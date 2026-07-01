@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lakshya ERP Health</title>
+  <meta name="theme-color" content="#d95d39">
+  <meta name="description" content="Operational health page for the Lakshya ERP demo application.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="main-panel">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Lakshya ERP Monitoring</p>
+        <h2>Application Health</h2>
+      </div>
+      <div class="topbar-actions">
+        <a class="pill" href="./index.html">Back to ERP</a>
+        <span class="app-status success">All Core Services Healthy</span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Status Overview</p>
+        <h3>Demo environment is available and ready for walkthroughs.</h3>
+        <p>This page gives a simple owner-friendly operational view of the ERP demo so the client can imagine how uptime, sync, storage, and app delivery would be monitored in a production version.</p>
+      </div>
+      <div class="hero-metrics">
+        <div class="metric-card">
+          <span>Frontend Availability</span>
+          <strong>99.98%</strong>
+          <small>Static app pages responding normally</small>
+        </div>
+        <div class="metric-card">
+          <span>Last Sync Cycle</span>
+          <strong>2 min ago</strong>
+          <small>Lead, fee, and attendance queues clear</small>
+        </div>
+        <div class="metric-card">
+          <span>PWA Status</span>
+          <strong>Active</strong>
+          <small>Offline shell and install support enabled</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid equal">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Service Health</p>
+            <h3>Core Modules</h3>
+          </div>
+        </div>
+        <ul class="simple-list">
+          <li><strong>Admissions CRM</strong><span>Lead capture and counsellor workflow healthy</span></li>
+          <li><strong>Student Records</strong><span>Profile rendering and local data access healthy</span></li>
+          <li><strong>Fees & Finance</strong><span>Collection dashboard and due views healthy</span></li>
+          <li><strong>Attendance</strong><span>Batch summaries and alert views healthy</span></li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">App Delivery</p>
+            <h3>PWA Checks</h3>
+          </div>
+        </div>
+        <ul class="simple-list">
+          <li><strong>Manifest</strong><span>Loaded and install metadata available</span></li>
+          <li><strong>Service Worker</strong><span>Registered for offline shell caching</span></li>
+          <li><strong>Icons</strong><span>Standard and maskable app icons available</span></li>
+          <li><strong>Standalone Mode</strong><span>Ready for install on mobile and desktop</span></li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Operational Notes</p>
+            <h3>Watchlist</h3>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="timeline-item">
+            <strong>No blocking errors detected</strong>
+            <span>UI and cached assets are available for demo use.</span>
+          </div>
+          <div class="timeline-item">
+            <strong>Next planned upgrade</strong>
+            <span>Connect live authentication, database, and role permissions.</span>
+          </div>
+          <div class="timeline-item">
+            <strong>Recommended production add-ons</strong>
+            <span>Server monitoring, backups, audit logs, and real notification delivery tracking.</span>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

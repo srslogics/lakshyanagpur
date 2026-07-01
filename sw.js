@@ -2,6 +2,7 @@ const CACHE_NAME = "lakshya-erp-demo-v1";
 const ASSETS = [
   "./",
   "./index.html",
+  "./health.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
