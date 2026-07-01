@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lakshya ERP Demo</title>
+  <meta name="theme-color" content="#d95d39">
+  <meta name="description" content="Lakshya ERP demo app for admissions, students, fees, attendance, academics, communication, and reports.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">L</div>
+        <div>
+          <p class="brand-kicker">Client Demo</p>
+          <h1>Lakshya ERP</h1>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <p class="sidebar-label">Institute Snapshot</p>
+        <h2>Nagpur Coaching Hub</h2>
+        <p>ERP demo for IIT-JEE, NEET, MHT-CET and Foundation batches.</p>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="admissions">Admissions CRM</button>
+        <button class="nav-item" data-view="students">Student Records</button>
+        <button class="nav-item" data-view="attendance">Attendance</button>
+        <button class="nav-item" data-view="fees">Fees & Finance</button>
+        <button class="nav-item" data-view="academics">Academics & Exams</button>
+        <button class="nav-item" data-view="faculty">Faculty & Timetable</button>
+        <button class="nav-item" data-view="communication">Communication</button>
+        <button class="nav-item" data-view="reports">Reports</button>
+        <button class="nav-item" data-view="settings">Parent App & Settings</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <p class="sidebar-label">Demo Goal</p>
+        <p>Show one unified system instead of separate spreadsheets, WhatsApp follow-ups, and manual fee tracking.</p>
+      </div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Lakshya Institute ERP Walkthrough</p>
+          <h2 id="view-title">Dashboard</h2>
+        </div>
+        <div class="topbar-actions">
+          <span class="app-status" id="app-status">Web App Ready</span>
+          <button class="pill">Session 2026-27</button>
+          <button class="pill highlight">Live Demo Mode</button>
+          <button class="pill install-cta hidden" id="install-app">Install App</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Owner-facing overview</p>
+          <h3>From enquiry to results, every operation sits in one place.</h3>
+          <p>This demo is tailored for a coaching institute that runs lead management, admissions, attendance, tests, fees, faculty planning, and parent communication on a daily basis.</p>
+        </div>
+        <div class="hero-metrics">
+          <div class="metric-card">
+            <span>Active Students</span>
+            <strong id="hero-students">1,284</strong>
+            <small>Across JEE, NEET, CET and Foundation</small>
+          </div>
+          <div class="metric-card">
+            <span>Collections This Month</span>
+            <strong id="hero-collections">Rs 18.6L</strong>
+            <small>92% on-time fee recovery</small>
+          </div>
+          <div class="metric-card">
+            <span>Attendance Today</span>
+            <strong id="hero-attendance">94.2%</strong>
+            <small>Auto-alerts for absentees</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="content-view active" id="dashboard">
+        <div class="grid two-thirds">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Command Center</p>
+                <h3>Institute Performance</h3>
+              </div>
+              <span class="tag green">Healthy</span>
+            </div>
+            <div class="stats-grid" id="dashboard-stats"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Priority Tasks</p>
+                <h3>What the owner checks every morning</h3>
+              </div>
+            </div>
+            <div class="timeline" id="priority-list"></div>
+          </article>
+        </div>
+
+        <div class="grid equal">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Admissions Funnel</p>
+                <h3>This Week</h3>
+              </div>
+            </div>
+            <div class="funnel" id="funnel"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Batch Mix</p>
+                <h3>Current Enrollment</h3>
+              </div>
+            </div>
+            <div class="batch-stack" id="batch-mix"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Alerts</p>
+                <h3>Risk Watchlist</h3>
+              </div>
+            </div>
+            <ul class="simple-list" id="alerts"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="admissions">
+        <div class="grid equal">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Lead Sources</p>
+                <h3>Campaign Performance</h3>
+              </div>
+            </div>
+            <div class="source-list" id="lead-sources"></div>
+          </article>
+
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Counsellor Pipeline</p>
+                <h3>Recent Enquiries</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Course</th>
+                    <th>Lead Source</th>
+                    <th>Counsellor</th>
+                    <th>Status</th>
+                    <th>Next Action</th>
+                  </tr>
+                </thead>
+                <tbody id="admission-rows"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="students">
+        <div class="grid equal">
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Student Master</p>
+                <h3>Academic + Parent + Fee Snapshot</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Batch</th>
+                    <th>Parent</th>
+                    <th>Attendance</th>
+                    <th>Fees</th>
+                    <th>Last Test</th>
+                  </tr>
+                </thead>
+                <tbody id="student-rows"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Student Profile</p>
+                <h3>Featured Demo Record</h3>
+              </div>
+            </div>
+            <div class="profile-card" id="student-profile"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="attendance">
+        <div class="grid equal">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Today</p>
+                <h3>Attendance Summary</h3>
+              </div>
+            </div>
+            <div class="stats-grid compact" id="attendance-summary"></div>
+          </article>
+
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Batch-wise Monitor</p>
+                <h3>Late, Absent and Parent Alerts</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Batch</th>
+                    <th>Strength</th>
+                    <th>Present</th>
+                    <th>Late</th>
+                    <th>Absent</th>
+                    <th>Auto Action</th>
+                  </tr>
+                </thead>
+                <tbody id="attendance-rows"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="fees">
+        <div class="grid equal">
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Fees Management</p>
+                <h3>Collection and Due Tracking</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Plan</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Due</th>
+                    <th>Next Due Date</th>
+                  </tr>
+                </thead>
+                <tbody id="fee-rows"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Finance Snapshot</p>
+                <h3>Owner Summary</h3>
+              </div>
+            </div>
+            <ul class="simple-list" id="finance-summary"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="academics">
+        <div class="grid equal">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Exam Calendar</p>
+                <h3>This Month</h3>
+              </div>
+            </div>
+            <div class="timeline" id="exam-calendar"></div>
+          </article>
+
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Result Analytics</p>
+                <h3>Top Performing Batches</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Batch</th>
+                    <th>Exam</th>
+                    <th>Average</th>
+                    <th>Top Score</th>
+                    <th>Weakest Subject</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="academic-rows"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="faculty">
+        <div class="grid equal">
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Faculty Console</p>
+                <h3>Faculty Load and Timetable</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Faculty</th>
+                    <th>Subject</th>
+                    <th>Batches</th>
+                    <th>Hours / Week</th>
+                    <th>Utilization</th>
+                    <th>Next Class</th>
+                  </tr>
+                </thead>
+                <tbody id="faculty-rows"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Timetable Health</p>
+                <h3>Operational Notes</h3>
+              </div>
+            </div>
+            <ul class="simple-list" id="timetable-notes"></ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="communication">
+        <div class="grid equal">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Auto Messages</p>
+                <h3>WhatsApp / SMS Journeys</h3>
+              </div>
+            </div>
+            <div class="timeline" id="message-flows"></div>
+          </article>
+
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Broadcast Center</p>
+                <h3>Recent Communication Log</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Audience</th>
+                    <th>Purpose</th>
+                    <th>Channel</th>
+                    <th>Sent</th>
+                    <th>Delivery</th>
+                    <th>Owner</th>
+                  </tr>
+                </thead>
+                <tbody id="communication-rows"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="reports">
+        <div class="grid equal">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Downloadable Reports</p>
+                <h3>Owner and Admin Views</h3>
+              </div>
+            </div>
+            <ul class="report-list" id="report-list"></ul>
+          </article>
+
+          <article class="panel span-2">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Executive Summary</p>
+                <h3>Monthly Performance Board</h3>
+              </div>
+            </div>
+            <div class="board" id="executive-board"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-view" id="settings">
+        <div class="grid equal">
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Parent App</p>
+                <h3>What parents can see</h3>
+              </div>
+            </div>
+            <ul class="simple-list" id="parent-features"></ul>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Admin Controls</p>
+                <h3>Core ERP Settings</h3>
+              </div>
+            </div>
+            <ul class="simple-list" id="admin-settings"></ul>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Implementation Plan</p>
+                <h3>How Lakshya can go live</h3>
+              </div>
+            </div>
+            <div class="timeline" id="rollout-plan"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
