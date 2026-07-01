@@ -16,6 +16,7 @@
 </head>
 <body>
   <div class="app-shell">
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">L</div>
@@ -31,7 +32,7 @@
         <p>ERP demo for IIT-JEE, NEET, MHT-CET and Foundation batches.</p>
       </div>
 
-      <nav class="nav">
+      <nav class="nav" id="sidebar-navigation">
         <button class="nav-item active" data-view="dashboard">Dashboard</button>
         <button class="nav-item" data-view="admissions">Admissions CRM</button>
         <button class="nav-item" data-view="students">Student Records</button>
@@ -52,7 +53,12 @@
 
     <main class="main-panel">
       <header class="topbar">
-        <div>
+        <div class="topbar-title">
+          <button class="menu-toggle" id="menu-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="sidebar-navigation">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
           <p class="eyebrow">Lakshya Institute ERP Walkthrough</p>
           <h2 id="view-title">Dashboard</h2>
         </div>

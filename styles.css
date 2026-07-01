@@ -29,6 +29,10 @@ body {
     linear-gradient(180deg, #f8f2e8 0%, #efe6d8 100%);
 }
 
+body.drawer-open {
+  overflow: hidden;
+}
+
 button {
   font: inherit;
 }
@@ -37,6 +41,18 @@ button {
   display: grid;
   grid-template-columns: 290px minmax(0, 1fr);
   min-height: 100vh;
+  position: relative;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 42, 47, 0.42);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+  z-index: 40;
 }
 
 .sidebar {
@@ -48,6 +64,7 @@ button {
   top: 0;
   height: 100vh;
   overflow: auto;
+  z-index: 50;
 }
 
 .brand {
@@ -156,6 +173,36 @@ button {
   gap: 16px;
   align-items: center;
   margin-bottom: 22px;
+}
+
+.topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.menu-toggle {
+  display: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(217, 93, 57, 0.22);
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.menu-toggle span {
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent-deep);
+  display: block;
 }
 
 .topbar-actions {
@@ -521,8 +568,14 @@ th {
   }
 
   .sidebar {
-    position: static;
-    height: auto;
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: min(84vw, 320px);
+    max-width: 320px;
+    transform: translateX(-105%);
+    transition: transform 220ms ease;
   }
 
   .hero,
@@ -540,6 +593,15 @@ th {
   .span-2 {
     grid-column: span 1;
   }
+
+  body.drawer-open .sidebar {
+    transform: translateX(0);
+  }
+
+  body.drawer-open .drawer-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 @media (max-width: 720px) {
@@ -551,6 +613,15 @@ th {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .topbar-title {
+    width: 100%;
+  }
+
+  .menu-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
   }
 
   .hero {
@@ -569,5 +640,9 @@ th {
   .pill {
     width: 100%;
     justify-content: center;
+  }
+
+  .sidebar {
+    width: min(88vw, 320px);
   }
 }

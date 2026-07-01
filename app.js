@@ -168,6 +168,8 @@ const navItems = document.querySelectorAll(".nav-item");
 const views = document.querySelectorAll(".content-view");
 const installButton = document.getElementById("install-app");
 const appStatus = document.getElementById("app-status");
+const menuToggle = document.getElementById("menu-toggle");
+const drawerBackdrop = document.getElementById("drawer-backdrop");
 let deferredInstallPrompt = null;
 
 function setStatusClass(value) {
@@ -297,8 +299,39 @@ function bindNavigation() {
       const target = document.getElementById(item.dataset.view);
       target.classList.add("active");
       viewTitle.textContent = item.textContent;
+      closeDrawer();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
+  });
+}
+
+function openDrawer() {
+  document.body.classList.add("drawer-open");
+  menuToggle.setAttribute("aria-expanded", "true");
+}
+
+function closeDrawer() {
+  document.body.classList.remove("drawer-open");
+  menuToggle.setAttribute("aria-expanded", "false");
+}
+
+function bindDrawer() {
+  if (!menuToggle || !drawerBackdrop) return;
+
+  menuToggle.addEventListener("click", () => {
+    if (document.body.classList.contains("drawer-open")) {
+      closeDrawer();
+    } else {
+      openDrawer();
+    }
+  });
+
+  drawerBackdrop.addEventListener("click", closeDrawer);
+
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 720) {
+      closeDrawer();
+    }
   });
 }
 
@@ -341,16 +374,52 @@ function setupInstallPrompt() {
 
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
-    updateAppStatus("Browser App Mode Limited", "warn");
+    updateAppStatus("Offline Mode Not Supported Here");
+    return;
+  }
+
+  if (!window.isSecureContext) {
+    updateAppStatus("Offline Mode Works After HTTPS Deployment");
     return;
   }
 
   try {
-    await navigator.serviceWorker.register("./sw.js");
-    updateAppStatus("Offline App Support Active", "success");
+    const registration = await navigator.serviceWorker.register("./sw.js");
+    if (registration) {
+      updateAppStatus("Offline App Support Active", "success");
+      return;
+    }
+    updateAppStatus("Offline Mode Ready After Refresh");
   } catch (error) {
-    updateAppStatus("Offline Support Failed", "warn");
+    const message = String(error && error.message ? error.message : error).toLowerCase();
+    if (message.includes("unsupported") || message.includes("secure") || message.includes("context")) {
+      updateAppStatus("Offline Mode Works After HTTPS Deployment");
+      return;
+    }
+
+    if (message.includes("script") || message.includes("scope") || message.includes("mime")) {
+      updateAppStatus("Offline Setup Needs Review", "warn");
+      return;
+    }
+
+    updateAppStatus("Offline Mode Temporarily Unavailable");
   }
+}
+
+function updateEnvironmentBadges() {
+  const pills = document.querySelectorAll(".topbar-actions .pill");
+  if (pills[0]) {
+    pills[0].textContent = "Session 2026-27";
+  }
+  if (pills[1]) {
+    pills[1].textContent = window.isSecureContext ? "Live Demo Mode" : "Preview Mode";
+  }
+}
+
+function initAppChrome() {
+  updateEnvironmentBadges();
+  setupInstallPrompt();
+  registerServiceWorker();
 }
 
 function init() {
@@ -379,8 +448,8 @@ function init() {
   renderSimpleList("admin-settings", data.adminSettings);
   renderTimeline("rollout-plan", data.rollout);
   bindNavigation();
-  setupInstallPrompt();
-  registerServiceWorker();
+  bindDrawer();
+  initAppChrome();
 }
 
 init();
