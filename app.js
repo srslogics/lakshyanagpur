@@ -167,8 +167,10 @@ const viewTitle = document.getElementById("view-title");
 const navItems = document.querySelectorAll(".nav-item");
 const views = document.querySelectorAll(".content-view");
 const appStatus = document.getElementById("app-status");
+const installButton = document.getElementById("install-app");
 const menuToggle = document.getElementById("menu-toggle");
 const drawerBackdrop = document.getElementById("drawer-backdrop");
+let deferredInstallPrompt = null;
 function setActiveView(viewId, trigger) {
   navItems.forEach(item => {
     const isActive = item.dataset.view === viewId;
@@ -361,6 +363,36 @@ function updateAppStatus(text, tone = "") {
   }
 }
 
+function setupInstallPrompt() {
+  if (!installButton) return;
+
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    installButton.classList.remove("hidden");
+  });
+
+  installButton.addEventListener("click", async () => {
+    if (!deferredInstallPrompt) return;
+
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    if (choice.outcome === "accepted") {
+      updateAppStatus("Installing", "success");
+    } else {
+      updateAppStatus("ERP Ready");
+    }
+    deferredInstallPrompt = null;
+    installButton.classList.add("hidden");
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    installButton.classList.add("hidden");
+    updateAppStatus("Installed", "success");
+  });
+}
+
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     updateAppStatus("ERP Ready");
@@ -401,6 +433,7 @@ function updateEnvironmentBadges() {
 
 function initAppChrome() {
   updateEnvironmentBadges();
+  setupInstallPrompt();
   registerServiceWorker();
 }
 
