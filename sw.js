@@ -1,16 +1,15 @@
 const CACHE_NAME = "lakshya-erp-demo-v5";
 const ASSETS = [
-  "./",
-  "./index.html",
-  "./health.html",
-  "./roles.html",
-  "./modules.html",
-  "./styles.css",
-  "./app.js",
-  "./manifest.webmanifest",
-  "./icon.svg",
-  "./icon-maskable.svg",
-  "./share-card.png"
+  "/",
+  "/health/",
+  "/roles/",
+  "/modules/",
+  "/styles.css",
+  "/app.js",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/icon-maskable.svg",
+  "/share-card.png"
 ];
 
 self.addEventListener("install", event => {
@@ -60,7 +59,7 @@ self.addEventListener("fetch", event => {
             }
           }
 
-          return caches.match("./index.html");
+          return caches.match("/");
         });
     })
   );

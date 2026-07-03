@@ -17,13 +17,13 @@
   <meta name="twitter:title" content="Lakshya ERP">
   <meta name="twitter:description" content="Premium institute ERP for admissions, academics, fees, attendance, communication, and leadership control.">
   <meta name="twitter:image" content="./share-card.png">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="/styles.css?v=5">
   <style>
     .founder-page {
       background:
@@ -281,8 +281,8 @@
 
       <div class="sidebar-footer">
         <p>Growth. Control. Outcomes.</p>
-        <a class="pill sidebar-link" href="./roles.html">Role Views</a>
-        <a class="pill sidebar-link" href="./modules.html">Modules</a>
+        <a class="pill sidebar-link" href="/roles/">Role Views</a>
+        <a class="pill sidebar-link" href="/modules/">Modules</a>
       </div>
     </aside>
 
@@ -300,15 +300,15 @@
           </div>
         </div>
         <div class="topbar-actions">
-          <a class="app-status" id="app-status" href="./health.html" aria-label="Open system health page">ERP Ready</a>
+          <a class="app-status" id="app-status" href="/health/" aria-label="Open system health page">ERP Ready</a>
         </div>
       </header>
 
       <nav class="deck-nav" aria-label="Presentation Navigation">
-        <a class="deck-link active" href="./index.html"><span class="icon-chip">00</span>Dashboard</a>
-        <a class="deck-link" href="./roles.html"><span class="icon-chip">01</span>Role Views</a>
-        <a class="deck-link" href="./modules.html"><span class="icon-chip">02</span>Module Stack</a>
-        <a class="deck-link" href="./health.html"><span class="icon-chip">03</span>System Health</a>
+        <a class="deck-link active" href="/"><span class="icon-chip">00</span>Dashboard</a>
+        <a class="deck-link" href="/roles/"><span class="icon-chip">01</span>Role Views</a>
+        <a class="deck-link" href="/modules/"><span class="icon-chip">02</span>Module Stack</a>
+        <a class="deck-link" href="/health/"><span class="icon-chip">03</span>System Health</a>
       </nav>
 
       <section class="content-view active" id="dashboard">
@@ -744,6 +744,14 @@
     </main>
   </div>
 
-  <script src="app.js"></script>
+  <script>
+    (() => {
+      const normalized = window.location.pathname.replace(/index\.html$/, "").replace(/\.html$/, "/");
+      if (normalized !== window.location.pathname) {
+        window.history.replaceState({}, "", `${normalized}${window.location.search}${window.location.hash}`);
+      }
+    })();
+  </script>
+  <script src="/app.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-# Lakshya ERP Demo
+# Lakshya ERP
 
-This is a browser-based demo ERP for Lakshya Institute. It is designed to help present a complete coaching-institute workflow to the client without needing a backend first.
+This is a browser-based ERP presentation for Lakshya Institute. It is designed to show a complete coaching-institute workflow without needing a backend first.
 
 ## What the demo covers
 
@@ -17,7 +17,7 @@ This is a browser-based demo ERP for Lakshya Institute. It is designed to help p
 
 ## How to open it
 
-Run a simple local server from this folder and open `http://127.0.0.1:4173/index.html`.
+Run a simple local server from this folder and open `http://127.0.0.1:4173/`.
 
 Example:
 

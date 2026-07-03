@@ -6,13 +6,13 @@
   <title>Lakshya ERP Health</title>
   <meta name="theme-color" content="#1f6d68">
   <meta name="description" content="Operational health page for the Lakshya ERP application.">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="/styles.css?v=5">
   <style>
     .health-page {
       background:
@@ -286,16 +286,16 @@
         <h1>Application Health</h1>
       </div>
       <div class="topbar-actions">
-        <a class="pill" href="./index.html">Dashboard</a>
+        <a class="pill" href="/">Dashboard</a>
         <span class="app-status success">All Systems Healthy</span>
       </div>
     </header>
 
     <nav class="deck-nav" aria-label="Presentation Navigation">
-      <a class="deck-link" href="./index.html"><span class="icon-chip">00</span>Dashboard</a>
-      <a class="deck-link" href="./roles.html"><span class="icon-chip">01</span>Role Views</a>
-      <a class="deck-link" href="./modules.html"><span class="icon-chip">02</span>Module Stack</a>
-      <a class="deck-link active" href="./health.html"><span class="icon-chip">03</span>System Health</a>
+      <a class="deck-link" href="/"><span class="icon-chip">00</span>Dashboard</a>
+      <a class="deck-link" href="/roles/"><span class="icon-chip">01</span>Role Views</a>
+      <a class="deck-link" href="/modules/"><span class="icon-chip">02</span>Module Stack</a>
+      <a class="deck-link active" href="/health/"><span class="icon-chip">03</span>System Health</a>
     </nav>
 
     <section class="signal-stage">
@@ -400,6 +400,14 @@
         </div>
       </article>
     </section>
-  </main>
+</main>
+  <script>
+    (() => {
+      const normalized = window.location.pathname.replace(/index\.html$/, "").replace(/\.html$/, "/");
+      if (normalized !== window.location.pathname) {
+        window.history.replaceState({}, "", `${normalized}${window.location.search}${window.location.hash}`);
+      }
+    })();
+  </script>
 </body>
 </html>

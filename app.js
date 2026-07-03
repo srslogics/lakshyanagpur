@@ -373,7 +373,7 @@ async function registerServiceWorker() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register("./sw.js");
+    const registration = await navigator.serviceWorker.register("/sw.js");
     if (registration) {
       updateAppStatus("ERP Ready", "success");
       return;
