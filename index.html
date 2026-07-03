@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=4">
+  <link rel="stylesheet" href="styles.css?v=5">
   <style>
     .founder-page {
       background:
@@ -32,7 +32,7 @@
         linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(234, 245, 240, 0.9));
     }
 
-    .founder-page .hero {
+    .founder-page .dashboard-hero {
       position: relative;
       overflow: hidden;
       background:
@@ -42,7 +42,7 @@
       box-shadow: 0 38px 120px rgba(17, 43, 46, 0.18);
     }
 
-    .founder-page .hero::after {
+    .founder-page .dashboard-hero::after {
       content: "";
       position: absolute;
       right: -60px;
@@ -53,22 +53,22 @@
       background: rgba(255, 245, 233, 0.08);
     }
 
-    .founder-page .hero-copy .eyebrow,
-    .founder-page .hero-copy p {
+    .founder-page .dashboard-hero-copy .eyebrow,
+    .founder-page .dashboard-hero-copy p {
       color: rgba(255, 244, 236, 0.8);
     }
 
-    .founder-page .hero-copy h3 {
+    .founder-page .dashboard-hero-copy h3 {
       color: #fff8f2;
       max-width: 10ch;
       font-size: clamp(2.6rem, 4.2vw, 4.4rem);
     }
 
-    .founder-page .hero-metrics {
+    .founder-page .dashboard-hero-metrics {
       align-self: end;
     }
 
-    .founder-page .metric-card {
+    .founder-page .dashboard-metric-card {
       background: rgba(251, 255, 252, 0.72);
       backdrop-filter: blur(14px);
       border-color: rgba(255, 255, 255, 0.32);
@@ -120,24 +120,24 @@
     }
 
     @media (min-width: 1181px) {
-      .founder-page .hero-copy h3 {
+      .founder-page .dashboard-hero-copy h3 {
         font-size: clamp(2.45rem, 2.9vw, 3.25rem);
         max-width: 8ch;
       }
 
-      .founder-page .hero {
+      .founder-page .dashboard-hero {
         min-height: 280px;
       }
 
-      .founder-page .hero-metrics {
+      .founder-page .dashboard-hero-metrics {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
-      .founder-page .spotlight-grid {
+      .founder-page .dashboard-spotlight-grid {
         grid-template-columns: 1.05fr 1fr 1fr;
       }
 
-      .founder-page .spotlight-card h3 {
+      .founder-page .dashboard-spotlight-card h3 {
         font-size: 1.35rem;
       }
 
@@ -147,11 +147,11 @@
     }
 
     @media (max-width: 720px) {
-      .founder-page .hero {
+      .founder-page .dashboard-hero {
         padding: 22px;
       }
 
-      .founder-page .hero-copy h3 {
+      .founder-page .dashboard-hero-copy h3 {
         font-size: 3rem;
         max-width: 8ch;
       }
@@ -226,24 +226,24 @@
         <a class="deck-link" href="./health.html"><span class="icon-chip">03</span>System Health</a>
       </nav>
 
-      <section class="hero">
-        <div class="hero-copy">
+      <section class="dashboard-hero">
+        <div class="dashboard-hero-copy">
           <p class="eyebrow">Owner Cockpit</p>
           <h3>See growth, academic quality, and collections in one glance.</h3>
           <p>Designed for leadership decisions, not admin clutter.</p>
         </div>
-        <div class="hero-metrics">
-          <div class="metric-card">
+        <div class="dashboard-hero-metrics">
+          <div class="dashboard-metric-card">
             <span>Enrollment Base</span>
             <strong id="hero-students">1,284</strong>
             <small>Flagship programs live</small>
           </div>
-          <div class="metric-card">
+          <div class="dashboard-metric-card">
             <span>Cash In This Month</span>
             <strong id="hero-collections">Rs 18.6L</strong>
             <small>92% on time</small>
           </div>
-          <div class="metric-card">
+          <div class="dashboard-metric-card">
             <span>Class Presence</span>
             <strong id="hero-attendance">94.2%</strong>
             <small>Alerts automated</small>
@@ -251,18 +251,18 @@
         </div>
       </section>
 
-      <section class="spotlight-grid">
-        <article class="spotlight-card dark">
+      <section class="dashboard-spotlight-grid">
+        <article class="dashboard-spotlight-card dark">
           <p class="eyebrow">Growth Narrative</p>
           <h3>Own the funnel.</h3>
           <p>Move from raw enquiry to predictable admissions with cleaner lead control and faster follow-up execution.</p>
         </article>
-        <article class="spotlight-card light">
+        <article class="dashboard-spotlight-card light">
           <p class="eyebrow">Academic Narrative</p>
           <h3>Protect quality.</h3>
           <p>Keep attendance, tests, faculty load, and student weak areas visible before they become reputation problems.</p>
         </article>
-        <article class="spotlight-card accent">
+        <article class="dashboard-spotlight-card accent">
           <p class="eyebrow">Finance Narrative</p>
           <h3>Control cash.</h3>
           <p>Make collections, dues, and discount decisions part of one disciplined leadership rhythm.</p>

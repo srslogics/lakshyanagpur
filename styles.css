@@ -169,7 +169,8 @@ a:focus-visible,
 .topbar h1,
 .topbar h2,
 .panel h3,
-.hero h3 {
+.hero h3,
+.dashboard-hero h3 {
   margin: 0;
   font-family: "Space Grotesk", sans-serif;
   letter-spacing: -0.03em;
@@ -178,7 +179,8 @@ a:focus-visible,
 .sidebar-card,
 .sidebar-footer,
 .panel,
-.hero {
+.hero,
+.dashboard-hero {
   background: var(--panel);
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: var(--radius-card);
@@ -440,7 +442,8 @@ a:focus-visible,
   display: none !important;
 }
 
-.hero {
+.hero,
+.dashboard-hero {
   padding: 30px;
   display: grid;
   grid-template-columns: 1.3fr 1fr;
@@ -448,26 +451,30 @@ a:focus-visible,
   margin-bottom: 26px;
 }
 
-.hero-copy p:last-child {
+.hero-copy p:last-child,
+.dashboard-hero-copy p:last-child {
   color: var(--muted);
   line-height: 1.65;
   max-width: 42ch;
   font-size: 1rem;
 }
 
-.hero-copy h3 {
+.hero-copy h3,
+.dashboard-hero-copy h3 {
   font-size: clamp(2rem, 3vw, 3rem);
   line-height: 1.02;
   max-width: 12ch;
 }
 
-.hero-metrics {
+.hero-metrics,
+.dashboard-hero-metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
 }
 
-.metric-card {
+.metric-card,
+.dashboard-metric-card {
   padding: 22px;
   border-radius: 24px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(239, 248, 244, 0.74));
@@ -477,6 +484,8 @@ a:focus-visible,
 
 .metric-card span,
 .metric-card small,
+.dashboard-metric-card span,
+.dashboard-metric-card small,
 .panel-head p,
 .simple-list,
 .timeline,
@@ -488,7 +497,8 @@ table,
   color: var(--muted);
 }
 
-.metric-card strong {
+.metric-card strong,
+.dashboard-metric-card strong {
   display: block;
   margin: 14px 0 6px;
   color: var(--text);
@@ -752,14 +762,16 @@ th {
   font-size: 1.05rem;
 }
 
-.spotlight-grid {
+.spotlight-grid,
+.dashboard-spotlight-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   margin-bottom: 24px;
 }
 
-.spotlight-card {
+.spotlight-card,
+.dashboard-spotlight-card {
   position: relative;
   overflow: hidden;
   padding: 24px;
@@ -769,44 +781,55 @@ th {
   backdrop-filter: blur(18px);
 }
 
-.spotlight-card.dark {
+.spotlight-card.dark,
+.dashboard-spotlight-card.dark {
   background: linear-gradient(135deg, #214957 0%, #2c6560 100%);
   color: #fff7ef;
 }
 
-.spotlight-card.light {
+.spotlight-card.light,
+.dashboard-spotlight-card.light {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(239, 248, 244, 0.92));
 }
 
-.spotlight-card.accent {
+.spotlight-card.accent,
+.dashboard-spotlight-card.accent {
   background: linear-gradient(135deg, #3a7b64 0%, #61aa81 100%);
   color: #fff8f2;
 }
 
-.spotlight-card .eyebrow {
+.spotlight-card .eyebrow,
+.dashboard-spotlight-card .eyebrow {
   margin-bottom: 12px;
 }
 
 .spotlight-card.dark .eyebrow,
 .spotlight-card.dark p,
 .spotlight-card.accent .eyebrow,
-.spotlight-card.accent p {
+.spotlight-card.accent p,
+.dashboard-spotlight-card.dark .eyebrow,
+.dashboard-spotlight-card.dark p,
+.dashboard-spotlight-card.accent .eyebrow,
+.dashboard-spotlight-card.accent p {
   color: rgba(255, 247, 239, 0.82);
 }
 
-.spotlight-card h3 {
+.spotlight-card h3,
+.dashboard-spotlight-card h3 {
   margin: 0 0 10px;
   font-size: 1.85rem;
   letter-spacing: -0.04em;
 }
 
-.spotlight-card p {
+.spotlight-card p,
+.dashboard-spotlight-card p {
   margin: 0;
   line-height: 1.6;
   color: var(--muted);
 }
 
-.spotlight-card ul {
+.spotlight-card ul,
+.dashboard-spotlight-card ul {
   list-style: none;
   padding: 0;
   margin: 14px 0 0;
@@ -814,7 +837,8 @@ th {
   gap: 8px;
 }
 
-.spotlight-card li {
+.spotlight-card li,
+.dashboard-spotlight-card li {
   color: inherit;
 }
 
@@ -890,46 +914,55 @@ th {
     font-size: 0.7rem;
   }
 
-  .hero {
+  .hero,
+  .dashboard-hero {
     padding: 20px;
     gap: 14px;
     margin-bottom: 12px;
   }
 
-  .hero-copy p:last-child {
+  .hero-copy p:last-child,
+  .dashboard-hero-copy p:last-child {
     font-size: 0.92rem;
     line-height: 1.45;
   }
 
-  .hero-metrics {
+  .hero-metrics,
+  .dashboard-hero-metrics {
     gap: 8px;
   }
 
-  .metric-card {
+  .metric-card,
+  .dashboard-metric-card {
     padding: 14px;
     border-radius: 18px;
   }
 
-  .metric-card strong {
+  .metric-card strong,
+  .dashboard-metric-card strong {
     margin: 8px 0 4px;
     font-size: 1.48rem;
   }
 
-  .spotlight-grid {
+  .spotlight-grid,
+  .dashboard-spotlight-grid {
     gap: 12px;
     margin-bottom: 12px;
   }
 
-  .spotlight-card {
+  .spotlight-card,
+  .dashboard-spotlight-card {
     padding: 16px;
   }
 
-  .spotlight-card h3 {
+  .spotlight-card h3,
+  .dashboard-spotlight-card h3 {
     font-size: 1.28rem;
     margin-bottom: 8px;
   }
 
-  .spotlight-card p {
+  .spotlight-card p,
+  .dashboard-spotlight-card p {
     font-size: 0.9rem;
     line-height: 1.42;
   }
@@ -1016,13 +1049,16 @@ th {
   }
 
   .hero,
+  .dashboard-hero,
   .grid.two-thirds,
   .grid.equal,
-  .spotlight-grid {
+  .spotlight-grid,
+  .dashboard-spotlight-grid {
     grid-template-columns: 1fr;
   }
 
   .hero-metrics,
+  .dashboard-hero-metrics,
   .stats-grid.compact,
   .board {
     grid-template-columns: 1fr;
@@ -1068,11 +1104,13 @@ th {
     font-size: 1.85rem;
   }
 
-  .hero {
+  .hero,
+  .dashboard-hero {
     padding: 18px;
   }
 
-  .hero-metrics {
+  .hero-metrics,
+  .dashboard-hero-metrics {
     grid-template-columns: 1fr;
   }
 
@@ -1114,7 +1152,8 @@ th {
     width: min(88vw, 320px);
   }
 
-  .hero-copy h3 {
+  .hero-copy h3,
+  .dashboard-hero-copy h3 {
     max-width: 11ch;
     font-size: 2.4rem;
   }

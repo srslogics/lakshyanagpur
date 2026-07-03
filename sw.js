@@ -1,4 +1,4 @@
-const CACHE_NAME = "lakshya-erp-demo-v4";
+const CACHE_NAME = "lakshya-erp-demo-v5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -45,7 +45,22 @@ self.addEventListener("fetch", event => {
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
           return response;
         })
-        .catch(() => caches.match("./index.html"));
+        .catch(async () => {
+          const url = new URL(event.request.url);
+
+          if (event.request.mode === "navigate") {
+            const requestedPage =
+              (await caches.match(event.request)) ||
+              (await caches.match(url.pathname)) ||
+              (await caches.match(`.${url.pathname}`));
+
+            if (requestedPage) {
+              return requestedPage;
+            }
+          }
+
+          return caches.match("./index.html");
+        });
     })
   );
 });
