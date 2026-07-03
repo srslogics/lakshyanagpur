@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lakshya ERP Modules</title>
+  <meta name="theme-color" content="#d95d39">
+  <meta name="description" content="Lakshya ERP module stack for admissions, academics, operations, finance, and communication.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .modules-page {
+      background:
+        radial-gradient(circle at top left, rgba(75, 169, 197, 0.14), transparent 18%),
+        radial-gradient(circle at bottom right, rgba(217, 93, 57, 0.18), transparent 18%),
+        linear-gradient(180deg, #f5f0e7 0%, #eadfce 100%);
+    }
+
+    .modules-wrap {
+      max-width: 1380px;
+      margin: 0 auto;
+    }
+
+    .module-atlas {
+      display: grid;
+      grid-template-columns: 0.92fr 1.08fr;
+      gap: 24px;
+      margin-bottom: 26px;
+    }
+
+    .atlas-intro {
+      position: relative;
+      overflow: hidden;
+      padding: 34px;
+      border-radius: 34px;
+      background:
+        radial-gradient(circle at top right, rgba(255, 232, 190, 0.18), transparent 20%),
+        linear-gradient(135deg, #2a3e49 0%, #2d596a 48%, #e48a4c 100%);
+      color: #fff8f2;
+      box-shadow: 0 30px 100px rgba(43, 31, 18, 0.16);
+    }
+
+    .atlas-intro::after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      bottom: -90px;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(255, 247, 239, 0.08);
+    }
+
+    .atlas-intro .eyebrow,
+    .atlas-intro p {
+      color: rgba(255, 247, 239, 0.82);
+    }
+
+    .atlas-intro h3 {
+      margin: 0 0 16px;
+      max-width: 11ch;
+      font-size: clamp(2.5rem, 4vw, 4rem);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+    }
+
+    .atlas-intro p:last-child {
+      margin: 0;
+      max-width: 42ch;
+      line-height: 1.65;
+      font-size: 1.02rem;
+    }
+
+    .atlas-rail {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      align-content: start;
+    }
+
+    .rail-card {
+      padding: 24px;
+      border-radius: 28px;
+      background: rgba(255, 251, 246, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      box-shadow: 0 24px 70px rgba(68, 45, 19, 0.12);
+    }
+
+    .rail-card:nth-child(1) {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 239, 231, 0.92));
+    }
+
+    .rail-card:nth-child(2) {
+      background: linear-gradient(180deg, rgba(33, 55, 65, 0.96), rgba(44, 76, 89, 0.94));
+      color: #fff7ef;
+    }
+
+    .rail-card:nth-child(3) {
+      background: linear-gradient(135deg, rgba(231, 134, 75, 0.98), rgba(214, 95, 57, 0.94));
+      color: #fff8f2;
+    }
+
+    .rail-card:nth-child(4) {
+      background: linear-gradient(180deg, rgba(248, 241, 232, 0.96), rgba(241, 229, 214, 0.94));
+    }
+
+    .rail-card .eyebrow {
+      margin-bottom: 10px;
+    }
+
+    .rail-card:nth-child(2) .eyebrow,
+    .rail-card:nth-child(2) p,
+    .rail-card:nth-child(3) .eyebrow,
+    .rail-card:nth-child(3) p {
+      color: rgba(255, 247, 239, 0.82);
+    }
+
+    .rail-card h4 {
+      margin: 0 0 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.55rem;
+      letter-spacing: -0.04em;
+    }
+
+    .rail-card p {
+      margin: 0;
+      line-height: 1.6;
+      color: #6d756f;
+    }
+
+    .module-sequence {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .sequence-card {
+      padding: 22px;
+      border-radius: 26px;
+      background: rgba(255, 251, 246, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.94);
+      box-shadow: 0 24px 70px rgba(68, 45, 19, 0.1);
+    }
+
+    .sequence-no {
+      display: inline-flex;
+      margin-bottom: 14px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(37, 94, 113, 0.08);
+      color: #22516a;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .sequence-card h4 {
+      margin: 0 0 8px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.35rem;
+      letter-spacing: -0.04em;
+      color: #233138;
+    }
+
+    .sequence-card p {
+      margin: 0;
+      color: #6d756f;
+      line-height: 1.6;
+    }
+
+    .modules-page .grid.two-thirds .panel:first-child {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 242, 235, 0.92));
+    }
+
+    .modules-page .grid.two-thirds .panel:last-child {
+      background:
+        linear-gradient(180deg, rgba(32, 53, 62, 0.94), rgba(41, 68, 80, 0.92));
+      color: #fff7ef;
+    }
+
+    .modules-page .grid.two-thirds .panel:last-child .eyebrow,
+    .modules-page .grid.two-thirds .panel:last-child h3,
+    .modules-page .grid.two-thirds .panel:last-child .timeline-item strong,
+    .modules-page .grid.two-thirds .panel:last-child .timeline-item span {
+      color: #fff7ef;
+    }
+
+    .modules-page .grid.two-thirds .panel:last-child .timeline-item {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .modules-page .grid.equal .panel {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 239, 231, 0.92));
+    }
+
+    @media (max-width: 1180px) {
+      .module-atlas,
+      .module-sequence {
+        grid-template-columns: 1fr;
+      }
+
+      .atlas-rail {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .atlas-intro,
+      .rail-card,
+      .sequence-card {
+        padding: 22px;
+      }
+
+      .atlas-rail {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body class="modules-page">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <main class="main-panel page-wrap modules-wrap" id="main-content">
+    <header class="topbar">
+      <div class="topbar-heading">
+        <p class="eyebrow">Module Stack</p>
+        <h1>What The Platform Covers</h1>
+      </div>
+      <div class="topbar-actions">
+        <a class="pill" href="./index.html">Back to Dashboard</a>
+        <a class="pill highlight" href="./roles.html">Role Views</a>
+      </div>
+    </header>
+
+    <nav class="deck-nav" aria-label="Presentation Navigation">
+      <a class="deck-link" href="./index.html"><span class="icon-chip">00</span>Dashboard</a>
+      <a class="deck-link" href="./roles.html"><span class="icon-chip">01</span>Role Views</a>
+      <a class="deck-link active" href="./modules.html"><span class="icon-chip">02</span>Module Stack</a>
+      <a class="deck-link" href="./health.html"><span class="icon-chip">03</span>System Health</a>
+    </nav>
+
+    <section class="module-atlas">
+      <article class="atlas-intro">
+        <p class="eyebrow">Product Scope</p>
+        <h3>Map the full institute system, not just one dashboard.</h3>
+        <p>Built to replace fragmented tools with one cohesive institute system.</p>
+      </article>
+      <div class="atlas-rail">
+        <article class="rail-card">
+          <p class="eyebrow">Coverage</p>
+          <h4>10 core modules</h4>
+          <p>Admissions, academics, operations, finance, communication, and scale control.</p>
+        </article>
+        <article class="rail-card">
+          <p class="eyebrow">Leadership Goal</p>
+          <h4>One operating layer</h4>
+          <p>Every team works in the same system, so founders get cleaner decisions.</p>
+        </article>
+        <article class="rail-card">
+          <p class="eyebrow">Demo Promise</p>
+          <h4>Less clutter, more clarity</h4>
+          <p>Each feature exists to reduce follow-up chaos and improve academic discipline.</p>
+        </article>
+        <article class="rail-card">
+          <p class="eyebrow">Fit</p>
+          <h4>Single center to multi-branch</h4>
+          <p>The same stack can support one institute today and expansion tomorrow.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="module-sequence">
+      <article class="sequence-card">
+        <span class="sequence-no">01</span>
+        <h4>Attract</h4>
+        <p>Capture enquiries, assign counsellors, and track follow-up without leakage.</p>
+      </article>
+      <article class="sequence-card">
+        <span class="sequence-no">02</span>
+        <h4>Enroll</h4>
+        <p>Move families from lead to admission with documents, fees, and onboarding in one flow.</p>
+      </article>
+      <article class="sequence-card">
+        <span class="sequence-no">03</span>
+        <h4>Deliver</h4>
+        <p>Run classes, attendance, tests, faculty plans, and parent communication from one base.</p>
+      </article>
+      <article class="sequence-card">
+        <span class="sequence-no">04</span>
+        <h4>Scale</h4>
+        <p>Measure collections, quality, utilization, and branch readiness before growth breaks operations.</p>
+      </article>
+    </section>
+
+    <section class="grid two-thirds">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Core Modules</p>
+            <h3>Business-Critical Stack</h3>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <caption class="visually-hidden">Core ERP modules, their purpose, key functions, and business outcomes</caption>
+            <thead>
+              <tr>
+                <th>Module</th>
+                <th>Purpose</th>
+                <th>Key Functions</th>
+                <th>Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Admissions CRM</td>
+                <td>Convert enquiries into enrollments</td>
+                <td>Lead capture, counsellor pipeline, follow-ups, demo tracking</td>
+                <td>Higher conversion</td>
+              </tr>
+              <tr>
+                <td>Student Records</td>
+                <td>Maintain a unified student profile</td>
+                <td>Parent data, batch, notes, documents, performance history</td>
+                <td>Single student view</td>
+              </tr>
+              <tr>
+                <td>Attendance</td>
+                <td>Track presence and discipline</td>
+                <td>Daily attendance, late flags, absentee alerts, batch trends</td>
+                <td>Stronger accountability</td>
+              </tr>
+              <tr>
+                <td>Fees &amp; Finance</td>
+                <td>Control collections and dues</td>
+                <td>Installments, receipts, concessions, ageing, cashflow view</td>
+                <td>Healthier collections</td>
+              </tr>
+              <tr>
+                <td>Tests &amp; Academics</td>
+                <td>Measure learning quality</td>
+                <td>Exam calendar, marks, rank, weak-topic analytics</td>
+                <td>Better outcomes</td>
+              </tr>
+              <tr>
+                <td>Faculty &amp; Timetable</td>
+                <td>Run teaching operations smoothly</td>
+                <td>Schedules, room planning, substitutions, utilization</td>
+                <td>Operational stability</td>
+              </tr>
+              <tr>
+                <td>Parent App</td>
+                <td>Build trust and transparency</td>
+                <td>Attendance, fees, results, notices, alerts</td>
+                <td>Higher retention</td>
+              </tr>
+              <tr>
+                <td>Communication Hub</td>
+                <td>Coordinate every audience</td>
+                <td>WhatsApp, SMS, email, reminders, broadcasts</td>
+                <td>Faster response loops</td>
+              </tr>
+              <tr>
+                <td>Reports &amp; Analytics</td>
+                <td>Support leadership decisions</td>
+                <td>Admissions, collections, performance, utilization dashboards</td>
+                <td>Founder visibility</td>
+              </tr>
+              <tr>
+                <td>Multi-Branch Control</td>
+                <td>Scale beyond one center</td>
+                <td>Branch dashboards, comparison, shared governance</td>
+                <td>Expansion readiness</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Value Lens</p>
+            <h3>Why This Stack Wins</h3>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="timeline-item">
+            <strong>Growth</strong>
+            <span>Better lead control and faster conversion from enquiry to admission.</span>
+          </div>
+          <div class="timeline-item">
+            <strong>Delivery</strong>
+            <span>Cleaner academic execution across batches, tests, and teachers.</span>
+          </div>
+          <div class="timeline-item">
+            <strong>Finance</strong>
+            <span>Stronger collections with visibility into dues and payment behavior.</span>
+          </div>
+          <div class="timeline-item">
+            <strong>Trust</strong>
+            <span>Parents and students stay informed, reducing friction and follow-up load.</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid equal">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Front Office</p>
+            <h3>Growth Layer</h3>
+          </div>
+        </div>
+        <ul class="simple-list">
+          <li>Admissions CRM</li>
+          <li>Counsellor workflow</li>
+          <li>Scholarship and onboarding</li>
+          <li>Marketing source visibility</li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Core Delivery</p>
+            <h3>Academic Layer</h3>
+          </div>
+        </div>
+        <ul class="simple-list">
+          <li>Student master record</li>
+          <li>Attendance and timetable</li>
+          <li>Tests, ranks, and weak areas</li>
+          <li>Faculty operations</li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Control Layer</p>
+            <h3>Leadership &amp; Finance</h3>
+          </div>
+        </div>
+        <ul class="simple-list">
+          <li>Fees and collections</li>
+          <li>Founder dashboards</li>
+          <li>Parent communication</li>
+          <li>Branch-scale readiness</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

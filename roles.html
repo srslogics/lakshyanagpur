@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lakshya ERP Roles</title>
+  <meta name="theme-color" content="#d95d39">
+  <meta name="description" content="Role and department views for the Lakshya ERP founder console.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .roles-page {
+      background:
+        radial-gradient(circle at top right, rgba(217, 93, 57, 0.22), transparent 22%),
+        radial-gradient(circle at 10% 20%, rgba(37, 94, 113, 0.14), transparent 18%),
+        linear-gradient(180deg, #fbf4ea 0%, #efe4d2 100%);
+    }
+
+    .roles-wrap {
+      max-width: 1380px;
+      margin: 0 auto;
+    }
+
+    .roles-hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+      margin-bottom: 26px;
+    }
+
+    .roles-stage {
+      position: relative;
+      overflow: hidden;
+      padding: 34px;
+      border-radius: 34px;
+      color: #fff7ef;
+      background:
+        radial-gradient(circle at top right, rgba(255, 210, 157, 0.35), transparent 20%),
+        linear-gradient(135deg, #1c3442 0%, #244c5f 42%, #cb6437 100%);
+      box-shadow: 0 30px 90px rgba(43, 31, 18, 0.18);
+    }
+
+    .roles-stage::after {
+      content: "";
+      position: absolute;
+      inset: auto -8% -20% auto;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(255, 245, 233, 0.08);
+      filter: blur(4px);
+    }
+
+    .roles-stage .eyebrow,
+    .roles-stage p {
+      color: rgba(255, 247, 239, 0.82);
+    }
+
+    .roles-stage h1 {
+      margin: 0 0 16px;
+      max-width: 10ch;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(2.8rem, 5vw, 5rem);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .roles-stage p {
+      max-width: 44ch;
+      font-size: 1.05rem;
+      line-height: 1.65;
+      margin: 0;
+    }
+
+    .roles-quickgrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .roles-quickcard {
+      padding: 24px;
+      border-radius: 28px;
+      background: rgba(255, 251, 246, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      box-shadow: 0 26px 80px rgba(68, 45, 19, 0.12);
+    }
+
+    .roles-quickcard span {
+      display: block;
+      font-size: 0.74rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #7b776f;
+      margin-bottom: 10px;
+    }
+
+    .roles-quickcard strong {
+      display: block;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 2.25rem;
+      color: #233138;
+      letter-spacing: -0.05em;
+      margin-bottom: 8px;
+    }
+
+    .roles-quickcard small {
+      color: #6d756f;
+      line-height: 1.55;
+    }
+
+    .roles-toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .roles-toolbar .eyebrow {
+      margin-bottom: 8px;
+    }
+
+    .roles-toolbar h2 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: clamp(2rem, 3vw, 3rem);
+      letter-spacing: -0.04em;
+    }
+
+    .roles-toolbar p:last-child {
+      margin: 8px 0 0;
+      color: #6d756f;
+    }
+
+    .roles-nav {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+      margin-bottom: 24px;
+    }
+
+    .role-card {
+      position: relative;
+      overflow: hidden;
+      padding: 28px;
+      border-radius: 30px;
+      background: rgba(255, 251, 246, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      box-shadow: 0 28px 80px rgba(68, 45, 19, 0.12);
+    }
+
+    .role-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 6px;
+      background: linear-gradient(90deg, #cb6437, #f0af57, #4ea2c7);
+    }
+
+    .role-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+
+    .role-tag {
+      display: inline-flex;
+      padding: 9px 14px;
+      border-radius: 999px;
+      background: rgba(37, 94, 113, 0.08);
+      color: #22516a;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .role-card h3 {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 2rem;
+      letter-spacing: -0.04em;
+      color: #223036;
+    }
+
+    .role-card > p {
+      margin: 10px 0 0;
+      color: #6d756f;
+      line-height: 1.6;
+      max-width: 46ch;
+    }
+
+    .role-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }
+
+    .role-pill {
+      padding: 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(34, 48, 54, 0.08);
+    }
+
+    .role-pill span {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #7b776f;
+    }
+
+    .role-pill strong {
+      color: #223036;
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+
+    .department-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .department-card {
+      padding: 26px;
+      border-radius: 30px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 243, 236, 0.9));
+      border: 1px solid rgba(255, 255, 255, 0.94);
+      box-shadow: 0 24px 70px rgba(68, 45, 19, 0.1);
+    }
+
+    .department-card .eyebrow {
+      margin-bottom: 10px;
+    }
+
+    .department-card h3 {
+      margin: 0 0 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.8rem;
+      letter-spacing: -0.04em;
+    }
+
+    .department-card p {
+      margin: 0 0 18px;
+      color: #6d756f;
+      line-height: 1.6;
+    }
+
+    .department-card ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 10px;
+    }
+
+    .department-card li {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(34, 48, 54, 0.06);
+      color: #314147;
+    }
+
+    @media (max-width: 1120px) {
+      .roles-hero,
+      .roles-grid,
+      .department-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .role-meta {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .roles-wrap {
+        padding: 0;
+      }
+
+      .roles-stage,
+      .roles-quickcard,
+      .role-card,
+      .department-card {
+        border-radius: 26px;
+      }
+
+      .roles-stage {
+        padding: 24px;
+      }
+
+      .roles-stage h1 {
+        font-size: 2.75rem;
+      }
+
+      .roles-quickgrid {
+        grid-template-columns: 1fr;
+      }
+
+      .roles-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .roles-nav {
+        width: 100%;
+      }
+
+      .roles-nav .pill {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body class="roles-page">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <main class="main-panel page-wrap roles-wrap" id="main-content">
+    <section class="roles-hero">
+      <div class="roles-stage">
+        <p class="eyebrow">Stakeholder Matrix</p>
+        <h1>Every role gets a workspace built for decisions.</h1>
+        <p>The platform is not one generic admin screen. It changes by person, department, and accountability level across the institute.</p>
+      </div>
+
+      <div class="roles-quickgrid">
+        <article class="roles-quickcard">
+          <span>Core Roles</span>
+          <strong>8</strong>
+          <small>Founder, admissions, accounts, faculty, coordinator, admin, parents, students</small>
+        </article>
+        <article class="roles-quickcard">
+          <span>Decision Layers</span>
+          <strong>3</strong>
+          <small>Strategic leadership, execution teams, learner-facing surfaces</small>
+        </article>
+        <article class="roles-quickcard">
+          <span>System Logic</span>
+          <strong>1</strong>
+          <small>Single record system with role-based visibility and action rights</small>
+        </article>
+        <article class="roles-quickcard">
+          <span>Client Benefit</span>
+          <strong>Fast</strong>
+          <small>Less clutter, clearer ownership, quicker decisions, smoother execution</small>
+        </article>
+      </div>
+    </section>
+
+    <nav class="deck-nav" aria-label="Presentation Navigation">
+      <a class="deck-link" href="./index.html"><span class="icon-chip">00</span>Dashboard</a>
+      <a class="deck-link active" href="./roles.html"><span class="icon-chip">01</span>Role Views</a>
+      <a class="deck-link" href="./modules.html"><span class="icon-chip">02</span>Module Stack</a>
+      <a class="deck-link" href="./health.html"><span class="icon-chip">03</span>System Health</a>
+    </nav>
+
+    <section class="roles-toolbar">
+      <div>
+        <p class="eyebrow">Role Views</p>
+        <h2>Who Sees What</h2>
+        <p>Each role has a different surface, a different action set, and a different business outcome.</p>
+      </div>
+    </section>
+
+    <section class="roles-grid">
+      <article class="role-card">
+        <div class="role-top">
+          <div>
+            <div class="role-tag">Leadership</div>
+            <h3>Owner / Director</h3>
+            <p>Runs the institute through a high-level command view focused on growth, collections, outcomes, and risk.</p>
+          </div>
+        </div>
+        <div class="role-meta">
+          <div class="role-pill">
+            <span>Sees</span>
+            <strong>Revenue, admissions, branch health, occupancy, faculty load</strong>
+          </div>
+          <div class="role-pill">
+            <span>Acts On</span>
+            <strong>Scholarship approvals, expansion, leadership decisions, escalations</strong>
+          </div>
+          <div class="role-pill">
+            <span>Business Value</span>
+            <strong>Faster decisions and tighter institutional control</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="role-card">
+        <div class="role-top">
+          <div>
+            <div class="role-tag">Growth</div>
+            <h3>Admissions Team</h3>
+            <p>Lives inside the enquiry-to-enrollment funnel and keeps every lead warm, tracked, and measurable.</p>
+          </div>
+        </div>
+        <div class="role-meta">
+          <div class="role-pill">
+            <span>Sees</span>
+            <strong>Lead source, parent interest, demo schedule, follow-up queue</strong>
+          </div>
+          <div class="role-pill">
+            <span>Acts On</span>
+            <strong>Counselling, demo booking, pipeline movement, onboarding</strong>
+          </div>
+          <div class="role-pill">
+            <span>Business Value</span>
+            <strong>Higher conversion with less lead leakage</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="role-card">
+        <div class="role-top">
+          <div>
+            <div class="role-tag">Finance</div>
+            <h3>Accounts Department</h3>
+            <p>Owns fee plans, collection discipline, receipts, dues, and payment clarity across all students.</p>
+          </div>
+        </div>
+        <div class="role-meta">
+          <div class="role-pill">
+            <span>Sees</span>
+            <strong>Installments, dues, discounts, concessions, ageing, receipts</strong>
+          </div>
+          <div class="role-pill">
+            <span>Acts On</span>
+            <strong>Collection follow-up, reconciliation, refund control, fee closure</strong>
+          </div>
+          <div class="role-pill">
+            <span>Business Value</span>
+            <strong>Stronger cashflow and fewer financial blind spots</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="role-card">
+        <div class="role-top">
+          <div>
+            <div class="role-tag">Academics</div>
+            <h3>Teachers / Faculty</h3>
+            <p>Operates through a lean teaching layer with batch context, attendance, tests, and intervention signals.</p>
+          </div>
+        </div>
+        <div class="role-meta">
+          <div class="role-pill">
+            <span>Sees</span>
+            <strong>Timetable, roster, attendance history, test readiness, weak students</strong>
+          </div>
+          <div class="role-pill">
+            <span>Acts On</span>
+            <strong>Teaching, attendance marking, score entry, remedial action</strong>
+          </div>
+          <div class="role-pill">
+            <span>Business Value</span>
+            <strong>Better academic consistency and quicker intervention</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="role-card">
+        <div class="role-top">
+          <div>
+            <div class="role-tag">Operations</div>
+            <h3>Academic Coordinator</h3>
+            <p>Keeps the academic engine synchronized across rooms, batches, faculty, and exam flow.</p>
+          </div>
+        </div>
+        <div class="role-meta">
+          <div class="role-pill">
+            <span>Sees</span>
+            <strong>Room allocation, batch map, faculty load, test calendar, substitution risk</strong>
+          </div>
+          <div class="role-pill">
+            <span>Acts On</span>
+            <strong>Scheduling, substitutions, capacity balancing, daily escalations</strong>
+          </div>
+          <div class="role-pill">
+            <span>Business Value</span>
+            <strong>Smoother day-to-day execution with fewer disruptions</strong>
+          </div>
+        </div>
+      </article>
+
+      <article class="role-card">
+        <div class="role-top">
+          <div>
+            <div class="role-tag">Support</div>
+            <h3>Front Desk / Admin</h3>
+            <p>Handles the human side of operations: walk-ins, documents, queries, updates, and coordination.</p>
+          </div>
+        </div>
+        <div class="role-meta">
+          <div class="role-pill">
+            <span>Sees</span>
+            <strong>Visitor logs, pending documents, notice boards, parent requests</strong>
+          </div>
+          <div class="role-pill">
+            <span>Acts On</span>
+            <strong>Registration, support closure, data updates, communication routing</strong>
+          </div>
+          <div class="role-pill">
+            <span>Business Value</span>
+            <strong>Reduced process friction and cleaner front-office flow</strong>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="department-strip">
+      <article class="department-card">
+        <p class="eyebrow">Learner Surface</p>
+        <h3>Students</h3>
+        <p>Students get a discipline-first experience built around clarity, routine, and measurable progress.</p>
+        <ul>
+          <li>Timetable and attendance view</li>
+          <li>Homework, tests, and result visibility</li>
+          <li>Doubt session updates and notices</li>
+          <li>Self-accountability loop</li>
+        </ul>
+      </article>
+
+      <article class="department-card">
+        <p class="eyebrow">Guardian Surface</p>
+        <h3>Parents</h3>
+        <p>Parents see the trust layer: attendance, fees, results, alerts, and communication without chasing the institute.</p>
+        <ul>
+          <li>Attendance and absentee alerts</li>
+          <li>Fees, receipts, and payment reminders</li>
+          <li>Result trends and academic visibility</li>
+          <li>Two-way communication channel</li>
+        </ul>
+      </article>
+
+      <article class="department-card">
+        <p class="eyebrow">Scale Surface</p>
+        <h3>Branch Heads</h3>
+        <p>Branch leadership sees local performance with enough authority to move quickly while staying aligned centrally.</p>
+        <ul>
+          <li>Branch dashboard and occupancy view</li>
+          <li>Collections and local admissions performance</li>
+          <li>Faculty and room utilization</li>
+          <li>Regional comparison and governance</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

@@ -11,88 +11,235 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .founder-page {
+      background:
+        radial-gradient(circle at top right, rgba(217, 93, 57, 0.22), transparent 18%),
+        radial-gradient(circle at left 20%, rgba(31, 92, 122, 0.16), transparent 18%),
+        linear-gradient(180deg, #fbf3e8 0%, #efe2cf 100%);
+    }
+
+    .founder-page .sidebar {
+      background: rgba(250, 242, 232, 0.84);
+      border-right-color: rgba(31, 42, 47, 0.08);
+    }
+
+    .founder-page .sidebar-card,
+    .founder-page .sidebar-footer {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 239, 229, 0.9));
+    }
+
+    .founder-page .hero {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top right, rgba(255, 213, 166, 0.22), transparent 18%),
+        linear-gradient(135deg, #1d3341 0%, #264d61 44%, #cb6437 100%);
+      border: none;
+      box-shadow: 0 34px 110px rgba(45, 32, 18, 0.18);
+    }
+
+    .founder-page .hero::after {
+      content: "";
+      position: absolute;
+      right: -60px;
+      bottom: -90px;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background: rgba(255, 245, 233, 0.08);
+    }
+
+    .founder-page .hero-copy .eyebrow,
+    .founder-page .hero-copy p {
+      color: rgba(255, 244, 236, 0.8);
+    }
+
+    .founder-page .hero-copy h3 {
+      color: #fff8f2;
+      max-width: 10ch;
+      font-size: clamp(2.6rem, 4.2vw, 4.4rem);
+    }
+
+    .founder-page .hero-metrics {
+      align-self: end;
+    }
+
+    .founder-page .metric-card {
+      background: rgba(255, 250, 244, 0.9);
+      backdrop-filter: blur(14px);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    .founder-page #dashboard .grid.two-thirds .panel:first-child {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(249, 243, 236, 0.9));
+    }
+
+    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) {
+      background:
+        linear-gradient(180deg, rgba(35, 50, 57, 0.94), rgba(48, 68, 78, 0.9));
+      color: #f7efe6;
+    }
+
+    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .eyebrow,
+    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) h3,
+    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .timeline-item strong,
+    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .timeline-item span {
+      color: #f7efe6;
+    }
+
+    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .timeline-item {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .founder-page #dashboard .grid.equal .panel {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 240, 232, 0.9));
+      color: var(--text);
+    }
+
+    .founder-page #dashboard .grid.equal .panel .eyebrow,
+    .founder-page #dashboard .grid.equal .panel h3,
+    .founder-page #dashboard .grid.equal .panel strong,
+    .founder-page #dashboard .grid.equal .panel span,
+    .founder-page #dashboard .grid.equal .panel li {
+      color: inherit;
+    }
+
+    .founder-page #dashboard .grid.equal .panel:nth-child(2),
+    .founder-page #dashboard .grid.equal .panel:nth-child(2) .eyebrow,
+    .founder-page #dashboard .grid.equal .panel:nth-child(2) h3,
+    .founder-page #dashboard .grid.equal .panel:nth-child(2) strong,
+    .founder-page #dashboard .grid.equal .panel:nth-child(2) span {
+      color: var(--text);
+    }
+
+    @media (max-width: 720px) {
+      .founder-page .hero {
+        padding: 22px;
+      }
+
+      .founder-page .hero-copy h3 {
+        font-size: 3rem;
+        max-width: 8ch;
+      }
+    }
+  </style>
 </head>
-<body>
+<body class="founder-page">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <div class="app-shell">
     <div class="drawer-backdrop" id="drawer-backdrop"></div>
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">L</div>
         <div>
-          <p class="brand-kicker">Client Demo</p>
+          <p class="brand-kicker">Founder Console</p>
           <h1>Lakshya ERP</h1>
         </div>
       </div>
 
       <div class="sidebar-card">
-        <p class="sidebar-label">Institute Snapshot</p>
-        <h2>Nagpur Coaching Hub</h2>
-        <p>ERP demo for IIT-JEE, NEET, MHT-CET and Foundation batches.</p>
+        <p class="sidebar-label">Command Center</p>
+        <h2>Nagpur HQ</h2>
+        <p>Admissions, academics, cashflow</p>
       </div>
 
-      <nav class="nav" id="sidebar-navigation">
-        <button class="nav-item active" data-view="dashboard">Dashboard</button>
-        <button class="nav-item" data-view="admissions">Admissions CRM</button>
-        <button class="nav-item" data-view="students">Student Records</button>
-        <button class="nav-item" data-view="attendance">Attendance</button>
-        <button class="nav-item" data-view="fees">Fees & Finance</button>
-        <button class="nav-item" data-view="academics">Academics & Exams</button>
-        <button class="nav-item" data-view="faculty">Faculty & Timetable</button>
-        <button class="nav-item" data-view="communication">Communication</button>
-        <button class="nav-item" data-view="reports">Reports</button>
-        <button class="nav-item" data-view="settings">Parent App & Settings</button>
+      <nav class="nav" id="sidebar-navigation" aria-label="Dashboard sections">
+        <button class="nav-item active" type="button" data-view="dashboard" aria-current="page">Dashboard</button>
+        <button class="nav-item" type="button" data-view="admissions">Admissions CRM</button>
+        <button class="nav-item" type="button" data-view="students">Student Records</button>
+        <button class="nav-item" type="button" data-view="attendance">Attendance</button>
+        <button class="nav-item" type="button" data-view="fees">Fees &amp; Finance</button>
+        <button class="nav-item" type="button" data-view="academics">Academics &amp; Exams</button>
+        <button class="nav-item" type="button" data-view="faculty">Faculty &amp; Timetable</button>
+        <button class="nav-item" type="button" data-view="communication">Communication</button>
+        <button class="nav-item" type="button" data-view="reports">Reports</button>
+        <button class="nav-item" type="button" data-view="settings">Parent App &amp; Settings</button>
       </nav>
 
       <div class="sidebar-footer">
-        <p class="sidebar-label">Demo Goal</p>
-        <p>Show one unified system instead of separate spreadsheets, WhatsApp follow-ups, and manual fee tracking.</p>
+        <p class="sidebar-label">Focus</p>
+        <p>Growth. Control. Outcomes.</p>
+        <a class="pill sidebar-link" href="./roles.html">Role Views</a>
+        <a class="pill sidebar-link" href="./modules.html">Modules</a>
       </div>
     </aside>
 
-    <main class="main-panel">
+    <main class="main-panel page-wrap" id="main-content">
       <header class="topbar">
         <div class="topbar-title">
-          <button class="menu-toggle" id="menu-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="sidebar-navigation">
+          <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="sidebar-navigation">
             <span></span>
             <span></span>
             <span></span>
           </button>
-          <p class="eyebrow">Lakshya Institute ERP Walkthrough</p>
-          <h2 id="view-title">Dashboard</h2>
+          <div class="topbar-heading">
+            <p class="eyebrow">Founder View</p>
+            <h2 id="view-title">Dashboard</h2>
+          </div>
         </div>
         <div class="topbar-actions">
-          <span class="app-status" id="app-status">Web App Ready</span>
-          <button class="pill">Session 2026-27</button>
-          <button class="pill highlight">Live Demo Mode</button>
-          <button class="pill install-cta hidden" id="install-app">Install App</button>
+          <a class="app-status" id="app-status" href="./health.html" aria-label="Open system health page">Web App Ready</a>
+          <span class="pill">Session 2026-27</span>
+          <span class="pill highlight">Live Demo</span>
+          <button class="pill install-cta hidden" id="install-app" type="button">Install App</button>
         </div>
       </header>
 
+      <nav class="deck-nav" aria-label="Presentation Navigation">
+        <a class="deck-link active" href="./index.html"><span class="icon-chip">00</span>Dashboard</a>
+        <a class="deck-link" href="./roles.html"><span class="icon-chip">01</span>Role Views</a>
+        <a class="deck-link" href="./modules.html"><span class="icon-chip">02</span>Module Stack</a>
+        <a class="deck-link" href="./health.html"><span class="icon-chip">03</span>System Health</a>
+      </nav>
+
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Owner-facing overview</p>
-          <h3>From enquiry to results, every operation sits in one place.</h3>
-          <p>This demo is tailored for a coaching institute that runs lead management, admissions, attendance, tests, fees, faculty planning, and parent communication on a daily basis.</p>
+          <p class="eyebrow">Owner Cockpit</p>
+          <h3>See growth, academic quality, and collections in one glance.</h3>
+          <p>Designed for leadership decisions, not admin clutter.</p>
         </div>
         <div class="hero-metrics">
           <div class="metric-card">
-            <span>Active Students</span>
+            <span>Enrollment Base</span>
             <strong id="hero-students">1,284</strong>
-            <small>Across JEE, NEET, CET and Foundation</small>
+            <small>Flagship programs live</small>
           </div>
           <div class="metric-card">
-            <span>Collections This Month</span>
+            <span>Cash In This Month</span>
             <strong id="hero-collections">Rs 18.6L</strong>
-            <small>92% on-time fee recovery</small>
+            <small>92% on time</small>
           </div>
           <div class="metric-card">
-            <span>Attendance Today</span>
+            <span>Class Presence</span>
             <strong id="hero-attendance">94.2%</strong>
-            <small>Auto-alerts for absentees</small>
+            <small>Alerts automated</small>
           </div>
         </div>
+      </section>
+
+      <section class="spotlight-grid">
+        <article class="spotlight-card dark">
+          <p class="eyebrow">Growth Narrative</p>
+          <h3>Own the funnel.</h3>
+          <p>Move from raw enquiry to predictable admissions with cleaner lead control and faster follow-up execution.</p>
+        </article>
+        <article class="spotlight-card light">
+          <p class="eyebrow">Academic Narrative</p>
+          <h3>Protect quality.</h3>
+          <p>Keep attendance, tests, faculty load, and student weak areas visible before they become reputation problems.</p>
+        </article>
+        <article class="spotlight-card accent">
+          <p class="eyebrow">Finance Narrative</p>
+          <h3>Control cash.</h3>
+          <p>Make collections, dues, and discount decisions part of one disciplined leadership rhythm.</p>
+        </article>
       </section>
 
       <section class="content-view active" id="dashboard">
@@ -100,8 +247,8 @@
           <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Command Center</p>
-                <h3>Institute Performance</h3>
+                <p class="eyebrow">Executive Summary</p>
+                <h3>Business Performance</h3>
               </div>
               <span class="tag green">Healthy</span>
             </div>
@@ -111,8 +258,8 @@
           <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Priority Tasks</p>
-                <h3>What the owner checks every morning</h3>
+                <p class="eyebrow">Leadership Queue</p>
+                <h3>Today's Focus</h3>
               </div>
             </div>
             <div class="timeline" id="priority-list"></div>
@@ -123,7 +270,7 @@
           <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Admissions Funnel</p>
+                <p class="eyebrow">Growth Pipeline</p>
                 <h3>This Week</h3>
               </div>
             </div>
@@ -133,7 +280,7 @@
           <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Batch Mix</p>
+                <p class="eyebrow">Portfolio Mix</p>
                 <h3>Current Enrollment</h3>
               </div>
             </div>
@@ -143,8 +290,8 @@
           <article class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Alerts</p>
-                <h3>Risk Watchlist</h3>
+                <p class="eyebrow">Risk Desk</p>
+                <h3>Watchlist</h3>
               </div>
             </div>
             <ul class="simple-list" id="alerts"></ul>
@@ -173,6 +320,7 @@
             </div>
             <div class="table-wrap">
               <table>
+                <caption class="visually-hidden">Recent admissions enquiries and counsellor status</caption>
                 <thead>
                   <tr>
                     <th>Student</th>
@@ -201,6 +349,7 @@
             </div>
             <div class="table-wrap">
               <table>
+                <caption class="visually-hidden">Student records including parent, attendance, fees, and test snapshot</caption>
                 <thead>
                   <tr>
                     <th>Student</th>
@@ -249,6 +398,7 @@
             </div>
             <div class="table-wrap">
               <table>
+                <caption class="visually-hidden">Batch attendance summary with late, absent, and parent alerts</caption>
                 <thead>
                   <tr>
                     <th>Batch</th>
@@ -277,6 +427,7 @@
             </div>
             <div class="table-wrap">
               <table>
+                <caption class="visually-hidden">Fee plans, payments, dues, and next due dates</caption>
                 <thead>
                   <tr>
                     <th>Student</th>
@@ -325,6 +476,7 @@
             </div>
             <div class="table-wrap">
               <table>
+                <caption class="visually-hidden">Academic batch performance with weak subject and action</caption>
                 <thead>
                   <tr>
                     <th>Batch</th>
@@ -353,6 +505,7 @@
             </div>
             <div class="table-wrap">
               <table>
+                <caption class="visually-hidden">Faculty workload, utilization, and next class timing</caption>
                 <thead>
                   <tr>
                     <th>Faculty</th>
@@ -401,6 +554,7 @@
             </div>
             <div class="table-wrap">
               <table>
+                <caption class="visually-hidden">Communication campaigns, channels, timing, and delivery rates</caption>
                 <thead>
                   <tr>
                     <th>Audience</th>

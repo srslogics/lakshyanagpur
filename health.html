@@ -11,15 +11,217 @@
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .health-page {
+      background:
+        radial-gradient(circle at top right, rgba(73, 173, 130, 0.16), transparent 18%),
+        radial-gradient(circle at left 18%, rgba(37, 94, 113, 0.16), transparent 16%),
+        linear-gradient(180deg, #eef4ef 0%, #dfe9e1 100%);
+    }
+
+    .health-wrap {
+      max-width: 1380px;
+      margin: 0 auto;
+    }
+
+    .health-page .topbar {
+      margin-bottom: 26px;
+    }
+
+    .signal-stage {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 24px;
+      margin-bottom: 26px;
+    }
+
+    .signal-brief {
+      background:
+        radial-gradient(circle at top right, rgba(173, 247, 203, 0.14), transparent 18%),
+        linear-gradient(135deg, #17343e 0%, #1e4b58 46%, #2f7d5a 100%);
+      position: relative;
+      overflow: hidden;
+      padding: 34px;
+      border-radius: 34px;
+      color: #f5fff8;
+      box-shadow: 0 28px 90px rgba(24, 37, 28, 0.16);
+    }
+
+    .signal-brief::after {
+      content: "";
+      position: absolute;
+      right: -90px;
+      bottom: -100px;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: rgba(246, 255, 249, 0.08);
+    }
+
+    .signal-brief .eyebrow,
+    .signal-brief p {
+      color: rgba(241, 255, 247, 0.8);
+    }
+
+    .signal-brief h3 {
+      margin: 0 0 16px;
+      max-width: 11ch;
+      font-size: clamp(2.4rem, 3.8vw, 3.8rem);
+      line-height: 0.96;
+      letter-spacing: -0.05em;
+    }
+
+    .signal-brief p:last-child {
+      margin: 0;
+      max-width: 45ch;
+      line-height: 1.65;
+    }
+
+    .signal-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .signal-card {
+      padding: 24px;
+      border-radius: 28px;
+      background: rgba(247, 255, 250, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      box-shadow: 0 24px 70px rgba(31, 53, 37, 0.12);
+    }
+
+    .signal-card:nth-child(2) {
+      background: linear-gradient(180deg, rgba(26, 60, 48, 0.96), rgba(37, 78, 62, 0.94));
+      color: #f6fff9;
+    }
+
+    .signal-card:nth-child(4) {
+      background: linear-gradient(135deg, rgba(83, 148, 101, 0.96), rgba(47, 125, 90, 0.94));
+      color: #f6fff9;
+    }
+
+    .signal-card .eyebrow {
+      margin-bottom: 10px;
+    }
+
+    .signal-card:nth-child(2) .eyebrow,
+    .signal-card:nth-child(2) p,
+    .signal-card:nth-child(4) .eyebrow,
+    .signal-card:nth-child(4) p {
+      color: rgba(246, 255, 249, 0.82);
+    }
+
+    .signal-card h4 {
+      margin: 0 0 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 1.45rem;
+      letter-spacing: -0.04em;
+    }
+
+    .signal-card p {
+      margin: 0;
+      color: #68766d;
+      line-height: 1.6;
+    }
+
+    .signal-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .strip-card {
+      padding: 22px;
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.92);
+      box-shadow: 0 24px 70px rgba(31, 53, 37, 0.1);
+    }
+
+    .strip-card strong {
+      display: block;
+      margin: 10px 0 6px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 2rem;
+      color: #1f2e28;
+      letter-spacing: -0.05em;
+    }
+
+    .strip-card span,
+    .strip-card small {
+      color: #68766d;
+    }
+
+    .strip-card span {
+      display: block;
+      font-size: 0.76rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 1180px) {
+      .signal-stage,
+      .signal-strip {
+        grid-template-columns: 1fr;
+      }
+
+      .signal-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .signal-brief,
+      .signal-card,
+      .strip-card {
+        padding: 22px;
+      }
+
+      .signal-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .health-page .grid.equal .panel:nth-child(1) {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 249, 244, 0.92));
+    }
+
+    .health-page .grid.equal .panel:nth-child(2) {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(238, 246, 240, 0.92));
+    }
+
+    .health-page .grid.equal .panel:nth-child(3) {
+      background:
+        linear-gradient(180deg, rgba(29, 58, 49, 0.94), rgba(37, 76, 63, 0.92));
+      color: #f6fff9;
+    }
+
+    .health-page .grid.equal .panel:nth-child(3) .eyebrow,
+    .health-page .grid.equal .panel:nth-child(3) h3,
+    .health-page .grid.equal .panel:nth-child(3) .timeline-item strong,
+    .health-page .grid.equal .panel:nth-child(3) .timeline-item span {
+      color: #f6fff9;
+    }
+
+    .health-page .grid.equal .panel:nth-child(3) .timeline-item {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+  </style>
 </head>
-<body>
-  <main class="main-panel">
+<body class="health-page">
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <main class="main-panel page-wrap health-wrap" id="main-content">
     <header class="topbar">
       <div>
         <p class="eyebrow">Lakshya ERP Monitoring</p>
-        <h2>Application Health</h2>
+        <h1>Application Health</h1>
       </div>
       <div class="topbar-actions">
         <a class="pill" href="./index.html">Back to ERP</a>
@@ -27,29 +229,59 @@
       </div>
     </header>
 
-    <section class="hero">
-      <div class="hero-copy">
+    <nav class="deck-nav" aria-label="Presentation Navigation">
+      <a class="deck-link" href="./index.html"><span class="icon-chip">00</span>Dashboard</a>
+      <a class="deck-link" href="./roles.html"><span class="icon-chip">01</span>Role Views</a>
+      <a class="deck-link" href="./modules.html"><span class="icon-chip">02</span>Module Stack</a>
+      <a class="deck-link active" href="./health.html"><span class="icon-chip">03</span>System Health</a>
+    </nav>
+
+    <section class="signal-stage">
+      <article class="signal-brief">
         <p class="eyebrow">Status Overview</p>
-        <h3>Demo environment is available and ready for walkthroughs.</h3>
+        <h3>Monitor reliability without turning this page into another dashboard.</h3>
         <p>This page gives a simple owner-friendly operational view of the ERP demo so the client can imagine how uptime, sync, storage, and app delivery would be monitored in a production version.</p>
+      </article>
+      <div class="signal-grid">
+        <article class="signal-card">
+          <p class="eyebrow">Availability</p>
+          <h4>Frontend is stable</h4>
+          <p>Static screens, founder view, and role pages are opening normally for demos.</p>
+        </article>
+        <article class="signal-card">
+          <p class="eyebrow">Resilience</p>
+          <h4>Offline shell is live</h4>
+          <p>PWA install support and cached shell behavior are ready for mobile walkthroughs.</p>
+        </article>
+        <article class="signal-card">
+          <p class="eyebrow">Queue Health</p>
+          <h4>Sync flow is clear</h4>
+          <p>Lead, fees, and attendance examples can be shown without backlog noise.</p>
+        </article>
+        <article class="signal-card">
+          <p class="eyebrow">Readiness</p>
+          <h4>Production path is visible</h4>
+          <p>Monitoring, backups, permissions, and audit trails can be layered in next.</p>
+        </article>
       </div>
-      <div class="hero-metrics">
-        <div class="metric-card">
-          <span>Frontend Availability</span>
-          <strong>99.98%</strong>
-          <small>Static app pages responding normally</small>
-        </div>
-        <div class="metric-card">
-          <span>Last Sync Cycle</span>
-          <strong>2 min ago</strong>
-          <small>Lead, fee, and attendance queues clear</small>
-        </div>
-        <div class="metric-card">
-          <span>PWA Status</span>
-          <strong>Active</strong>
-          <small>Offline shell and install support enabled</small>
-        </div>
-      </div>
+    </section>
+
+    <section class="signal-strip">
+      <article class="strip-card">
+        <span>Frontend Availability</span>
+        <strong>99.98%</strong>
+        <small>Static app pages responding normally</small>
+      </article>
+      <article class="strip-card">
+        <span>Last Sync Cycle</span>
+        <strong>2 min ago</strong>
+        <small>Lead, fee, and attendance queues clear</small>
+      </article>
+      <article class="strip-card">
+        <span>PWA Status</span>
+        <strong>Active</strong>
+        <small>Offline shell and install support enabled</small>
+      </article>
     </section>
 
     <section class="grid equal">
@@ -63,7 +295,7 @@
         <ul class="simple-list">
           <li><strong>Admissions CRM</strong><span>Lead capture and counsellor workflow healthy</span></li>
           <li><strong>Student Records</strong><span>Profile rendering and local data access healthy</span></li>
-          <li><strong>Fees & Finance</strong><span>Collection dashboard and due views healthy</span></li>
+          <li><strong>Fees &amp; Finance</strong><span>Collection dashboard and due views healthy</span></li>
           <li><strong>Attendance</strong><span>Batch summaries and alert views healthy</span></li>
         </ul>
       </article>

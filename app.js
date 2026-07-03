@@ -1,15 +1,15 @@
 const data = {
   dashboardStats: [
-    { label: "New Enquiries", value: "186", note: "42 from website this week" },
-    { label: "Admissions Closed", value: "74", note: "39.7% funnel conversion" },
-    { label: "Fees Due", value: "Rs 4.8L", note: "61 students need follow-up" },
-    { label: "Tests Scheduled", value: "12", note: "3 full syllabus mocks" }
+    { label: "New Enquiries", value: "186", note: "42 from web" },
+    { label: "Admissions", value: "74", note: "39.7% conversion" },
+    { label: "Fees Due", value: "Rs 4.8L", note: "61 follow-ups" },
+    { label: "Tests", value: "12", note: "3 full mocks" }
   ],
   priorities: [
-    { title: "Call 18 hot leads from NEET seminar campaign", note: "Counsellor Priya has 6 parents waiting for fee plan discussion." },
-    { title: "Approve discount requests above 10%", note: "7 cases pending owner approval in scholarship + conversion bucket." },
-    { title: "Review absent students from top JEE batch", note: "Auto parent alerts sent. 3 need academic mentor callback." },
-    { title: "Check month-end cashflow projection", note: "Expected shortfall reduces if 14 overdue instalments are collected this week." }
+    { title: "18 hot leads pending", note: "Priority counselling today" },
+    { title: "7 discount approvals", note: "Owner review pending" },
+    { title: "3 absentee escalations", note: "Mentor callback needed" },
+    { title: "Month-end cashflow", note: "14 overdue instalments in focus" }
   ],
   funnel: [
     { stage: "Enquiries", count: 186 },
@@ -25,10 +25,10 @@ const data = {
     { name: "Foundation 9-10", students: 325, fill: 85 }
   ],
   alerts: [
-    "14 fee instalments overdue for more than 10 days.",
-    "Physics faculty load exceeds 92% for two consecutive weeks.",
-    "Batch NEET-R3 average score dropped 6% in last mock test.",
-    "8 new web leads still not contacted within 30 minutes."
+    "14 overdue instalments",
+    "Physics load above 92%",
+    "NEET-R3 average down 6%",
+    "8 web leads untouched"
   ],
   leadSources: [
     { source: "Website Forms", leads: 42, conversion: "36%" },
@@ -86,10 +86,10 @@ const data = {
     ["Prisha Tiwari", "Quarterly", "Rs 68,000", "Rs 68,000", "Rs 0", "-"]
   ],
   financeSummary: [
-    "Fee collection this month: Rs 18.6L against target of Rs 20.2L.",
-    "Outstanding receivables: Rs 4.8L, with Rs 2.1L overdue by more than 7 days.",
-    "Scholarship impact: 11.4% effective discount across fresh admissions.",
-    "Expected collection if reminders convert: Rs 3.2L within 5 days."
+    "Collections: Rs 18.6L vs Rs 20.2L target.",
+    "Outstanding: Rs 4.8L.",
+    "Scholarship impact: 11.4%.",
+    "Near-term recovery: Rs 3.2L."
   ],
   examCalendar: [
     { title: "NEET Full Syllabus Mock", note: "4 July, OMR + analytics + parent summary." },
@@ -110,10 +110,10 @@ const data = {
     ["Mrs. Vaishali Wankhede", "Chemistry", "Foundation 10-A, NEET-12 Elite", "26", "74%", "Today 5:30 PM"]
   ],
   timetableNotes: [
-    "Physics load is highest. Add one backup faculty slot before peak season.",
-    "Sunday doubt sessions are 91% utilized and can be upsold as premium support.",
-    "Room 204 is underbooked in afternoon hours and can host extra CET revision batches.",
-    "Faculty attendance and class completion can be linked to payroll in the live version."
+    "Physics load is the tightest.",
+    "Sunday doubt slots run at 91%.",
+    "Room 204 has spare afternoon capacity.",
+    "Payroll can be linked in production."
   ],
   messageFlows: [
     { title: "New Lead Journey", note: "Instant WhatsApp acknowledgement, brochure, counsellor assignment, 3 follow-up nudges." },
@@ -136,10 +136,10 @@ const data = {
     "Parent communication audit"
   ],
   executiveBoard: [
-    { title: "Revenue", note: "Collections are at 92% of target. Biggest lift opportunity is overdue instalment recovery." },
-    { title: "Admissions", note: "School seminar leads convert best. Double down on that channel in July." },
-    { title: "Academics", note: "NEET flagship batches are strong, but JEE chemistry intervention is needed." },
-    { title: "Operations", note: "Attendance automation is saving front-desk time and improving parent trust." }
+    { title: "Revenue", note: "Collections sit at 92% of target." },
+    { title: "Admissions", note: "School seminars remain the best channel." },
+    { title: "Academics", note: "NEET is strong; JEE chemistry needs action." },
+    { title: "Operations", note: "Attendance automation is working well." }
   ],
   parentFeatures: [
     "Daily attendance status with absent and late alerts",
@@ -172,6 +172,26 @@ const menuToggle = document.getElementById("menu-toggle");
 const drawerBackdrop = document.getElementById("drawer-backdrop");
 let deferredInstallPrompt = null;
 
+function setActiveView(viewId, trigger) {
+  navItems.forEach(item => {
+    const isActive = item.dataset.view === viewId;
+    item.classList.toggle("active", isActive);
+    if (isActive) {
+      item.setAttribute("aria-current", "page");
+    } else {
+      item.removeAttribute("aria-current");
+    }
+  });
+
+  views.forEach(view => {
+    view.classList.toggle("active", view.id === viewId);
+  });
+
+  if (viewTitle && trigger) {
+    viewTitle.textContent = trigger.textContent;
+  }
+}
+
 function setStatusClass(value) {
   const text = String(value).toLowerCase();
   if (text.includes("clear") || text.includes("won") || text.includes("healthy")) return "green";
@@ -203,7 +223,7 @@ function renderTimeline(targetId, items) {
 
 function renderSimpleList(targetId, items) {
   const el = document.getElementById(targetId);
-  el.innerHTML = items.map(item => `<li><strong>${item}</strong></li>`).join("");
+  el.innerHTML = items.map(item => `<li>${item}</li>`).join("");
 }
 
 function renderFunnel() {
@@ -292,13 +312,7 @@ function renderBoard() {
 function bindNavigation() {
   navItems.forEach(item => {
     item.addEventListener("click", () => {
-      navItems.forEach(nav => nav.classList.remove("active"));
-      views.forEach(view => view.classList.remove("active"));
-
-      item.classList.add("active");
-      const target = document.getElementById(item.dataset.view);
-      target.classList.add("active");
-      viewTitle.textContent = item.textContent;
+      setActiveView(item.dataset.view, item);
       closeDrawer();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
@@ -328,6 +342,13 @@ function bindDrawer() {
 
   drawerBackdrop.addEventListener("click", closeDrawer);
 
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && document.body.classList.contains("drawer-open")) {
+      closeDrawer();
+      menuToggle.focus();
+    }
+  });
+
   window.addEventListener("resize", () => {
     if (window.innerWidth > 720) {
       closeDrawer();
@@ -348,7 +369,7 @@ function setupInstallPrompt() {
     event.preventDefault();
     deferredInstallPrompt = event;
     installButton.classList.remove("hidden");
-    updateAppStatus("Installable App Ready");
+    updateAppStatus("App Ready");
   });
 
   installButton.addEventListener("click", async () => {
@@ -409,10 +430,10 @@ async function registerServiceWorker() {
 function updateEnvironmentBadges() {
   const pills = document.querySelectorAll(".topbar-actions .pill");
   if (pills[0]) {
-    pills[0].textContent = "Session 2026-27";
+    pills[0].textContent = "2026-27";
   }
   if (pills[1]) {
-    pills[1].textContent = window.isSecureContext ? "Live Demo Mode" : "Preview Mode";
+    pills[1].textContent = window.isSecureContext ? "Live" : "Preview";
   }
 }
 
@@ -447,6 +468,7 @@ function init() {
   renderSimpleList("parent-features", data.parentFeatures);
   renderSimpleList("admin-settings", data.adminSettings);
   renderTimeline("rollout-plan", data.rollout);
+  setActiveView("dashboard", document.querySelector('.nav-item[data-view="dashboard"]'));
   bindNavigation();
   bindDrawer();
   initAppChrome();
