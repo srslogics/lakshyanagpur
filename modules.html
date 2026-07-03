@@ -131,6 +131,7 @@
       margin: 0;
       line-height: 1.6;
       color: #6d756f;
+      overflow-wrap: anywhere;
     }
 
     .module-sequence {
@@ -173,6 +174,7 @@
       margin: 0;
       color: #6d756f;
       line-height: 1.6;
+      overflow-wrap: anywhere;
     }
 
     .modules-page .grid.two-thirds .panel:first-child {
@@ -252,14 +254,35 @@
     }
 
     @media (max-width: 720px) {
+      .modules-page .topbar {
+        margin-bottom: 18px;
+      }
+
+      .module-atlas,
+      .module-sequence {
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+
       .atlas-intro,
       .rail-card,
       .sequence-card {
-        padding: 22px;
+        padding: 18px;
+        border-radius: 24px;
       }
 
       .atlas-rail {
         grid-template-columns: 1fr;
+      }
+
+      .atlas-intro h3 {
+        font-size: 2rem;
+        max-width: 10ch;
+      }
+
+      .rail-card h4,
+      .sequence-card h4 {
+        font-size: 1.18rem;
       }
     }
   </style>
@@ -273,7 +296,7 @@
         <h1>What The Platform Covers</h1>
       </div>
       <div class="topbar-actions">
-        <a class="pill" href="./index.html">Back to Dashboard</a>
+        <a class="pill" href="./index.html">Dashboard</a>
         <a class="pill highlight" href="./roles.html">Role Views</a>
       </div>
     </header>
@@ -287,7 +310,7 @@
 
     <section class="module-atlas">
       <article class="atlas-intro">
-        <p class="eyebrow">Product Scope</p>
+        <p class="eyebrow">Platform Scope</p>
         <h3>Map the full institute system, not just one dashboard.</h3>
         <p>Built to replace fragmented tools with one cohesive institute system.</p>
       </article>
@@ -303,7 +326,7 @@
           <p>Every team works in the same system, so founders get cleaner decisions.</p>
         </article>
         <article class="rail-card">
-          <p class="eyebrow">Demo Promise</p>
+          <p class="eyebrow">Operating Promise</p>
           <h4>Less clutter, more clarity</h4>
           <p>Each feature exists to reduce follow-up chaos and improve academic discipline.</p>
         </article>

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lakshya ERP Health</title>
   <meta name="theme-color" content="#1f6d68">
-  <meta name="description" content="Operational health page for the Lakshya ERP demo application.">
+  <meta name="description" content="Operational health page for the Lakshya ERP application.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.svg">
@@ -125,6 +125,7 @@
       margin: 0;
       color: #68766d;
       line-height: 1.6;
+      overflow-wrap: anywhere;
     }
 
     .signal-strip {
@@ -154,6 +155,7 @@
     .strip-card span,
     .strip-card small {
       color: #68766d;
+      overflow-wrap: anywhere;
     }
 
     .strip-card span {
@@ -175,14 +177,38 @@
     }
 
     @media (max-width: 720px) {
+      .health-page .topbar {
+        margin-bottom: 18px;
+      }
+
+      .signal-stage,
+      .signal-strip {
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+
       .signal-brief,
       .signal-card,
       .strip-card {
-        padding: 22px;
+        padding: 18px;
+        border-radius: 24px;
       }
 
       .signal-grid {
         grid-template-columns: 1fr;
+      }
+
+      .signal-brief h3 {
+        font-size: 2rem;
+        max-width: 10ch;
+      }
+
+      .signal-card h4 {
+        font-size: 1.2rem;
+      }
+
+      .strip-card strong {
+        font-size: 1.6rem;
       }
     }
 
@@ -256,12 +282,12 @@
   <main class="main-panel page-wrap health-wrap" id="main-content">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Lakshya ERP Monitoring</p>
+        <p class="eyebrow">Operations</p>
         <h1>Application Health</h1>
       </div>
       <div class="topbar-actions">
-        <a class="pill" href="./index.html">Back to ERP</a>
-        <span class="app-status success">All Core Services Healthy</span>
+        <a class="pill" href="./index.html">Dashboard</a>
+        <span class="app-status success">All Systems Healthy</span>
       </div>
     </header>
 
@@ -276,18 +302,18 @@
       <article class="signal-brief">
         <p class="eyebrow">Status Overview</p>
         <h3>Monitor reliability without turning this page into another dashboard.</h3>
-        <p>This page gives a simple owner-friendly operational view of the ERP demo so the client can imagine how uptime, sync, storage, and app delivery would be monitored in a production version.</p>
+        <p>A clean owner-facing view of uptime, sync, storage, and delivery readiness.</p>
       </article>
       <div class="signal-grid">
         <article class="signal-card">
           <p class="eyebrow">Availability</p>
           <h4>Frontend is stable</h4>
-          <p>Static screens, founder view, and role pages are opening normally for demos.</p>
+          <p>Core screens and role surfaces are opening normally.</p>
         </article>
         <article class="signal-card">
           <p class="eyebrow">Resilience</p>
-          <h4>Offline shell is live</h4>
-          <p>PWA install support and cached shell behavior are ready for mobile walkthroughs.</p>
+          <h4>App shell is active</h4>
+          <p>Cached access and installable app behavior are available.</p>
         </article>
         <article class="signal-card">
           <p class="eyebrow">Queue Health</p>
@@ -297,7 +323,7 @@
         <article class="signal-card">
           <p class="eyebrow">Readiness</p>
           <h4>Production path is visible</h4>
-          <p>Monitoring, backups, permissions, and audit trails can be layered in next.</p>
+          <p>Monitoring, backups, permissions, and audit trails can be layered next.</p>
         </article>
       </div>
     </section>
@@ -316,7 +342,7 @@
       <article class="strip-card">
         <span>PWA Status</span>
         <strong>Active</strong>
-        <small>Offline shell and install support enabled</small>
+        <small>Installable app and cached access enabled</small>
       </article>
     </section>
 
@@ -344,10 +370,10 @@
           </div>
         </div>
         <ul class="simple-list">
-          <li><strong>Manifest</strong><span>Loaded and install metadata available</span></li>
-          <li><strong>Service Worker</strong><span>Registered for offline shell caching</span></li>
+          <li><strong>Manifest</strong><span>Loaded and app metadata available</span></li>
+          <li><strong>Service Worker</strong><span>Registered for app shell caching</span></li>
           <li><strong>Icons</strong><span>Standard and maskable app icons available</span></li>
-          <li><strong>Standalone Mode</strong><span>Ready for install on mobile and desktop</span></li>
+          <li><strong>Standalone Mode</strong><span>Ready on mobile and desktop</span></li>
         </ul>
       </article>
 
@@ -361,7 +387,7 @@
         <div class="timeline">
           <div class="timeline-item">
             <strong>No blocking errors detected</strong>
-            <span>UI and cached assets are available for demo use.</span>
+            <span>UI and cached assets are available.</span>
           </div>
           <div class="timeline-item">
             <strong>Next planned upgrade</strong>

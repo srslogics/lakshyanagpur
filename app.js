@@ -166,12 +166,9 @@ const data = {
 const viewTitle = document.getElementById("view-title");
 const navItems = document.querySelectorAll(".nav-item");
 const views = document.querySelectorAll(".content-view");
-const installButton = document.getElementById("install-app");
 const appStatus = document.getElementById("app-status");
 const menuToggle = document.getElementById("menu-toggle");
 const drawerBackdrop = document.getElementById("drawer-backdrop");
-let deferredInstallPrompt = null;
-
 function setActiveView(viewId, trigger) {
   navItems.forEach(item => {
     const isActive = item.dataset.view === viewId;
@@ -364,82 +361,46 @@ function updateAppStatus(text, tone = "") {
   }
 }
 
-function setupInstallPrompt() {
-  window.addEventListener("beforeinstallprompt", event => {
-    event.preventDefault();
-    deferredInstallPrompt = event;
-    installButton.classList.remove("hidden");
-    updateAppStatus("App Ready");
-  });
-
-  installButton.addEventListener("click", async () => {
-    if (!deferredInstallPrompt) return;
-
-    deferredInstallPrompt.prompt();
-    const choice = await deferredInstallPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      updateAppStatus("App Installation Started", "success");
-    } else {
-      updateAppStatus("Install Prompt Dismissed", "warn");
-    }
-    deferredInstallPrompt = null;
-    installButton.classList.add("hidden");
-  });
-
-  window.addEventListener("appinstalled", () => {
-    deferredInstallPrompt = null;
-    installButton.classList.add("hidden");
-    updateAppStatus("Installed as App", "success");
-  });
-}
-
 async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
-    updateAppStatus("Offline Mode Not Supported Here");
+    updateAppStatus("ERP Ready");
     return;
   }
 
   if (!window.isSecureContext) {
-    updateAppStatus("Offline Mode Works After HTTPS Deployment");
+    updateAppStatus("ERP Ready");
     return;
   }
 
   try {
     const registration = await navigator.serviceWorker.register("./sw.js");
     if (registration) {
-      updateAppStatus("Offline App Support Active", "success");
+      updateAppStatus("ERP Ready", "success");
       return;
     }
-    updateAppStatus("Offline Mode Ready After Refresh");
+    updateAppStatus("ERP Ready");
   } catch (error) {
     const message = String(error && error.message ? error.message : error).toLowerCase();
     if (message.includes("unsupported") || message.includes("secure") || message.includes("context")) {
-      updateAppStatus("Offline Mode Works After HTTPS Deployment");
+      updateAppStatus("ERP Ready");
       return;
     }
 
     if (message.includes("script") || message.includes("scope") || message.includes("mime")) {
-      updateAppStatus("Offline Setup Needs Review", "warn");
+      updateAppStatus("ERP Ready");
       return;
     }
 
-    updateAppStatus("Offline Mode Temporarily Unavailable");
+    updateAppStatus("ERP Ready");
   }
 }
 
 function updateEnvironmentBadges() {
-  const pills = document.querySelectorAll(".topbar-actions .pill");
-  if (pills[0]) {
-    pills[0].textContent = "2026-27";
-  }
-  if (pills[1]) {
-    pills[1].textContent = window.isSecureContext ? "Live" : "Preview";
-  }
+  return;
 }
 
 function initAppChrome() {
   updateEnvironmentBadges();
-  setupInstallPrompt();
   registerServiceWorker();
 }
 

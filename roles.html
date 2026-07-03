@@ -75,6 +75,7 @@
       font-size: 1.05rem;
       line-height: 1.65;
       margin: 0;
+      overflow-wrap: anywhere;
     }
 
     .roles-quickgrid {
@@ -112,6 +113,8 @@
     .roles-quickcard small {
       color: #6d756f;
       line-height: 1.55;
+      display: block;
+      overflow-wrap: anywhere;
     }
 
     .roles-toolbar {
@@ -204,6 +207,7 @@
       color: #6d756f;
       line-height: 1.6;
       max-width: 46ch;
+      overflow-wrap: anywhere;
     }
 
     .role-meta {
@@ -233,6 +237,7 @@
       color: #223036;
       font-size: 1rem;
       line-height: 1.5;
+      overflow-wrap: anywhere;
     }
 
     .department-strip {
@@ -264,6 +269,7 @@
       margin: 0 0 18px;
       color: #6d756f;
       line-height: 1.6;
+      overflow-wrap: anywhere;
     }
 
     .department-card ul {
@@ -280,6 +286,7 @@
       background: rgba(255, 255, 255, 0.72);
       border: 1px solid rgba(34, 48, 54, 0.06);
       color: #314147;
+      overflow-wrap: anywhere;
     }
 
     @media (min-width: 1181px) {
@@ -347,19 +354,28 @@
         padding: 0;
       }
 
+      .roles-hero,
+      .roles-grid,
+      .department-strip {
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+
       .roles-stage,
       .roles-quickcard,
       .role-card,
       .department-card {
+        padding: 18px;
         border-radius: 26px;
       }
 
       .roles-stage {
-        padding: 24px;
+        padding: 20px;
       }
 
       .roles-stage h1 {
-        font-size: 2.75rem;
+        font-size: 2.1rem;
+        max-width: 11ch;
       }
 
       .roles-quickgrid {
@@ -379,6 +395,29 @@
         width: 100%;
         justify-content: center;
       }
+
+      .roles-toolbar h2 {
+        font-size: 1.75rem;
+      }
+
+      .roles-quickcard strong {
+        font-size: 1.8rem;
+      }
+
+      .role-card h3,
+      .department-card h3 {
+        font-size: 1.45rem;
+      }
+
+      .role-meta,
+      .department-card ul {
+        gap: 10px;
+      }
+
+      .role-pill,
+      .department-card li {
+        padding: 14px;
+      }
     }
   </style>
 </head>
@@ -387,7 +426,7 @@
   <main class="main-panel page-wrap roles-wrap" id="main-content">
     <section class="roles-hero">
       <div class="roles-stage">
-        <p class="eyebrow">Stakeholder Matrix</p>
+        <p class="eyebrow">Stakeholders</p>
         <h1>Every role gets a workspace built for decisions.</h1>
         <p>The platform is not one generic admin screen. It changes by person, department, and accountability level across the institute.</p>
       </div>

@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lakshya ERP Demo</title>
+  <title>Lakshya ERP</title>
   <meta name="theme-color" content="#1f6d68">
-  <meta name="description" content="Lakshya ERP demo app for admissions, students, fees, attendance, academics, communication, and reports.">
+  <meta name="description" content="Lakshya ERP for admissions, students, fees, attendance, academics, communication, and reports.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Lakshya ERP Demo">
-  <meta property="og:description" content="Premium institute ERP demo for admissions, academics, fees, attendance, communication, and leadership control.">
+  <meta property="og:title" content="Lakshya ERP">
+  <meta property="og:description" content="Premium institute ERP for admissions, academics, fees, attendance, communication, and leadership control.">
   <meta property="og:image" content="./share-card.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Lakshya ERP premium demo share card">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Lakshya ERP Demo">
-  <meta name="twitter:description" content="Premium institute ERP demo for admissions, academics, fees, attendance, communication, and leadership control.">
+  <meta name="twitter:title" content="Lakshya ERP">
+  <meta name="twitter:description" content="Premium institute ERP for admissions, academics, fees, attendance, communication, and leadership control.">
   <meta name="twitter:image" content="./share-card.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -158,13 +158,92 @@
     }
 
     @media (max-width: 720px) {
+      .founder-page .topbar-actions .pill:not(.install-cta) {
+        display: none;
+      }
+
+      .founder-page .deck-nav {
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .founder-page .deck-link {
+        min-height: 42px;
+        padding: 10px 14px;
+      }
+
       .founder-page .dashboard-hero {
-        padding: 22px;
+        padding: 16px;
+        gap: 12px;
+        margin-bottom: 12px;
       }
 
       .founder-page .dashboard-hero-copy h3 {
-        font-size: 3rem;
-        max-width: 8ch;
+        font-size: 1.75rem;
+        max-width: 9ch;
+      }
+
+      .founder-page .dashboard-hero-copy p:last-child {
+        font-size: 0.9rem;
+        line-height: 1.45;
+      }
+
+      .founder-page .dashboard-hero-metrics {
+        grid-template-columns: repeat(3, minmax(118px, 1fr));
+        gap: 10px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .founder-page .dashboard-hero-metrics::-webkit-scrollbar,
+      .founder-page .dashboard-spotlight-grid::-webkit-scrollbar {
+        display: none;
+      }
+
+      .founder-page .dashboard-metric-card {
+        min-width: 118px;
+        padding: 12px;
+      }
+
+      .founder-page .dashboard-metric-card span {
+        font-size: 0.72rem;
+        margin-bottom: 6px;
+      }
+
+      .founder-page .dashboard-metric-card strong {
+        margin: 4px 0;
+        font-size: 1.42rem;
+      }
+
+      .founder-page .dashboard-metric-card small {
+        font-size: 0.78rem;
+        line-height: 1.3;
+      }
+
+      .founder-page .dashboard-spotlight-grid {
+        display: flex;
+        overflow-x: auto;
+        gap: 10px;
+        margin-bottom: 12px;
+        padding-bottom: 2px;
+        scroll-snap-type: x proximity;
+      }
+
+      .founder-page .dashboard-spotlight-card {
+        min-width: min(84vw, 280px);
+        padding: 16px;
+        scroll-snap-align: start;
+      }
+
+      .founder-page .dashboard-spotlight-card h3 {
+        font-size: 1.22rem;
+      }
+
+      .founder-page #dashboard .grid {
+        gap: 10px;
+        margin-bottom: 10px;
       }
     }
   </style>
@@ -177,13 +256,12 @@
       <div class="brand">
         <div class="brand-mark">L</div>
         <div>
-          <p class="brand-kicker">Founder Console</p>
+          <p class="brand-kicker">Lakshya ERP</p>
           <h1>Lakshya ERP</h1>
         </div>
       </div>
 
       <div class="sidebar-card">
-        <p class="sidebar-label">Command Center</p>
         <h2>Nagpur HQ</h2>
         <p>Admissions, academics, cashflow</p>
       </div>
@@ -202,7 +280,6 @@
       </nav>
 
       <div class="sidebar-footer">
-        <p class="sidebar-label">Focus</p>
         <p>Growth. Control. Outcomes.</p>
         <a class="pill sidebar-link" href="./roles.html">Role Views</a>
         <a class="pill sidebar-link" href="./modules.html">Modules</a>
@@ -218,15 +295,12 @@
             <span></span>
           </button>
           <div class="topbar-heading">
-            <p class="eyebrow">Founder View</p>
+            <p class="eyebrow">Lakshya ERP</p>
             <h2 id="view-title">Dashboard</h2>
           </div>
         </div>
         <div class="topbar-actions">
-          <a class="app-status" id="app-status" href="./health.html" aria-label="Open system health page">Web App Ready</a>
-          <span class="pill">Session 2026-27</span>
-          <span class="pill highlight">Live Demo</span>
-          <button class="pill install-cta hidden" id="install-app" type="button">Install App</button>
+          <a class="app-status" id="app-status" href="./health.html" aria-label="Open system health page">ERP Ready</a>
         </div>
       </header>
 
@@ -407,7 +481,7 @@
             <div class="panel-head">
               <div>
                 <p class="eyebrow">Student Profile</p>
-                <h3>Featured Demo Record</h3>
+                <h3>Featured Student Record</h3>
               </div>
             </div>
             <div class="profile-card" id="student-profile"></div>

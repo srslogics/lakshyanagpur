@@ -1,7 +1,7 @@
 {
-  "name": "Lakshya ERP Demo",
+  "name": "Lakshya ERP",
   "short_name": "Lakshya ERP",
-  "description": "A coaching institute ERP demo for admissions, students, fees, attendance, academics, communication, and reports.",
+  "description": "A coaching institute ERP for admissions, students, fees, attendance, academics, communication, and reports.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
