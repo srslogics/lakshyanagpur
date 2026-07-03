@@ -9,7 +9,8 @@ const ASSETS = [
   "./app.js",
   "./manifest.webmanifest",
   "./icon.svg",
-  "./icon-maskable.svg"
+  "./icon-maskable.svg",
+  "./share-card.png"
 ];
 
 self.addEventListener("install", event => {
