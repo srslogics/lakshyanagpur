@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lakshya ERP Demo</title>
-  <meta name="theme-color" content="#d95d39">
+  <meta name="theme-color" content="#1f6d68">
   <meta name="description" content="Lakshya ERP demo app for admissions, students, fees, attendance, academics, communication, and reports.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -12,34 +12,34 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=4">
   <style>
     .founder-page {
       background:
-        radial-gradient(circle at top right, rgba(217, 93, 57, 0.22), transparent 18%),
-        radial-gradient(circle at left 20%, rgba(31, 92, 122, 0.16), transparent 18%),
-        linear-gradient(180deg, #fbf3e8 0%, #efe2cf 100%);
+        radial-gradient(circle at top right, rgba(88, 166, 123, 0.2), transparent 18%),
+        radial-gradient(circle at left 20%, rgba(33, 95, 103, 0.16), transparent 18%),
+        linear-gradient(180deg, #eef7f3 0%, #dcece6 100%);
     }
 
     .founder-page .sidebar {
-      background: rgba(250, 242, 232, 0.84);
+      background: rgba(237, 247, 242, 0.84);
       border-right-color: rgba(31, 42, 47, 0.08);
     }
 
     .founder-page .sidebar-card,
     .founder-page .sidebar-footer {
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 239, 229, 0.9));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(234, 245, 240, 0.9));
     }
 
     .founder-page .hero {
       position: relative;
       overflow: hidden;
       background:
-        radial-gradient(circle at top right, rgba(255, 213, 166, 0.22), transparent 18%),
-        linear-gradient(135deg, #1d3341 0%, #264d61 44%, #cb6437 100%);
+        radial-gradient(circle at top right, rgba(126, 204, 166, 0.18), transparent 18%),
+        linear-gradient(135deg, #203f51 0%, #285f62 48%, #5ba57e 100%);
       border: none;
-      box-shadow: 0 34px 110px rgba(45, 32, 18, 0.18);
+      box-shadow: 0 38px 120px rgba(17, 43, 46, 0.18);
     }
 
     .founder-page .hero::after {
@@ -69,19 +69,19 @@
     }
 
     .founder-page .metric-card {
-      background: rgba(255, 250, 244, 0.9);
+      background: rgba(251, 255, 252, 0.72);
       backdrop-filter: blur(14px);
-      border-color: rgba(255, 255, 255, 0.5);
+      border-color: rgba(255, 255, 255, 0.32);
     }
 
     .founder-page #dashboard .grid.two-thirds .panel:first-child {
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(249, 243, 236, 0.9));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(238, 247, 243, 0.92));
     }
 
     .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) {
       background:
-        linear-gradient(180deg, rgba(35, 50, 57, 0.94), rgba(48, 68, 78, 0.9));
+        linear-gradient(180deg, rgba(31, 67, 74, 0.98), rgba(39, 84, 81, 0.94));
       color: #f7efe6;
     }
 
@@ -99,7 +99,7 @@
 
     .founder-page #dashboard .grid.equal .panel {
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 240, 232, 0.9));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(238, 246, 242, 0.92));
       color: var(--text);
     }
 
@@ -117,6 +117,33 @@
     .founder-page #dashboard .grid.equal .panel:nth-child(2) strong,
     .founder-page #dashboard .grid.equal .panel:nth-child(2) span {
       color: var(--text);
+    }
+
+    @media (min-width: 1181px) {
+      .founder-page .hero-copy h3 {
+        font-size: clamp(2.45rem, 2.9vw, 3.25rem);
+        max-width: 8ch;
+      }
+
+      .founder-page .hero {
+        min-height: 280px;
+      }
+
+      .founder-page .hero-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .founder-page .spotlight-grid {
+        grid-template-columns: 1.05fr 1fr 1fr;
+      }
+
+      .founder-page .spotlight-card h3 {
+        font-size: 1.35rem;
+      }
+
+      .founder-page #dashboard .grid.equal {
+        grid-template-columns: 0.92fr 1fr 0.92fr;
+      }
     }
 
     @media (max-width: 720px) {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lakshya ERP Modules</title>
-  <meta name="theme-color" content="#d95d39">
+  <meta name="theme-color" content="#1f6d68">
   <meta name="description" content="Lakshya ERP module stack for admissions, academics, operations, finance, and communication.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -12,13 +12,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=4">
   <style>
     .modules-page {
       background:
-        radial-gradient(circle at top left, rgba(75, 169, 197, 0.14), transparent 18%),
-        radial-gradient(circle at bottom right, rgba(217, 93, 57, 0.18), transparent 18%),
-        linear-gradient(180deg, #f5f0e7 0%, #eadfce 100%);
+        radial-gradient(circle at top left, rgba(93, 180, 153, 0.14), transparent 18%),
+        radial-gradient(circle at bottom right, rgba(70, 136, 113, 0.16), transparent 18%),
+        linear-gradient(180deg, #eff8f4 0%, #dfeee8 100%);
     }
 
     .modules-wrap {
@@ -39,10 +39,10 @@
       padding: 34px;
       border-radius: 34px;
       background:
-        radial-gradient(circle at top right, rgba(255, 232, 190, 0.18), transparent 20%),
-        linear-gradient(135deg, #2a3e49 0%, #2d596a 48%, #e48a4c 100%);
+        radial-gradient(circle at top right, rgba(145, 223, 188, 0.18), transparent 20%),
+        linear-gradient(135deg, #214453 0%, #2a5f60 48%, #5ba47d 100%);
       color: #fff8f2;
-      box-shadow: 0 30px 100px rgba(43, 31, 18, 0.16);
+      box-shadow: 0 30px 100px rgba(24, 64, 58, 0.16);
     }
 
     .atlas-intro::after {
@@ -92,21 +92,21 @@
     }
 
     .rail-card:nth-child(1) {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 239, 231, 0.92));
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(237, 247, 243, 0.92));
     }
 
     .rail-card:nth-child(2) {
-      background: linear-gradient(180deg, rgba(33, 55, 65, 0.96), rgba(44, 76, 89, 0.94));
+      background: linear-gradient(180deg, rgba(31, 67, 74, 0.98), rgba(39, 81, 79, 0.94));
       color: #fff7ef;
     }
 
     .rail-card:nth-child(3) {
-      background: linear-gradient(135deg, rgba(231, 134, 75, 0.98), rgba(214, 95, 57, 0.94));
+      background: linear-gradient(135deg, rgba(60, 123, 101, 0.98), rgba(91, 165, 125, 0.94));
       color: #fff8f2;
     }
 
     .rail-card:nth-child(4) {
-      background: linear-gradient(180deg, rgba(248, 241, 232, 0.96), rgba(241, 229, 214, 0.94));
+      background: linear-gradient(180deg, rgba(241, 249, 245, 0.96), rgba(228, 242, 236, 0.94));
     }
 
     .rail-card .eyebrow {
@@ -153,8 +153,8 @@
       margin-bottom: 14px;
       padding: 7px 12px;
       border-radius: 999px;
-      background: rgba(37, 94, 113, 0.08);
-      color: #22516a;
+      background: rgba(33, 95, 103, 0.08);
+      color: #215f67;
       font-size: 0.76rem;
       font-weight: 700;
       letter-spacing: 0.1em;
@@ -177,12 +177,12 @@
 
     .modules-page .grid.two-thirds .panel:first-child {
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 242, 235, 0.92));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(237, 247, 243, 0.92));
     }
 
     .modules-page .grid.two-thirds .panel:last-child {
       background:
-        linear-gradient(180deg, rgba(32, 53, 62, 0.94), rgba(41, 68, 80, 0.92));
+        linear-gradient(180deg, rgba(31, 67, 74, 0.98), rgba(38, 80, 78, 0.94));
       color: #fff7ef;
     }
 
@@ -200,7 +200,44 @@
 
     .modules-page .grid.equal .panel {
       background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 239, 231, 0.92));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(238, 247, 243, 0.92));
+    }
+
+    @media (min-width: 1181px) {
+      .modules-wrap {
+        max-width: 1320px;
+      }
+
+      .module-atlas {
+        gap: 18px;
+        margin-bottom: 16px;
+      }
+
+      .atlas-intro,
+      .rail-card,
+      .sequence-card {
+        padding: 18px;
+      }
+
+      .atlas-intro h3 {
+        font-size: clamp(2.4rem, 2.8vw, 3.4rem);
+      }
+
+      .atlas-rail,
+      .module-sequence {
+        gap: 12px;
+      }
+
+      .rail-card h4,
+      .sequence-card h4 {
+        font-size: 1.2rem;
+      }
+
+      .rail-card p,
+      .sequence-card p {
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
     }
 
     @media (max-width: 1180px) {

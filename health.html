@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lakshya ERP Health</title>
-  <meta name="theme-color" content="#d95d39">
+  <meta name="theme-color" content="#1f6d68">
   <meta name="description" content="Operational health page for the Lakshya ERP demo application.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=4">
   <style>
     .health-page {
       background:
@@ -212,6 +212,42 @@
     .health-page .grid.equal .panel:nth-child(3) .timeline-item {
       background: rgba(255, 255, 255, 0.06);
       border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    @media (min-width: 1181px) {
+      .health-wrap {
+        max-width: 1320px;
+      }
+
+      .signal-stage,
+      .signal-strip {
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .signal-brief,
+      .signal-card,
+      .strip-card {
+        padding: 18px;
+      }
+
+      .signal-brief h3 {
+        font-size: clamp(2.3rem, 2.8vw, 3.2rem);
+      }
+
+      .signal-card h4 {
+        font-size: 1.18rem;
+      }
+
+      .signal-card p,
+      .strip-card small {
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+
+      .strip-card strong {
+        font-size: 1.7rem;
+      }
     }
   </style>
 </head>
