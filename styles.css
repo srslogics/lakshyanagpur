@@ -529,6 +529,7 @@ table,
 
 .grid.equal {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
 }
 
 .span-2 {
@@ -607,6 +608,15 @@ table,
 
 .simple-list li {
   color: var(--ink-soft);
+}
+
+#alerts.simple-list {
+  gap: 10px;
+}
+
+#alerts.simple-list li {
+  padding: 14px 18px;
+  line-height: 1.35;
 }
 
 .timeline-item span,
@@ -1290,9 +1300,10 @@ th {
 
   .hero-copy h3,
   .dashboard-hero-copy h3 {
-    max-width: 10ch;
-    font-size: 2rem;
-    line-height: 1;
+    max-width: 14ch;
+    font-size: 1.8rem;
+    line-height: 1.04;
+    text-wrap: balance;
   }
 
   .hero-copy p:last-child,
@@ -1326,6 +1337,14 @@ th {
 
   .panel {
     padding: 18px;
+  }
+
+  #alerts.simple-list {
+    gap: 8px;
+  }
+
+  #alerts.simple-list li {
+    padding: 12px 14px;
   }
 
   .panel-head,
