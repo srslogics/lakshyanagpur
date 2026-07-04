@@ -1,4 +1,4 @@
-const CACHE_NAME = "lakshya-erp-demo-v5";
+const CACHE_NAME = "lakshya-erp-demo-v6";
 const ASSETS = [
   "/",
   "/health/",
