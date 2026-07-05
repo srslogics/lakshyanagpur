@@ -170,7 +170,52 @@ const appStatus = document.getElementById("app-status");
 const installButton = document.getElementById("install-app");
 const menuToggle = document.getElementById("menu-toggle");
 const drawerBackdrop = document.getElementById("drawer-backdrop");
+const installSheet = document.getElementById("install-sheet");
+const installSheetBackdrop = document.getElementById("install-sheet-backdrop");
+const installSheetClose = document.getElementById("install-sheet-close");
 let deferredInstallPrompt = null;
+
+function isIosDevice() {
+  const ua = window.navigator.userAgent;
+  return /iphone|ipad|ipod/i.test(ua);
+}
+
+function isSafariBrowser() {
+  const ua = window.navigator.userAgent;
+  return /safari/i.test(ua) && !/chrome|crios|fxios|edgios|opr\//i.test(ua);
+}
+
+function isInStandaloneMode() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function openInstallSheet() {
+  if (!installSheet || !installSheetBackdrop) return;
+  installSheet.classList.remove("hidden");
+  installSheetBackdrop.classList.remove("hidden");
+  document.body.classList.add("install-sheet-open");
+}
+
+function closeInstallSheet() {
+  if (!installSheet || !installSheetBackdrop) return;
+  installSheet.classList.add("hidden");
+  installSheetBackdrop.classList.add("hidden");
+  document.body.classList.remove("install-sheet-open");
+}
+
+function bindInstallSheet() {
+  if (!installSheet || !installSheetBackdrop || !installSheetClose) return;
+
+  installSheetBackdrop.addEventListener("click", closeInstallSheet);
+  installSheetClose.addEventListener("click", closeInstallSheet);
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && !installSheet.classList.contains("hidden")) {
+      closeInstallSheet();
+    }
+  });
+}
+
 function setActiveView(viewId, trigger) {
   navItems.forEach(item => {
     const isActive = item.dataset.view === viewId;
@@ -366,9 +411,26 @@ function updateAppStatus(text, tone = "") {
 function setupInstallPrompt() {
   if (!installButton) return;
 
+  if (isIosDevice() && !isInStandaloneMode()) {
+    installButton.textContent = "Add to Home Screen";
+    installButton.classList.remove("hidden");
+    installButton.addEventListener("click", () => {
+      updateAppStatus(isSafariBrowser() ? "Use Safari Share" : "Open In Safari", "success");
+      openInstallSheet();
+    });
+    return;
+  }
+
+  if (isInStandaloneMode()) {
+    updateAppStatus("Installed", "success");
+    installButton.classList.add("hidden");
+    return;
+  }
+
   window.addEventListener("beforeinstallprompt", event => {
     event.preventDefault();
     deferredInstallPrompt = event;
+    installButton.textContent = "Install App";
     installButton.classList.remove("hidden");
   });
 
@@ -433,6 +495,7 @@ function updateEnvironmentBadges() {
 
 function initAppChrome() {
   updateEnvironmentBadges();
+  bindInstallSheet();
   setupInstallPrompt();
   registerServiceWorker();
 }

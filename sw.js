@@ -1,4 +1,4 @@
-const CACHE_NAME = "lakshya-erp-demo-v6";
+const CACHE_NAME = "lakshya-erp-demo-v7";
 const ASSETS = [
   "/",
   "/health/",
@@ -9,6 +9,8 @@ const ASSETS = [
   "/manifest.webmanifest",
   "/icon.svg",
   "/icon-maskable.svg",
+  "/apple-touch-icon.png",
+  "/icon-512.png",
   "/share-card.png"
 ];
 
