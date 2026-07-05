@@ -173,6 +173,9 @@ const drawerBackdrop = document.getElementById("drawer-backdrop");
 const installSheet = document.getElementById("install-sheet");
 const installSheetBackdrop = document.getElementById("install-sheet-backdrop");
 const installSheetClose = document.getElementById("install-sheet-close");
+const installSheetKicker = document.getElementById("install-sheet-kicker");
+const installSheetTitle = document.getElementById("install-sheet-title");
+const installSteps = document.getElementById("install-steps");
 let deferredInstallPrompt = null;
 
 function isIosDevice() {
@@ -185,8 +188,25 @@ function isSafariBrowser() {
   return /safari/i.test(ua) && !/chrome|crios|fxios|edgios|opr\//i.test(ua);
 }
 
+function isMacSafari() {
+  return isSafariBrowser() && !isIosDevice();
+}
+
 function isInStandaloneMode() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function setInstallSheetContent(config) {
+  if (!installSheetKicker || !installSheetTitle || !installSteps) return;
+
+  installSheetKicker.textContent = config.kicker;
+  installSheetTitle.textContent = config.title;
+  installSteps.innerHTML = config.steps.map((step, index) => `
+    <div class="install-step">
+      <strong>${index + 1}</strong>
+      <span>${step}</span>
+    </div>
+  `).join("");
 }
 
 function openInstallSheet() {
@@ -412,10 +432,38 @@ function setupInstallPrompt() {
   if (!installButton) return;
 
   if (isIosDevice() && !isInStandaloneMode()) {
+    setInstallSheetContent({
+      kicker: "iPhone Install",
+      title: "Add Lakshya ERP to the home screen.",
+      steps: [
+        "Open this link in Safari.",
+        "Tap the Share button at the bottom of Safari.",
+        "Choose <b>Add to Home Screen</b>, then tap <b>Add</b>."
+      ]
+    });
     installButton.textContent = "Add to Home Screen";
     installButton.classList.remove("hidden");
     installButton.addEventListener("click", () => {
       updateAppStatus(isSafariBrowser() ? "Use Safari Share" : "Open In Safari", "success");
+      openInstallSheet();
+    });
+    return;
+  }
+
+  if (isMacSafari() && !isInStandaloneMode()) {
+    setInstallSheetContent({
+      kicker: "Mac Install",
+      title: "Add Lakshya ERP to the Dock.",
+      steps: [
+        "Open this link in Safari.",
+        "Click the <b>Share</b> button in Safari.",
+        "Choose <b>Add to Dock</b>, then confirm to create the app."
+      ]
+    });
+    installButton.textContent = "Add to Dock";
+    installButton.classList.remove("hidden");
+    installButton.addEventListener("click", () => {
+      updateAppStatus("Use Safari Share", "success");
       openInstallSheet();
     });
     return;
