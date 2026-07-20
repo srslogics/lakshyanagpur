@@ -10,8 +10,18 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 load_dotenv(BASE_DIR / ".env")
 
 
+def normalize_database_url(value: str) -> str:
+    """Select Psycopg 3 explicitly for provider-style PostgreSQL URLs."""
+    url = value.strip()
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgres://")
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+    return url
+
+
 class Settings:
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./lakshya_erp.db")
+    database_url: str = normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///./lakshya_erp.db"))
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
     app_port: int = int(os.getenv("APP_PORT", "8000"))
     cors_origins: list[str] = [item.strip() for item in os.getenv("CORS_ORIGINS", "http://localhost:8000").split(",") if item.strip()]
