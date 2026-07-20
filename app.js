@@ -1,582 +1,355 @@
-const data = {
-  dashboardStats: [
-    { label: "New Enquiries", value: "186", note: "42 from web" },
-    { label: "Admissions", value: "74", note: "39.7% conversion" },
-    { label: "Fees Due", value: "Rs 4.8L", note: "61 follow-ups" },
-    { label: "Tests", value: "12", note: "3 full mocks" }
-  ],
-  priorities: [
-    { title: "18 hot leads pending", note: "Priority counselling today" },
-    { title: "7 discount approvals", note: "Owner review pending" },
-    { title: "3 absentee escalations", note: "Mentor callback needed" },
-    { title: "Month-end cashflow", note: "14 overdue instalments in focus" }
-  ],
-  funnel: [
-    { stage: "Enquiries", count: 186 },
-    { stage: "Counselling Done", count: 124 },
-    { stage: "Demo Class", count: 91 },
-    { stage: "Fee Discussion", count: 82 },
-    { stage: "Admissions", count: 74 }
-  ],
-  batchMix: [
-    { name: "NEET Repeaters", students: 380, fill: 88 },
-    { name: "JEE Main + Advanced", students: 315, fill: 79 },
-    { name: "MHT-CET", students: 264, fill: 72 },
-    { name: "Foundation 9-10", students: 325, fill: 85 }
-  ],
-  alerts: [
-    "14 overdue instalments",
-    "Physics load above 92%",
-    "NEET-R3 average down 6%",
-    "8 web leads untouched"
-  ],
-  leadSources: [
-    { source: "Website Forms", leads: 42, conversion: "36%" },
-    { source: "Seminars in Schools", leads: 51, conversion: "48%" },
-    { source: "Parent Referrals", leads: 27, conversion: "63%" },
-    { source: "Instagram / Meta Ads", leads: 39, conversion: "28%" },
-    { source: "Walk-ins", leads: 27, conversion: "52%" }
-  ],
-  admissions: [
-    ["Aarav Thakre", "JEE 11th", "Website", "Priya", "Hot", "Parent meeting at 6:30 PM"],
-    ["Saanvi Mohod", "NEET Repeater", "Seminar", "Rahul", "Demo Booked", "Attend biology demo tomorrow"],
-    ["Vedant Zade", "MHT-CET", "Instagram", "Kiran", "Negotiation", "Owner discount approval"],
-    ["Khushi Agrawal", "Foundation", "Referral", "Priya", "Won", "Admission fee paid"],
-    ["Yash Bisen", "NEET 12th", "Walk-in", "Rahul", "Follow-up", "Share test schedule and fee plan"]
-  ],
-  students: [
-    ["Ananya Deshmukh", "NEET-R2", "Mrs. Deshmukh", "96%", "Clear", "612 / 720"],
-    ["Rudra Sakhare", "JEE-A1", "Mr. Sakhare", "89%", "Instalment due", "211 / 300"],
-    ["Prisha Tiwari", "Foundation 10-A", "Mrs. Tiwari", "98%", "Clear", "91 / 100"],
-    ["Atharv Kale", "MHT-CET-P1", "Mr. Kale", "84%", "2 dues", "148 / 200"],
-    ["Myra Jain", "NEET-12 Elite", "Mrs. Jain", "93%", "Clear", "645 / 720"]
-  ],
-  studentProfile: [
-    {
-      title: "Ananya Deshmukh",
-      body: "NEET Repeater batch. Target score 650+. Parent app active. 96% attendance, all fees paid, strongest in Biology, needs speed improvement in Physics numericals."
-    },
-    {
-      title: "Parent Notes",
-      body: "Mother prefers weekly progress summary on WhatsApp every Sunday evening. Escalate only if attendance drops below 90% or if two tests decline in a row."
-    },
-    {
-      title: "Academic Action",
-      body: "Auto-enrolled in Monday doubt-solving clinic and Friday speed-test series based on weak-area analytics."
-    }
-  ],
-  attendanceSummary: [
-    { label: "Marked Today", value: "1,211", note: "Out of 1,284 students" },
-    { label: "Present", value: "1,144", note: "94.2% attendance" },
-    { label: "Late", value: "28", note: "Gate scan after cutoff" },
-    { label: "Absent", value: "39", note: "Parent alerts triggered" }
-  ],
-  attendanceRows: [
-    ["NEET-R2", "120", "113", "2", "5", "WhatsApp alert + mentor call"],
-    ["JEE-A1", "96", "90", "3", "3", "Absence trend normal"],
-    ["MHT-CET-P1", "82", "74", "4", "4", "Send parent note for repeat latecomers"],
-    ["Foundation 10-A", "64", "62", "1", "1", "No escalation needed"],
-    ["NEET-12 Elite", "72", "68", "0", "4", "Academic coordinator to review"]
-  ],
-  fees: [
-    ["Rudra Sakhare", "Quarterly", "Rs 1,45,000", "Rs 95,000", "Rs 50,000", "08 Jul 2026"],
-    ["Atharv Kale", "Monthly", "Rs 72,000", "Rs 48,000", "Rs 24,000", "05 Jul 2026"],
-    ["Saanvi Mohod", "Full Payment", "Rs 1,20,000", "Rs 1,20,000", "Rs 0", "-"],
-    ["Yash Bisen", "Installments", "Rs 1,05,000", "Rs 35,000", "Rs 70,000", "12 Jul 2026"],
-    ["Prisha Tiwari", "Quarterly", "Rs 68,000", "Rs 68,000", "Rs 0", "-"]
-  ],
-  financeSummary: [
-    "Collections: Rs 18.6L vs Rs 20.2L target.",
-    "Outstanding: Rs 4.8L.",
-    "Scholarship impact: 11.4%.",
-    "Near-term recovery: Rs 3.2L."
-  ],
-  examCalendar: [
-    { title: "NEET Full Syllabus Mock", note: "4 July, OMR + analytics + parent summary." },
-    { title: "JEE Advanced Problem Marathon", note: "6 July, paper discussion by senior faculty." },
-    { title: "Foundation Weekly Olympiad", note: "8 July, auto-rank generation." },
-    { title: "MHT-CET Speed Test", note: "10 July, chapter-level accuracy trends." }
-  ],
-  academics: [
-    ["NEET-12 Elite", "Mock 07", "612 / 720", "688 / 720", "Physics", "Push speed drills"],
-    ["JEE-A1", "PCM Grand Test", "214 / 300", "276 / 300", "Organic Chemistry", "Add revision block"],
-    ["MHT-CET-P1", "CET Sprint 05", "151 / 200", "182 / 200", "Maths", "Assign formula recap"],
-    ["Foundation 10-A", "Olympiad 04", "87 / 100", "98 / 100", "Mental ability", "Extra worksheet"]
-  ],
-  faculty: [
-    ["Dr. Meenal Joshi", "Biology", "NEET-R2, NEET-12 Elite", "28", "86%", "Today 4:00 PM"],
-    ["Prof. Rohan Bhave", "Physics", "JEE-A1, NEET-R2", "33", "92%", "Today 2:30 PM"],
-    ["Prof. Ketan Kadu", "Mathematics", "JEE-A1, MHT-CET-P1", "30", "84%", "Tomorrow 8:00 AM"],
-    ["Mrs. Vaishali Wankhede", "Chemistry", "Foundation 10-A, NEET-12 Elite", "26", "74%", "Today 5:30 PM"]
-  ],
-  timetableNotes: [
-    "Physics load is the tightest.",
-    "Sunday doubt slots run at 91%.",
-    "Room 204 has spare afternoon capacity.",
-    "Payroll can be linked in production."
-  ],
-  messageFlows: [
-    { title: "New Lead Journey", note: "Instant WhatsApp acknowledgement, brochure, counsellor assignment, 3 follow-up nudges." },
-    { title: "Attendance Alert", note: "Parent message at 15 minutes after class start, mentor call if 2nd absence this week." },
-    { title: "Fee Reminder", note: "Gentle reminder 3 days before due date, payment link on due date, escalation after 5 days." },
-    { title: "Test Result Broadcast", note: "Scorecard, percentile, weak subjects, next action plan to parent + student app." }
-  ],
-  communications: [
-    ["NEET Parents", "Mock test result summary", "WhatsApp", "Yesterday 8:15 PM", "98.1%", "Academic team"],
-    ["All New Leads", "Seminar invitation", "SMS + WhatsApp", "Yesterday 11:00 AM", "94.6%", "Admissions"],
-    ["Fee Due Students", "Payment reminder", "WhatsApp", "Today 9:30 AM", "97.4%", "Accounts"],
-    ["Foundation Parents", "PTM reminder", "SMS", "Today 1:00 PM", "99.2%", "Admin desk"]
-  ],
-  reports: [
-    "Daily admissions tracker",
-    "Batch occupancy report",
-    "Faculty utilization report",
-    "Fee due ageing report",
-    "Student performance trend report",
-    "Parent communication audit"
-  ],
-  executiveBoard: [
-    { title: "Revenue", note: "Collections sit at 92% of target." },
-    { title: "Admissions", note: "School seminars remain the best channel." },
-    { title: "Academics", note: "NEET is strong; JEE chemistry needs action." },
-    { title: "Operations", note: "Attendance automation is working well." }
-  ],
-  parentFeatures: [
-    "Daily attendance status with absent and late alerts",
-    "Fee receipts, due reminders, and online payment links",
-    "Test scores, rank, percentile, and weak topic breakdown",
-    "Timetable, homework, doubt sessions, and PTM updates",
-    "Direct two-way communication with academic mentor"
-  ],
-  adminSettings: [
-    "Branch setup, courses, batches, subjects, and fee plans",
-    "Role-based access for owner, counsellor, admin, faculty, accounts",
-    "Lead source mapping and campaign tracking",
-    "Automated reminders, templates, and escalation rules",
-    "Audit logs, user activity, and export permissions"
-  ],
-  rollout: [
-    { title: "Week 1: Discovery", note: "Import student, fee, batch and lead data from Excel and existing tools." },
-    { title: "Week 2: Core Setup", note: "Configure admissions, courses, fee plans, roles, and parent communication templates." },
-    { title: "Week 3: Pilot Branch", note: "Run one branch or one department live with attendance + fees + reports." },
-    { title: "Week 4: Full Go-Live", note: "Train team, enable dashboards for owner, and switch off manual registers." }
-  ]
+"use strict";
+
+const icons = {
+  eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
+  "arrow-right": '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  shield: '<path d="M12 3 5 6v5c0 4.5 2.8 8.1 7 10 4.2-1.9 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
+  building: '<path d="M4 21V5l8-3 8 3v16M8 9h2m4 0h2M8 13h2m4 0h2M9 21v-4h6v4M2 21h20"/>',
+  "chevron-down": '<path d="m7 10 5 5 5-5"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  spark: '<path d="m12 3 1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3ZM19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14ZM5 14l.8 2.2L8 17l-2.2.8L5 20l-.8-2.2L2 17l2.2-.8L5 14Z"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  wallet: '<path d="M4 5h15a2 2 0 0 1 2 2v12H4a2 2 0 0 1-2-2V5.5A2.5 2.5 0 0 1 4.5 3H18"/><path d="M16 11h5v4h-5a2 2 0 0 1 0-4Z"/>',
+  "calendar-check": '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18m-12 5 2 2 4-4"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  message: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="M8 9h8M8 13h5"/>',
+  chart: '<path d="M4 20V10m6 10V4m6 16v-7m6 7H2"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
+  x: '<path d="m6 6 12 12M18 6 6 18"/>', more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>', search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  moon: '<path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/>', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  refresh: '<path d="M20 6v5h-5M4 18v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.7-2.6L20 11M4 13l2.2 4.6A7 7 0 0 0 18 15"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/>', receipt: '<path d="M5 3v18l3-2 4 2 4-2 3 2V3l-3 2-4-2-4 2-3-2Z"/><path d="M9 9h6M9 13h6"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', trend: '<path d="m3 17 6-6 4 4 8-9M15 6h6v6"/>',
+  alert: '<path d="M10.3 4.5 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', logout: '<path d="M10 17l5-5-5-5M15 12H3M15 3h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5"/>'
 };
 
-const viewTitle = document.getElementById("view-title");
-const navItems = document.querySelectorAll(".nav-item");
-const views = document.querySelectorAll(".content-view");
-const appStatus = document.getElementById("app-status");
-const installButton = document.getElementById("install-app");
-const menuToggle = document.getElementById("menu-toggle");
-const drawerBackdrop = document.getElementById("drawer-backdrop");
-const installSheet = document.getElementById("install-sheet");
-const installSheetBackdrop = document.getElementById("install-sheet-backdrop");
-const installSheetClose = document.getElementById("install-sheet-close");
-const installSheetKicker = document.getElementById("install-sheet-kicker");
-const installSheetTitle = document.getElementById("install-sheet-title");
-const installSteps = document.getElementById("install-steps");
-let deferredInstallPrompt = null;
+const state = { token: sessionStorage.getItem("lakshya_token"), user: null, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [] };
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
+const initials = name => String(name || "Lakshya").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
+const normalize = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.info}</svg>`;
+const money = value => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(value || 0));
+const shortMoney = value => Number(value || 0) >= 100000 ? `₹${(Number(value) / 100000).toFixed(2)}L` : money(value);
+const formatDate = value => value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value}T00:00:00`)) : "—";
+const status = value => `<span class="status status-${normalize(value) || "neutral"}">${esc(String(value || "Unknown").replaceAll("_", " "))}</span>`;
 
-function isIosDevice() {
-  const ua = window.navigator.userAgent;
-  return /iphone|ipad|ipod/i.test(ua);
+function injectIcons(root = document) {
+  $$('[data-icon]', root).forEach(node => { if (icons[node.dataset.icon]) node.innerHTML = icon(node.dataset.icon); });
 }
 
-function isSafariBrowser() {
-  const ua = window.navigator.userAgent;
-  return /safari/i.test(ua) && !/chrome|crios|fxios|edgios|opr\//i.test(ua);
-}
-
-function isMacSafari() {
-  return isSafariBrowser() && !isIosDevice();
-}
-
-function isInStandaloneMode() {
-  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-}
-
-function setInstallSheetContent(config) {
-  if (!installSheetKicker || !installSheetTitle || !installSteps) return;
-
-  installSheetKicker.textContent = config.kicker;
-  installSheetTitle.textContent = config.title;
-  installSteps.innerHTML = config.steps.map((step, index) => `
-    <div class="install-step">
-      <strong>${index + 1}</strong>
-      <span>${step}</span>
-    </div>
-  `).join("");
-}
-
-function openInstallSheet() {
-  if (!installSheet || !installSheetBackdrop) return;
-  installSheet.classList.remove("hidden");
-  installSheetBackdrop.classList.remove("hidden");
-  document.body.classList.add("install-sheet-open");
-}
-
-function closeInstallSheet() {
-  if (!installSheet || !installSheetBackdrop) return;
-  installSheet.classList.add("hidden");
-  installSheetBackdrop.classList.add("hidden");
-  document.body.classList.remove("install-sheet-open");
-}
-
-function bindInstallSheet() {
-  if (!installSheet || !installSheetBackdrop || !installSheetClose) return;
-
-  installSheetBackdrop.addEventListener("click", closeInstallSheet);
-  installSheetClose.addEventListener("click", closeInstallSheet);
-
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !installSheet.classList.contains("hidden")) {
-      closeInstallSheet();
-    }
-  });
-}
-
-function setActiveView(viewId, trigger) {
-  navItems.forEach(item => {
-    const isActive = item.dataset.view === viewId;
-    item.classList.toggle("active", isActive);
-    if (isActive) {
-      item.setAttribute("aria-current", "page");
-    } else {
-      item.removeAttribute("aria-current");
-    }
-  });
-
-  views.forEach(view => {
-    view.classList.toggle("active", view.id === viewId);
-  });
-
-  if (viewTitle && trigger) {
-    viewTitle.textContent = trigger.textContent;
+async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (state.token) headers.Authorization = `Bearer ${state.token}`;
+  const response = await fetch(path, { ...options, headers });
+  let body = null;
+  try { body = await response.json(); } catch { body = {}; }
+  if (response.status === 401 && state.token) { logout(false); throw new Error("Your session expired. Please sign in again."); }
+  if (!response.ok) {
+    const detail = body?.detail;
+    throw new Error(typeof detail === "string" ? detail : detail?.message || body?.error?.message || "Something went wrong. Please try again.");
   }
+  return body;
 }
 
-function setStatusClass(value) {
-  const text = String(value).toLowerCase();
-  if (text.includes("clear") || text.includes("won") || text.includes("healthy")) return "green";
-  if (text.includes("due") || text.includes("hot") || text.includes("demo") || text.includes("negotiation")) return "orange";
-  if (text.includes("absent") || text.includes("overdue")) return "red";
-  return "green";
+function toast(message, tone = "success") {
+  const node = document.createElement("div");
+  node.className = "toast";
+  node.innerHTML = `<span class="status status-${tone === "error" ? "blocked" : "ready"}">${tone === "error" ? "Issue" : "Done"}</span><span>${esc(message)}</span>`;
+  $("#toast-region").append(node);
+  setTimeout(() => node.remove(), 3600);
 }
 
-function renderStats(targetId, items) {
-  const el = document.getElementById(targetId);
-  el.innerHTML = items.map(item => `
-    <div class="stat-card">
-      <span>${item.label}</span>
-      <strong>${item.value}</strong>
-      <small>${item.note}</small>
-    </div>
-  `).join("");
+function setAuthMode(setup) {
+  state.setupRequired = setup;
+  $$(".setup-only").forEach(node => node.classList.toggle("hidden", !setup));
+  $("#auth-kicker").textContent = setup ? "First-time setup" : "Secure workspace";
+  $("#auth-title").textContent = setup ? "Create the owner account" : "Welcome back";
+  $("#auth-description").textContent = setup ? "Set up the first accountable administrator for Lakshya ERP." : "Sign in to continue to institution operations.";
+  $("#auth-submit-label").textContent = setup ? "Create owner workspace" : "Sign in securely";
+  $("#password-help").textContent = setup ? "Use at least 10 characters." : "Use at least 8 characters.";
+  $("#auth-password").autocomplete = setup ? "new-password" : "current-password";
 }
 
-function renderTimeline(targetId, items) {
-  const el = document.getElementById(targetId);
-  el.innerHTML = items.map(item => `
-    <div class="timeline-item">
-      <strong>${item.title}</strong>
-      <span>${item.note}</span>
-    </div>
-  `).join("");
-}
-
-function renderSimpleList(targetId, items) {
-  const el = document.getElementById(targetId);
-  el.innerHTML = items.map(item => `<li>${item}</li>`).join("");
-}
-
-function renderFunnel() {
-  const max = data.funnel[0].count;
-  const el = document.getElementById("funnel");
-  el.innerHTML = data.funnel.map(item => `
-    <div class="funnel-step">
-      <div class="funnel-label">${item.stage}</div>
-      <div class="funnel-bar" style="width:${(item.count / max) * 100}%"></div>
-      <strong>${item.count}</strong>
-    </div>
-  `).join("");
-}
-
-function renderBatchMix() {
-  const el = document.getElementById("batch-mix");
-  el.innerHTML = data.batchMix.map(item => `
-    <div class="batch-row">
-      <div class="batch-row-head">
-        <strong>${item.name}</strong>
-        <span>${item.students} students</span>
-      </div>
-      <div class="batch-track">
-        <div class="batch-fill" style="width:${item.fill}%"></div>
-      </div>
-    </div>
-  `).join("");
-}
-
-function renderLeadSources() {
-  const el = document.getElementById("lead-sources");
-  el.innerHTML = data.leadSources.map(item => `
-    <div class="source-item">
-      <div>
-        <strong>${item.source}</strong>
-        <span>${item.leads} leads</span>
-      </div>
-      <strong>${item.conversion}</strong>
-    </div>
-  `).join("");
-}
-
-function renderTableRows(targetId, rows, options = {}) {
-  const el = document.getElementById(targetId);
-  el.innerHTML = rows.map(row => {
-    const cells = row.map((cell, index) => {
-      if (options.statusIndex === index) {
-        return `<td><span class="status ${setStatusClass(cell)}">${cell}</span></td>`;
-      }
-      return `<td>${cell}</td>`;
-    }).join("");
-    return `<tr>${cells}</tr>`;
-  }).join("");
-}
-
-function renderProfile() {
-  const el = document.getElementById("student-profile");
-  el.innerHTML = data.studentProfile.map(item => `
-    <div class="profile-block">
-      <h4>${item.title}</h4>
-      <p>${item.body}</p>
-    </div>
-  `).join("");
-}
-
-function renderReportList() {
-  const el = document.getElementById("report-list");
-  el.innerHTML = data.reports.map(item => `
-    <li>
-      <strong>${item}</strong>
-      <span>Export as PDF / Excel for owner, accounts, faculty or counsellors.</span>
-    </li>
-  `).join("");
-}
-
-function renderBoard() {
-  const el = document.getElementById("executive-board");
-  el.innerHTML = data.executiveBoard.map(item => `
-    <div class="board-item">
-      <strong>${item.title}</strong>
-      <span>${item.note}</span>
-    </div>
-  `).join("");
-}
-
-function bindNavigation() {
-  navItems.forEach(item => {
-    item.addEventListener("click", () => {
-      setActiveView(item.dataset.view, item);
-      closeDrawer();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  });
-}
-
-function openDrawer() {
-  document.body.classList.add("drawer-open");
-  menuToggle.setAttribute("aria-expanded", "true");
-}
-
-function closeDrawer() {
-  document.body.classList.remove("drawer-open");
-  menuToggle.setAttribute("aria-expanded", "false");
-}
-
-function bindDrawer() {
-  if (!menuToggle || !drawerBackdrop) return;
-
-  menuToggle.addEventListener("click", () => {
-    if (document.body.classList.contains("drawer-open")) {
-      closeDrawer();
-    } else {
-      openDrawer();
-    }
-  });
-
-  drawerBackdrop.addEventListener("click", closeDrawer);
-
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && document.body.classList.contains("drawer-open")) {
-      closeDrawer();
-      menuToggle.focus();
-    }
-  });
-
-  window.addEventListener("resize", () => {
-    if (window.innerWidth > 720) {
-      closeDrawer();
-    }
-  });
-}
-
-function updateAppStatus(text, tone = "") {
-  appStatus.textContent = text;
-  appStatus.classList.remove("success", "warn");
-  if (tone) {
-    appStatus.classList.add(tone);
-  }
-}
-
-function setupInstallPrompt() {
-  if (!installButton) return;
-
-  if (isIosDevice() && !isInStandaloneMode()) {
-    setInstallSheetContent({
-      kicker: "iPhone Install",
-      title: "Add Lakshya ERP to the home screen.",
-      steps: [
-        "Open this link in Safari.",
-        "Tap the Share button at the bottom of Safari.",
-        "Choose <b>Add to Home Screen</b>, then tap <b>Add</b>."
-      ]
-    });
-    installButton.textContent = "Add to Home Screen";
-    installButton.classList.remove("hidden");
-    installButton.addEventListener("click", () => {
-      updateAppStatus(isSafariBrowser() ? "Use Safari Share" : "Open In Safari", "success");
-      openInstallSheet();
-    });
-    return;
-  }
-
-  if (isMacSafari() && !isInStandaloneMode()) {
-    setInstallSheetContent({
-      kicker: "Mac Install",
-      title: "Add Lakshya ERP to the Dock.",
-      steps: [
-        "Open this link in Safari.",
-        "Click the <b>Share</b> button in Safari.",
-        "Choose <b>Add to Dock</b>, then confirm to create the app."
-      ]
-    });
-    installButton.textContent = "Add to Dock";
-    installButton.classList.remove("hidden");
-    installButton.addEventListener("click", () => {
-      updateAppStatus("Use Safari Share", "success");
-      openInstallSheet();
-    });
-    return;
-  }
-
-  if (isInStandaloneMode()) {
-    updateAppStatus("Installed", "success");
-    installButton.classList.add("hidden");
-    return;
-  }
-
-  window.addEventListener("beforeinstallprompt", event => {
-    event.preventDefault();
-    deferredInstallPrompt = event;
-    installButton.textContent = "Install App";
-    installButton.classList.remove("hidden");
-  });
-
-  installButton.addEventListener("click", async () => {
-    if (!deferredInstallPrompt) return;
-
-    deferredInstallPrompt.prompt();
-    const choice = await deferredInstallPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      updateAppStatus("Installing", "success");
-    } else {
-      updateAppStatus("ERP Ready");
-    }
-    deferredInstallPrompt = null;
-    installButton.classList.add("hidden");
-  });
-
-  window.addEventListener("appinstalled", () => {
-    deferredInstallPrompt = null;
-    installButton.classList.add("hidden");
-    updateAppStatus("Installed", "success");
-  });
-}
-
-async function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) {
-    updateAppStatus("ERP Ready");
-    return;
-  }
-
-  if (!window.isSecureContext) {
-    updateAppStatus("ERP Ready");
-    return;
-  }
-
+async function initialize() {
+  injectIcons();
+  initializeTheme();
+  bindEvents();
+  renderPlaceholders();
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js");
-    if (registration) {
-      updateAppStatus("ERP Ready", "success");
-      return;
-    }
-    updateAppStatus("ERP Ready");
+    const setup = await api("/api/auth/bootstrap-status");
+    setAuthMode(setup.setupRequired);
+    if (state.token) {
+      try { state.user = await api("/api/auth/me"); await enterWorkspace(); }
+      catch { showAuth(); }
+    } else showAuth();
   } catch (error) {
-    const message = String(error && error.message ? error.message : error).toLowerCase();
-    if (message.includes("unsupported") || message.includes("secure") || message.includes("context")) {
-      updateAppStatus("ERP Ready");
-      return;
-    }
-
-    if (message.includes("script") || message.includes("scope") || message.includes("mime")) {
-      updateAppStatus("ERP Ready");
-      return;
-    }
-
-    updateAppStatus("ERP Ready");
+    showAuth();
+    $("#auth-error").textContent = "The ERP service is unavailable. Please start the backend and refresh.";
+    $("#auth-error").classList.remove("hidden");
   }
 }
 
-function updateEnvironmentBadges() {
-  return;
+function showAuth() { $("#auth-screen").classList.remove("hidden"); $("#app-shell").classList.add("hidden"); }
+
+async function handleAuth(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const fullName = String(form.get("fullName") || "").trim();
+  const email = String(form.get("email") || "").trim();
+  const password = String(form.get("password") || "");
+  $$(".field-error").forEach(node => node.textContent = "");
+  $("#auth-error").classList.add("hidden");
+  let invalid = false;
+  if (state.setupRequired && fullName.length < 2) { $('[data-error-for="fullName"]').textContent = "Enter the owner’s full name."; invalid = true; }
+  if (!/^\S+@\S+\.\S+$/.test(email)) { $('[data-error-for="email"]').textContent = "Enter a valid email address."; invalid = true; }
+  if (password.length < (state.setupRequired ? 10 : 8)) { $('[data-error-for="password"]').textContent = `Use at least ${state.setupRequired ? 10 : 8} characters.`; invalid = true; }
+  if (invalid) return;
+  const button = $("#auth-submit"); button.disabled = true; $("#auth-submit-label").textContent = state.setupRequired ? "Creating workspace…" : "Signing in…";
+  try {
+    const payload = state.setupRequired ? { fullName, email, password } : { email, password };
+    const result = await api(state.setupRequired ? "/api/auth/bootstrap" : "/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
+    state.token = result.access_token; sessionStorage.setItem("lakshya_token", state.token);
+    state.user = await api("/api/auth/me");
+    await enterWorkspace();
+  } catch (error) {
+    $("#auth-error").textContent = error.message; $("#auth-error").classList.remove("hidden");
+  } finally {
+    button.disabled = false; $("#auth-submit-label").textContent = state.setupRequired ? "Create owner workspace" : "Sign in securely";
+  }
 }
 
-function initAppChrome() {
-  updateEnvironmentBadges();
-  bindInstallSheet();
-  setupInstallPrompt();
-  registerServiceWorker();
+async function enterWorkspace() {
+  $("#auth-screen").classList.add("hidden"); $("#app-shell").classList.remove("hidden");
+  const name = state.user?.fullName || "Lakshya Director";
+  const label = state.user?.role?.replaceAll("_", " ") || "Owner";
+  $("#sidebar-user-name").textContent = name; $("#sidebar-user-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
+  $("#greeting-name").textContent = name.split(" ")[0];
+  [$("#user-avatar"), $("#topbar-avatar")].forEach(node => node.textContent = initials(name));
+  await loadWorkspace();
 }
 
-function init() {
-  renderStats("dashboard-stats", data.dashboardStats);
-  renderTimeline("priority-list", data.priorities);
-  renderFunnel();
-  renderBatchMix();
-  renderSimpleList("alerts", data.alerts);
-  renderLeadSources();
-  renderTableRows("admission-rows", data.admissions, { statusIndex: 4 });
-  renderTableRows("student-rows", data.students);
-  renderProfile();
-  renderStats("attendance-summary", data.attendanceSummary);
-  renderTableRows("attendance-rows", data.attendanceRows);
-  renderTableRows("fee-rows", data.fees);
-  renderSimpleList("finance-summary", data.financeSummary);
-  renderTimeline("exam-calendar", data.examCalendar);
-  renderTableRows("academic-rows", data.academics);
-  renderTableRows("faculty-rows", data.faculty);
-  renderSimpleList("timetable-notes", data.timetableNotes);
-  renderTimeline("message-flows", data.messageFlows);
-  renderTableRows("communication-rows", data.communications);
-  renderReportList();
-  renderBoard();
-  renderSimpleList("parent-features", data.parentFeatures);
-  renderSimpleList("admin-settings", data.adminSettings);
-  renderTimeline("rollout-plan", data.rollout);
-  setActiveView("dashboard", document.querySelector('.nav-item[data-view="dashboard"]'));
-  bindNavigation();
-  bindDrawer();
-  initAppChrome();
+async function fetchAll(path, pageSize = 100) {
+  const separator = path.includes("?") ? "&" : "?";
+  const first = await api(`${path}${separator}page=1&page_size=${pageSize}`);
+  const items = [...(first.items || [])];
+  const pages = Math.ceil((first.total || items.length) / pageSize);
+  for (let page = 2; page <= pages; page += 1) {
+    const next = await api(`${path}${separator}page=${page}&page_size=${pageSize}`); items.push(...(next.items || []));
+  }
+  return items;
 }
 
-init();
+async function loadWorkspace() {
+  try {
+    const [students, agreements, payments, leads, admissionMeta] = await Promise.all([
+      fetchAll("/api/students"), fetchAll("/api/finance/agreements"), fetchAll("/api/finance/staged-payments"), fetchAll("/api/admissions/leads"), api("/api/admissions/bootstrap")
+    ]);
+    Object.assign(state, { students, agreements, payments, leads, stages: admissionMeta.stageOrder || [] });
+    renderAll();
+  } catch (error) { toast(error.message, "error"); }
+}
+
+function renderAll() {
+  $("#nav-students-count").textContent = state.students.length;
+  $("#nav-leads-count").textContent = state.leads.length;
+  const reviewCount = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
+  $("#nav-finance-count").textContent = reviewCount;
+  $("#payment-review-count").textContent = reviewCount;
+  renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderCommandResults(); injectIcons();
+}
+
+function metricCard(label, value, note, iconName, featured = false) {
+  return `<article class="metric-card ${featured ? "metric-card-featured" : ""}"><div class="metric-card-head"><span class="metric-label">${esc(label)}</span><span class="metric-icon">${icon(iconName)}</span></div><div><p class="metric-value">${esc(value)}</p><span class="metric-note">${esc(note)}</span></div></article>`;
+}
+
+function renderDashboard() {
+  const agreed = state.agreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0);
+  const registration = state.agreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
+  const review = state.students.filter(item => item.dataQualityStatus !== "ready").length;
+  $("#dashboard-metrics").innerHTML = [
+    metricCard("Active students", String(state.students.length), "Imported from the 2026–27 admission sheet", "users", true),
+    metricCard("Agreed fees", shortMoney(agreed), `${state.agreements.length} verified agreements`, "wallet"),
+    metricCard("Registration total", shortMoney(registration), "Legacy registration entries", "receipt"),
+    metricCard("Quality review", String(review), review ? "Records need a decision" : "All records are import-ready", "alert")
+  ].join("");
+
+  const programs = state.students.reduce((map, item) => map.set(item.program || "Unassigned", (map.get(item.program || "Unassigned") || 0) + 1), new Map());
+  const sortedPrograms = [...programs.entries()].sort((a, b) => b[1] - a[1]);
+  const max = Math.max(...sortedPrograms.map(([, count]) => count), 1);
+  $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments yet", "Imported enrollments will appear here.");
+
+  const quality = ["review", "blocked"].map(kind => ({ kind, count: state.students.filter(item => item.dataQualityStatus === kind).length })).filter(item => item.count);
+  const paymentReview = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
+  if (paymentReview) quality.push({ kind: "payment review", count: paymentReview });
+  $("#attention-count").textContent = quality.reduce((sum, item) => sum + item.count, 0);
+  $("#attention-list").innerHTML = quality.length ? quality.map(item => `<button class="attention-item" type="button" data-view-target="${item.kind === "payment review" ? "finance" : "students"}"><span>${icon("alert")}</span><span><strong>${esc(item.kind.replace(/\b\w/g, c => c.toUpperCase()))}</strong><small>${item.kind === "payment review" ? "Staged ledger lines" : "Student source records"}</small></span><em>${item.count} ${item.count === 1 ? "item" : "items"}</em></button>`).join("") : `<div class="attention-item"><span>${icon("shield")}</span><span><strong>Import checks complete</strong><small>No blocked or review records</small></span>${status("ready")}</div>`;
+
+  const recent = [...state.students].sort((a, b) => String(b.enrollmentDate).localeCompare(String(a.enrollmentDate))).slice(0, 5);
+  $("#recent-students").innerHTML = recent.map(student => `<button class="record-item" type="button" data-student-id="${esc(student.id)}"><span class="record-avatar">${initials(student.fullName)}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span><span class="record-program">${esc(student.program)}</span><span class="record-date">${formatDate(student.enrollmentDate)}</span>${status(student.dataQualityStatus)}</button>`).join("");
+
+  const stagedTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const readyPayments = state.payments.filter(item => item.reconciliationStatus === "ready").length;
+  const readyPercent = state.payments.length ? Math.round(readyPayments / state.payments.length * 100) : 0;
+  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} payment and adjustment lines staged from Excel</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} ready</span><span>${state.payments.length - readyPayments} need review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open finance control ${icon("arrow-right")}</button></div>`;
+}
+
+function compactMetrics(items) { return items.map(item => `<div class="compact-metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`).join(""); }
+function studentPrimary(name, detail = "") { return `<div class="table-primary"><span class="record-avatar">${initials(name)}</span><span><strong>${esc(name)}</strong><small>${esc(detail)}</small></span></div>`; }
+function emptyState(iconName, title, copy) { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3><p>${esc(copy)}</p></div></div>`; }
+
+function filteredStudents() {
+  const search = $("#student-search").value.trim().toLowerCase(), program = $("#student-program-filter").value, quality = $("#student-quality-filter").value;
+  return state.students.filter(item => (!search || [item.fullName, item.mobile, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search))) && (!program || item.program === program) && (!quality || item.dataQualityStatus === quality));
+}
+
+function renderStudents() {
+  const programs = [...new Set(state.students.map(item => item.program).filter(Boolean))].sort();
+  const programFilter = $("#student-program-filter"); const current = programFilter.value;
+  programFilter.innerHTML = `<option value="">All programs</option>${programs.map(program => `<option>${esc(program)}</option>`).join("")}`; programFilter.value = current;
+  $("#student-metrics").innerHTML = compactMetrics([
+    { label: "Active records", value: String(state.students.length) }, { label: "Import ready", value: String(state.students.filter(item => item.dataQualityStatus === "ready").length) },
+    { label: "Needs review", value: String(state.students.filter(item => item.dataQualityStatus === "review").length) }, { label: "Programs", value: String(programs.length) }
+  ]);
+  renderStudentRows();
+}
+
+function renderStudentRows() {
+  const rows = filteredStudents(); $("#student-result-count").textContent = `${rows.length} of ${state.students.length} students`;
+  $("#students-table-body").innerHTML = rows.length ? rows.map(student => `<tr><td>${studentPrimary(student.fullName, student.previousSchool || "School not captured")}</td><td><strong>${esc(student.admissionNumber)}</strong></td><td>${esc(student.program)}<br><small>${esc(student.batch || "—")}</small></td><td>${esc(student.mobile || "—")}</td><td>${formatDate(student.enrollmentDate)}</td><td>${status(student.dataQualityStatus)}</td><td><button class="icon-button table-action" type="button" aria-label="View ${esc(student.fullName)}" data-student-id="${esc(student.id)}">${icon("chevron-right")}</button></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching students", "Try clearing one of the directory filters.")}</td></tr>`;
+  $("#students-mobile-list").innerHTML = rows.map(student => `<article class="mobile-record-card"><div>${studentPrimary(student.fullName, student.admissionNumber)}${status(student.dataQualityStatus)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(student.program)}</strong></div><div><span>Mobile</span><strong>${esc(student.mobile || "—")}</strong></div></div><button class="button button-secondary" type="button" data-student-id="${esc(student.id)}">View complete record</button></article>`).join("");
+}
+
+function renderFinance() {
+  const agreed = state.agreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0), registration = state.agreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
+  const paymentTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0), review = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
+  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Registration", value: shortMoney(registration) }, { label: "Staged payments", value: shortMoney(paymentTotal) }, { label: "Review lines", value: String(review) }]);
+  renderAgreementRows(); renderPaymentRows();
+}
+
+function renderAgreementRows() {
+  const search = $("#agreement-search").value.trim().toLowerCase();
+  const rows = state.agreements.filter(item => !search || [item.studentName, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search)));
+  $("#agreements-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName)}</td><td>${esc(item.admissionNumber)}</td><td class="currency">${money(item.agreedAmount)}</td><td class="currency">${money(item.legacyRegistrationTotal)}</td><td>${status(item.status)}</td></tr>`).join("");
+  $("#agreements-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, item.admissionNumber)}${status(item.status)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreedAmount)}</strong></div><div><span>Registration</span><strong>${money(item.legacyRegistrationTotal)}</strong></div></div></article>`).join("");
+}
+
+function renderPaymentRows() {
+  const filter = $("#payment-status-filter").value;
+  const rows = state.payments.filter(item => !filter || item.reconciliationStatus === filter);
+  $("#payments-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName, `Line ${item.line || "—"}`)}</td><td>${formatDate(item.date)}</td><td class="currency">${money(item.amount)}</td><td>${esc(item.method || "Not captured")}</td><td title="${esc(item.sourceNote || "")}">${esc((item.sourceNote || "—").slice(0, 42))}</td><td>${status(item.reconciliationStatus)}</td></tr>`).join("");
+  $("#payments-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, formatDate(item.date))}${status(item.reconciliationStatus)}</div><div class="mobile-record-meta"><div><span>Amount</span><strong>${money(item.amount)}</strong></div><div><span>Mode</span><strong>${esc(item.method || "Not captured")}</strong></div></div></article>`).join("");
+}
+
+function renderAdmissions() {
+  const stageFilter = $("#lead-stage-filter"), current = stageFilter.value;
+  stageFilter.innerHTML = `<option value="">All stages</option>${state.stages.map(stage => `<option>${esc(stage)}</option>`).join("")}`; stageFilter.value = current;
+  $("#admissions-metrics").innerHTML = compactMetrics([
+    { label: "Open enquiries", value: String(state.leads.filter(item => !["Converted", "Lost", "Not Interested"].includes(item.stage)).length) },
+    { label: "Follow-ups", value: String(state.leads.filter(item => item.nextFollowUpAt).length) }, { label: "Confirmed", value: String(state.leads.filter(item => item.stage === "Admission Confirmed").length) }, { label: "Converted", value: String(state.leads.filter(item => item.stage === "Converted").length) }
+  ]);
+  renderLeadRows();
+}
+
+function renderLeadRows() {
+  const search = $("#lead-search").value.trim().toLowerCase(), stage = $("#lead-stage-filter").value;
+  const rows = state.leads.filter(item => (!search || [item.student, item.mobile, item.program].some(value => String(value || "").toLowerCase().includes(search))) && (!stage || item.stage === stage));
+  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td><span class="icon-button table-action">${icon("chevron-right")}</span></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "Your enquiry pipeline is ready", state.leads.length ? "Change the search or stage filter." : "Create the first enquiry here; imported admissions remain in the student directory.")}</td></tr>`;
+  $("#leads-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div></article>`).join("");
+}
+
+async function openStudent(studentId) {
+  const drawer = $("#detail-drawer"), body = $("#detail-drawer-body");
+  drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false");
+  body.innerHTML = '<div class="skeleton-line"></div>';
+  try {
+    const student = await api(`/api/students/${encodeURIComponent(studentId)}`); $("#drawer-title").textContent = student.fullName;
+    const issues = student.migration?.issues || [];
+    body.innerHTML = `<div class="profile-hero"><span class="record-avatar">${initials(student.fullName)}</span><h3>${esc(student.fullName)}</h3><p>${esc(student.admissionNumber)} · ${esc(student.enrollment?.program || "Program not assigned")}</p></div>
+      <section class="detail-section"><h4>Student &amp; enrollment</h4><div class="detail-grid">${detailField("Primary mobile", student.mobile)}${detailField("Secondary mobile", student.secondaryMobile)}${detailField("Previous school", student.previousSchool)}${detailField("Enrollment date", formatDate(student.enrollment?.enrollmentDate))}${detailField("Batch", student.enrollment?.batch)}${detailField("Status", student.status)}</div></section>
+      <section class="detail-section"><h4>Fee agreement</h4><div class="detail-grid">${detailField("Agreed amount", money(student.feeAgreement?.agreedAmount))}${detailField("Registration", money(student.feeAgreement?.legacyRegistrationTotal))}${detailField("Agreement status", student.feeAgreement?.status)}${detailField("Currency", student.feeAgreement?.currency || "INR")}</div></section>
+      <section class="detail-section"><h4>Migration trace</h4><div class="detail-grid">${detailField("Source row", student.migration?.sourceRow)}${detailField("Import readiness", student.migration?.readiness)}</div>${issues.length ? `<div class="issue-list">${issues.map(issue => `<div>${icon("alert")}<span>${esc(typeof issue === "string" ? issue : issue.message || JSON.stringify(issue))}</span></div>`).join("")}</div>` : ""}</section>`;
+  } catch (error) { body.innerHTML = emptyState("alert", "Could not open this record", error.message); }
+}
+function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
+function closeDetail() { $("#detail-drawer").classList.remove("open"); $("#detail-overlay").classList.remove("open"); $("#detail-drawer").setAttribute("aria-hidden", "true"); }
+
+function openLeadForm() {
+  const drawer = $("#detail-drawer"); drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false"); $("#drawer-title").textContent = "New enquiry";
+  $("#detail-drawer-body").innerHTML = `<form class="auth-form" id="lead-create-form"><label class="field"><span>Student name</span><input name="student" required></label><label class="field"><span>Mobile number</span><input name="mobile" inputmode="numeric" required></label><label class="field"><span>Program</span><input name="program" required></label><label class="field"><span>Parent / guardian</span><input name="parent" required></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(state.user?.fullName || "Admissions desk")}" required></label><label class="field"><span>Source</span><select name="source" required><option value="walk-in">Walk-in</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="website">Website</option><option value="referral">Referral</option><option value="campaign">Campaign</option><option value="seminar">Seminar</option><option value="social media">Social media</option></select></label><label class="field"><span>Next action</span><input name="nextAction" placeholder="Call, campus visit, counselling…" required></label><div class="auth-error hidden" id="lead-form-error" role="alert"></div><button class="button button-primary button-large" type="submit">${icon("plus")}Create enquiry</button></form>`;
+  $("#lead-create-form").addEventListener("submit", createLead);
+}
+
+async function createLead(event) {
+  event.preventDefault(); const form = new FormData(event.currentTarget); const button = $("button[type=submit]", event.currentTarget); button.disabled = true;
+  const payload = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value).trim()]));
+  try { const lead = await api("/api/admissions/leads", { method: "POST", body: JSON.stringify(payload) }); state.leads.unshift(lead); closeDetail(); renderAdmissions(); $("#nav-leads-count").textContent = state.leads.length; toast("Enquiry created and added to the pipeline."); }
+  catch (error) { $("#lead-form-error").textContent = error.message; $("#lead-form-error").classList.remove("hidden"); button.disabled = false; }
+}
+
+const viewTitles = { dashboard: ["Operations / Today", "Command center"], admissions: ["Workspace / Admissions", "Admissions"], students: ["Workspace / Records", "Students"], finance: ["Workspace / Finance", "Fees & finance"], attendance: ["Workspace / Delivery", "Attendance"], academics: ["Workspace / Delivery", "Academics"], timetable: ["Workspace / Resources", "Faculty & timetable"], communication: ["Control / Engagement", "Communication"], reports: ["Control / Intelligence", "Reports"], settings: ["Control / Governance", "Settings & audit"] };
+function showView(view) {
+  if (!$("#" + view)) return; state.view = view;
+  $$(".app-view").forEach(node => node.classList.toggle("active", node.id === view));
+  $$(".nav-item").forEach(node => node.classList.toggle("active", node.dataset.view === view));
+  $("#page-kicker").textContent = viewTitles[view][0]; $("#page-title").textContent = viewTitles[view][1];
+  closeSidebar(); closeCommand(); $("#main-content").focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderPlaceholders() {
+  const moduleIcons = { Attendance: "calendar-check", Academics: "book", "Faculty & timetable": "clock", Communication: "message", Reports: "chart", "Settings & audit": "settings" };
+  $$(".placeholder-view").forEach(node => { const name = node.dataset.module; node.innerHTML = `<article class="module-ready-card"><span class="module-ready-icon">${icon(moduleIcons[name])}</span><p class="overline">Production roadmap</p><h2>${esc(name)}</h2><p>${esc(node.dataset.description)} The shared navigation, access control and data foundation are already in place.</p><div class="module-readiness"><div><strong>Foundation ready</strong><span>Authenticated workspace</span></div><div><strong>Data model aligned</strong><span>Built for ERP records</span></div><div><strong>Next release</strong><span>Workflow implementation</span></div></div></article>`; });
+}
+
+function renderCommandResults(query = "") {
+  const needle = query.trim().toLowerCase();
+  const views = Object.entries(viewTitles).filter(([, values]) => !needle || values.join(" ").toLowerCase().includes(needle)).slice(0, 7);
+  const students = state.students.filter(item => !needle || [item.fullName, item.admissionNumber, item.mobile].some(value => String(value || "").toLowerCase().includes(needle))).slice(0, needle ? 7 : 3);
+  $("#command-results").innerHTML = `<p>${needle ? "Matching results" : "Quick navigation"}</p>${views.map(([key, values]) => `<button class="command-item" type="button" data-command-view="${key}"><span>${icon(key === "dashboard" ? "grid" : key === "finance" ? "wallet" : key === "students" ? "users" : "arrow-right")}</span><span><strong>${esc(values[1])}</strong><small>${esc(values[0])}</small></span><span>${icon("chevron-right")}</span></button>`).join("")}${students.length ? `<p>Students</p>${students.map(student => `<button class="command-item" type="button" data-command-student="${esc(student.id)}"><span>${icon("user")}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)} · ${esc(student.program)}</small></span><span>${icon("chevron-right")}</span></button>`).join("")}` : needle ? emptyState("search", "No student records found", "Try a name, mobile number or admission ID.") : ""}`;
+}
+function openCommand() { $("#command-overlay").classList.remove("hidden"); $("#global-search").value = ""; renderCommandResults(); setTimeout(() => $("#global-search").focus(), 10); }
+function closeCommand() { $("#command-overlay").classList.add("hidden"); }
+function openSidebar() { $("#sidebar").classList.add("open"); $("#drawer-scrim").classList.add("open"); $("#menu-button").setAttribute("aria-expanded", "true"); }
+function closeSidebar() { $("#sidebar").classList.remove("open"); $("#drawer-scrim").classList.remove("open"); $("#menu-button").setAttribute("aria-expanded", "false"); }
+
+function initializeTheme() {
+  const saved = localStorage.getItem("lakshya_theme") || "light"; document.documentElement.dataset.theme = saved; updateThemeIcon();
+}
+function updateThemeIcon() { const dark = document.documentElement.dataset.theme === "dark"; $("#theme-toggle").dataset.icon = dark ? "sun" : "moon"; $("#theme-toggle").setAttribute("aria-label", dark ? "Use light appearance" : "Use dark appearance"); injectIcons($("#theme-toggle")); }
+function toggleTheme() { const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; localStorage.setItem("lakshya_theme", next); updateThemeIcon(); }
+function logout(notify = true) { state.token = null; state.user = null; sessionStorage.removeItem("lakshya_token"); showAuth(); if (notify) toast("You have been signed out."); }
+
+function exportStudents() {
+  const rows = filteredStudents(), fields = [["Admission number", "Student", "Mobile", "Previous school", "Program", "Batch", "Enrollment date", "Data quality"], ...rows.map(item => [item.admissionNumber, item.fullName, item.mobile, item.previousSchool, item.program, item.batch, item.enrollmentDate, item.dataQualityStatus])];
+  const csv = fields.map(row => row.map(value => `"${String(value || "").replaceAll('"', '""')}"`).join(",")).join("\n");
+  const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); link.download = `lakshya-students-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(link.href); toast(`${rows.length} student records exported.`);
+}
+
+function bindEvents() {
+  $("#auth-form").addEventListener("submit", handleAuth);
+  $(".password-toggle").addEventListener("click", event => { const field = $("#auth-password"), visible = field.type === "text"; field.type = visible ? "password" : "text"; event.currentTarget.setAttribute("aria-label", visible ? "Show password" : "Hide password"); });
+  document.addEventListener("click", event => {
+    const view = event.target.closest("[data-view], [data-view-target]")?.dataset; if (view) showView(view.view || view.viewTarget);
+    const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
+    const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
+    const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
+  });
+  $("#menu-button").addEventListener("click", openSidebar); $("#sidebar-close").addEventListener("click", closeSidebar); $("#drawer-scrim").addEventListener("click", closeSidebar);
+  $("#detail-close").addEventListener("click", closeDetail); $("#detail-overlay").addEventListener("click", closeDetail);
+  $("#search-trigger").addEventListener("click", openCommand); $("#command-overlay").addEventListener("click", event => { if (event.target === event.currentTarget) closeCommand(); });
+  $("#global-search").addEventListener("input", event => renderCommandResults(event.target.value));
+  $("#theme-toggle").addEventListener("click", toggleTheme); $("#user-menu-button").addEventListener("click", () => logout());
+  $("#student-search").addEventListener("input", renderStudentRows); $("#student-program-filter").addEventListener("change", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
+  $("#agreement-search").addEventListener("input", renderAgreementRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
+  $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Admissions pipeline refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
+  $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => { $$("[data-finance-tab]").forEach(item => item.classList.toggle("active", item === button)); $$(".finance-tab").forEach(panel => panel.classList.toggle("active", panel.id === `finance-${button.dataset.financeTab}-panel`)); }));
+  document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeCommand(); closeDetail(); closeSidebar(); } });
+}
+
+initialize();

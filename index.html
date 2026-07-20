@@ -1,777 +1,238 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lakshya ERP</title>
-  <meta name="theme-color" content="#1f6d68">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lakshya ERP · Institution Operations</title>
+  <meta name="theme-color" content="#123d35">
+  <meta name="description" content="Lakshya Institution ERP for admissions, students, finance, academics and daily operations.">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Lakshya ERP">
-  <meta name="format-detection" content="telephone=no">
-  <meta name="description" content="Lakshya ERP for admissions, students, fees, attendance, academics, communication, and reports.">
-  <link rel="canonical" href="https://lakshyanagpur.onrender.com/">
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="https://lakshyanagpur.onrender.com/">
-  <meta property="og:title" content="Lakshya ERP">
-  <meta property="og:description" content="Premium institute ERP for admissions, academics, fees, attendance, communication, and leadership control.">
-  <meta property="og:image" content="https://lakshyanagpur.onrender.com/share-card.png">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta property="og:image:type" content="image/png">
-  <meta property="og:image:alt" content="Lakshya ERP premium demo share card">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Lakshya ERP">
-  <meta name="twitter:description" content="Premium institute ERP for admissions, academics, fees, attendance, communication, and leadership control.">
-  <meta name="twitter:image" content="https://lakshyanagpur.onrender.com/share-card.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=5">
-  <style>
-    .founder-page {
-      background:
-        radial-gradient(circle at top right, rgba(88, 166, 123, 0.2), transparent 18%),
-        radial-gradient(circle at left 20%, rgba(33, 95, 103, 0.16), transparent 18%),
-        linear-gradient(180deg, #eef7f3 0%, #dcece6 100%);
-    }
-
-    .founder-page .sidebar {
-      background: rgba(237, 247, 242, 0.84);
-      border-right-color: rgba(31, 42, 47, 0.08);
-    }
-
-    .founder-page .sidebar-card,
-    .founder-page .sidebar-footer {
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(234, 245, 240, 0.9));
-    }
-
-    .founder-page .dashboard-hero {
-      position: relative;
-      overflow: hidden;
-      background:
-        radial-gradient(circle at top right, rgba(126, 204, 166, 0.18), transparent 18%),
-        linear-gradient(135deg, #203f51 0%, #285f62 48%, #5ba57e 100%);
-      border: none;
-      box-shadow: 0 38px 120px rgba(17, 43, 46, 0.18);
-    }
-
-    .founder-page .dashboard-hero::after {
-      content: "";
-      position: absolute;
-      right: -60px;
-      bottom: -90px;
-      width: 280px;
-      height: 280px;
-      border-radius: 50%;
-      background: rgba(255, 245, 233, 0.08);
-    }
-
-    .founder-page .dashboard-hero-copy .eyebrow,
-    .founder-page .dashboard-hero-copy p {
-      color: rgba(255, 244, 236, 0.8);
-    }
-
-    .founder-page .dashboard-hero-copy h3 {
-      color: #fff8f2;
-      max-width: 10ch;
-      font-size: clamp(2.6rem, 4.2vw, 4.4rem);
-    }
-
-    .founder-page .dashboard-hero-metrics {
-      align-self: end;
-    }
-
-    .founder-page .dashboard-metric-card {
-      background: rgba(251, 255, 252, 0.72);
-      backdrop-filter: blur(14px);
-      border-color: rgba(255, 255, 255, 0.32);
-    }
-
-    .founder-page #dashboard .grid.two-thirds .panel:first-child {
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(238, 247, 243, 0.92));
-    }
-
-    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) {
-      background:
-        linear-gradient(180deg, rgba(31, 67, 74, 0.98), rgba(39, 84, 81, 0.94));
-      color: #f7efe6;
-    }
-
-    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .eyebrow,
-    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) h3,
-    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .timeline-item strong,
-    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .timeline-item span {
-      color: #f7efe6;
-    }
-
-    .founder-page #dashboard .grid.two-thirds .panel:nth-child(2) .timeline-item {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(255, 255, 255, 0.08);
-    }
-
-    .founder-page #dashboard .grid.equal .panel {
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(238, 246, 242, 0.92));
-      color: var(--text);
-    }
-
-    .founder-page #dashboard .grid.equal .panel .eyebrow,
-    .founder-page #dashboard .grid.equal .panel h3,
-    .founder-page #dashboard .grid.equal .panel strong,
-    .founder-page #dashboard .grid.equal .panel span,
-    .founder-page #dashboard .grid.equal .panel li {
-      color: inherit;
-    }
-
-    .founder-page #dashboard .grid.equal .panel:nth-child(2),
-    .founder-page #dashboard .grid.equal .panel:nth-child(2) .eyebrow,
-    .founder-page #dashboard .grid.equal .panel:nth-child(2) h3,
-    .founder-page #dashboard .grid.equal .panel:nth-child(2) strong,
-    .founder-page #dashboard .grid.equal .panel:nth-child(2) span {
-      color: var(--text);
-    }
-
-    @media (min-width: 1181px) {
-      .founder-page .dashboard-hero-copy h3 {
-        font-size: clamp(2.45rem, 2.9vw, 3.25rem);
-        max-width: 8ch;
-      }
-
-      .founder-page .dashboard-hero {
-        min-height: 280px;
-      }
-
-      .founder-page .dashboard-hero-metrics {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-
-      .founder-page .dashboard-spotlight-grid {
-        grid-template-columns: 1.05fr 1fr 1fr;
-      }
-
-      .founder-page .dashboard-spotlight-card h3 {
-        font-size: 1.35rem;
-      }
-
-      .founder-page #dashboard .grid.equal {
-        grid-template-columns: 0.92fr 1fr 0.92fr;
-      }
-    }
-
-    @media (max-width: 720px) {
-      .founder-page .topbar-actions .pill:not(.install-cta) {
-        display: none;
-      }
-
-      .founder-page .deck-nav {
-        gap: 8px;
-        margin-bottom: 12px;
-      }
-
-      .founder-page .deck-link {
-        min-height: 42px;
-        padding: 10px 14px;
-      }
-
-      .founder-page .dashboard-hero {
-        padding: 16px;
-        gap: 12px;
-        margin-bottom: 12px;
-      }
-
-      .founder-page .dashboard-hero-copy h3 {
-        font-size: 1.58rem;
-        max-width: 14ch;
-        line-height: 1.06;
-      }
-
-      .founder-page .dashboard-hero-copy p:last-child {
-        font-size: 0.9rem;
-        line-height: 1.45;
-        max-width: 28ch;
-      }
-
-      .founder-page .dashboard-hero-metrics {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 8px;
-        overflow: visible;
-        padding-bottom: 0;
-      }
-
-      .founder-page .dashboard-hero-metrics::-webkit-scrollbar,
-      .founder-page .dashboard-spotlight-grid::-webkit-scrollbar {
-        display: none;
-      }
-
-      .founder-page .dashboard-metric-card {
-        min-width: 0;
-        padding: 12px 10px;
-        border-radius: 20px;
-      }
-
-      .founder-page .dashboard-metric-card span {
-        font-size: 0.7rem;
-        margin-bottom: 5px;
-      }
-
-      .founder-page .dashboard-metric-card strong {
-        margin: 4px 0;
-        font-size: 1.28rem;
-      }
-
-      .founder-page .dashboard-metric-card small {
-        font-size: 0.74rem;
-        line-height: 1.28;
-      }
-
-      .founder-page .dashboard-spotlight-grid {
-        display: flex;
-        overflow-x: auto;
-        gap: 10px;
-        margin-bottom: 12px;
-        padding-bottom: 2px;
-        scroll-snap-type: x proximity;
-      }
-
-      .founder-page .dashboard-spotlight-card {
-        min-width: min(84vw, 280px);
-        padding: 16px;
-        scroll-snap-align: start;
-      }
-
-      .founder-page .dashboard-spotlight-card h3 {
-        font-size: 1.22rem;
-      }
-
-      .founder-page #dashboard .grid {
-        gap: 10px;
-        margin-bottom: 10px;
-      }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=12">
 </head>
-<body class="founder-page">
+<body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
-  <div class="app-shell">
-    <div class="drawer-backdrop" id="drawer-backdrop"></div>
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">L</div>
-        <div>
-          <p class="brand-kicker">Lakshya ERP</p>
-          <h1>Lakshya ERP</h1>
+
+  <section class="auth-screen" id="auth-screen" aria-labelledby="auth-title">
+    <div class="auth-brand-panel">
+      <div class="auth-brand-content">
+        <div class="brand-lockup brand-lockup-light">
+          <img src="./icon.svg" width="48" height="48" alt="" aria-hidden="true">
+          <div><strong>Lakshya</strong><span>Institution ERP</span></div>
+        </div>
+        <div class="auth-statement">
+          <span class="auth-badge"><span class="status-dot"></span> Institution operations, connected</span>
+          <h1>Every student journey.<br>One trusted system.</h1>
+          <p>Admissions, enrollments and finance—designed around the way Lakshya’s team actually works.</p>
+        </div>
+        <div class="auth-proof-grid" aria-label="Platform safeguards">
+          <div><strong>Secure</strong><span>Role-based workspace access</span></div>
+          <div><strong>Auditable</strong><span>Every important action traceable</span></div>
+          <div><strong>Connected</strong><span>Admissions and finance in sync</span></div>
         </div>
       </div>
+      <div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div>
+    </div>
 
-      <div class="sidebar-card">
-        <h2>Nagpur HQ</h2>
-        <p>Admissions, academics, cashflow</p>
+    <div class="auth-form-panel">
+      <div class="auth-form-wrap">
+        <div class="mobile-auth-brand brand-lockup">
+          <img src="./icon.svg" width="44" height="44" alt="">
+          <div><strong>Lakshya</strong><span>Institution ERP</span></div>
+        </div>
+        <div class="auth-heading">
+          <p class="overline" id="auth-kicker">Secure workspace</p>
+          <h2 id="auth-title">Welcome back</h2>
+          <p id="auth-description">Sign in to continue to institution operations.</p>
+        </div>
+        <form class="auth-form" id="auth-form" novalidate>
+          <label class="field setup-only hidden" for="auth-name">
+            <span>Full name</span>
+            <input id="auth-name" name="fullName" autocomplete="name" placeholder="Director name">
+            <small class="field-error" data-error-for="fullName"></small>
+          </label>
+          <label class="field" for="auth-email">
+            <span>Email address</span>
+            <input id="auth-email" name="email" type="email" autocomplete="email" placeholder="director@lakshya.edu" required>
+            <small class="field-error" data-error-for="email"></small>
+          </label>
+          <label class="field" for="auth-password">
+            <span>Password</span>
+            <span class="password-control">
+              <input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+              <button class="icon-button password-toggle" type="button" aria-label="Show password" data-icon="eye"></button>
+            </span>
+            <small class="field-help" id="password-help">Use at least 8 characters.</small>
+            <small class="field-error" data-error-for="password"></small>
+          </label>
+          <div class="auth-error hidden" id="auth-error" role="alert"></div>
+          <button class="button button-primary button-large" id="auth-submit" type="submit">
+            <span id="auth-submit-label">Sign in securely</span><span data-icon="arrow-right"></span>
+          </button>
+        </form>
+        <p class="auth-footnote"><span data-icon="shield"></span> Protected by role-based access and an auditable activity history.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="app-shell hidden" id="app-shell">
+    <div class="drawer-scrim" id="drawer-scrim"></div>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand-row">
+        <div class="brand-lockup brand-lockup-light">
+          <img src="./icon.svg" width="42" height="42" alt="">
+          <div><strong>Lakshya</strong><span>Institution ERP</span></div>
+        </div>
+        <button class="icon-button sidebar-close" id="sidebar-close" type="button" aria-label="Close navigation" data-icon="x"></button>
       </div>
 
-      <nav class="nav" id="sidebar-navigation" aria-label="Dashboard sections">
-        <button class="nav-item active" type="button" data-view="dashboard" aria-current="page">Dashboard</button>
-        <button class="nav-item" type="button" data-view="admissions">Admissions CRM</button>
-        <button class="nav-item" type="button" data-view="students">Student Records</button>
-        <button class="nav-item" type="button" data-view="attendance">Attendance</button>
-        <button class="nav-item" type="button" data-view="fees">Fees &amp; Finance</button>
-        <button class="nav-item" type="button" data-view="academics">Academics &amp; Exams</button>
-        <button class="nav-item" type="button" data-view="faculty">Faculty &amp; Timetable</button>
-        <button class="nav-item" type="button" data-view="communication">Communication</button>
-        <button class="nav-item" type="button" data-view="reports">Reports</button>
-        <button class="nav-item" type="button" data-view="settings">Parent App &amp; Settings</button>
+      <div class="branch-switcher">
+        <span class="branch-icon" data-icon="building"></span>
+        <span><small>Active branch</small><strong>Sadar · Nagpur</strong></span>
+        <span data-icon="chevron-down"></span>
+      </div>
+
+      <nav class="primary-nav" aria-label="Application navigation">
+        <p class="nav-label">Workspace</p>
+        <button class="nav-item active" type="button" data-view="dashboard"><span data-icon="grid"></span><span>Command center</span></button>
+        <button class="nav-item" type="button" data-view="admissions"><span data-icon="spark"></span><span>Admissions</span><em id="nav-leads-count">0</em></button>
+        <button class="nav-item" type="button" data-view="students"><span data-icon="users"></span><span>Students</span><em id="nav-students-count">64</em></button>
+        <button class="nav-item" type="button" data-view="finance"><span data-icon="wallet"></span><span>Fees &amp; finance</span><em id="nav-finance-count">3</em></button>
+        <button class="nav-item" type="button" data-view="attendance"><span data-icon="calendar-check"></span><span>Attendance</span></button>
+        <button class="nav-item" type="button" data-view="academics"><span data-icon="book"></span><span>Academics</span></button>
+        <button class="nav-item" type="button" data-view="timetable"><span data-icon="clock"></span><span>Faculty &amp; timetable</span></button>
+
+        <p class="nav-label nav-label-spaced">Control</p>
+        <button class="nav-item" type="button" data-view="communication"><span data-icon="message"></span><span>Communication</span></button>
+        <button class="nav-item" type="button" data-view="reports"><span data-icon="chart"></span><span>Reports</span></button>
+        <button class="nav-item" type="button" data-view="settings"><span data-icon="settings"></span><span>Settings &amp; audit</span></button>
       </nav>
 
       <div class="sidebar-footer">
-        <p>Growth. Control. Outcomes.</p>
-        <a class="pill sidebar-link" href="/roles/">Role Views</a>
-        <a class="pill sidebar-link" href="/modules/">Modules</a>
+        <div class="system-health"><span class="status-dot"></span><span><strong>All systems operational</strong><small>Supabase connected</small></span></div>
+        <button class="user-card" id="user-menu-button" type="button">
+          <span class="user-avatar" id="user-avatar">LI</span>
+          <span><strong id="sidebar-user-name">Lakshya Director</strong><small id="sidebar-user-role">Owner</small></span>
+          <span data-icon="more"></span>
+        </button>
       </div>
     </aside>
 
-    <main class="main-panel page-wrap" id="main-content">
+    <main class="main-panel" id="main-content" tabindex="-1">
       <header class="topbar">
-        <div class="topbar-title">
-          <button class="menu-toggle" id="menu-toggle" type="button" aria-label="Open navigation menu" aria-expanded="false" aria-controls="sidebar-navigation">
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
-          <div class="topbar-heading">
-            <p class="eyebrow">Lakshya ERP</p>
-            <h2 id="view-title">Dashboard</h2>
-          </div>
+        <div class="topbar-left">
+          <button class="icon-button menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false" data-icon="menu"></button>
+          <div><p class="breadcrumb" id="page-kicker">Operations / Today</p><h1 id="page-title">Command center</h1></div>
         </div>
         <div class="topbar-actions">
-          <a class="app-status" id="app-status" href="/health/" aria-label="Open system health page">ERP Ready</a>
-          <button class="pill install-cta hidden" id="install-app" type="button">Install App</button>
+          <button class="search-trigger" id="search-trigger" type="button"><span data-icon="search"></span><span>Search students, leads…</span><kbd>⌘ K</kbd></button>
+          <button class="icon-button" id="theme-toggle" type="button" aria-label="Switch appearance" data-icon="moon"></button>
+          <button class="icon-button notification-button" type="button" aria-label="Notifications" data-icon="bell"><span class="notification-dot"></span></button>
+          <button class="topbar-profile" type="button" aria-label="Open profile"><span class="user-avatar" id="topbar-avatar">LI</span></button>
         </div>
       </header>
 
-      <nav class="deck-nav" aria-label="Presentation Navigation">
-        <a class="deck-link active" href="/"><span class="icon-chip">00</span>Dashboard</a>
-        <a class="deck-link" href="/roles/"><span class="icon-chip">01</span>Role Views</a>
-        <a class="deck-link" href="/modules/"><span class="icon-chip">02</span>Module Stack</a>
-        <a class="deck-link" href="/health/"><span class="icon-chip">03</span>System Health</a>
-      </nav>
-
-      <section class="content-view active" id="dashboard">
-        <section class="dashboard-hero">
-          <div class="dashboard-hero-copy">
-            <p class="eyebrow">Owner Cockpit</p>
-            <h3>See growth, academic quality, and collections in one glance.</h3>
-            <p>Designed for leadership decisions, not admin clutter.</p>
+      <div class="page-container">
+        <section class="app-view active" id="dashboard" aria-labelledby="dashboard-heading">
+          <div class="welcome-row">
+            <div><p class="overline">Monday · 20 July 2026</p><h2 id="dashboard-heading">Good morning, <span id="greeting-name">Director</span>.</h2><p>Your institution is ready for today. Here is what needs attention.</p></div>
+            <button class="button button-primary" type="button" data-view-target="admissions"><span data-icon="plus"></span>Create enquiry</button>
           </div>
-          <div class="dashboard-hero-metrics">
-            <div class="dashboard-metric-card">
-              <span>Enrollment Base</span>
-              <strong id="hero-students">1,284</strong>
-              <small>Flagship programs live</small>
-            </div>
-            <div class="dashboard-metric-card">
-              <span>Cash In This Month</span>
-              <strong id="hero-collections">Rs 18.6L</strong>
-              <small>92% on time</small>
-            </div>
-            <div class="dashboard-metric-card">
-              <span>Class Presence</span>
-              <strong id="hero-attendance">94.2%</strong>
-              <small>Alerts automated</small>
-            </div>
+
+          <div class="metric-grid" id="dashboard-metrics" aria-label="Institution summary">
+            <article class="metric-card metric-card-featured skeleton-card"></article>
+            <article class="metric-card skeleton-card"></article><article class="metric-card skeleton-card"></article><article class="metric-card skeleton-card"></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <article class="surface surface-wide">
+              <div class="surface-head"><div><p class="overline">Enrollment portfolio</p><h3>Program distribution</h3></div><button class="button button-quiet" type="button" data-view-target="students">View students<span data-icon="arrow-right"></span></button></div>
+              <div class="program-chart" id="program-chart"><div class="skeleton-line"></div></div>
+            </article>
+            <article class="surface attention-panel">
+              <div class="surface-head"><div><p class="overline">Quality desk</p><h3>Needs attention</h3></div><span class="count-badge" id="attention-count">—</span></div>
+              <div class="attention-list" id="attention-list"><div class="skeleton-line"></div></div>
+            </article>
+            <article class="surface surface-wide">
+              <div class="surface-head"><div><p class="overline">Newest records</p><h3>Recent admissions</h3></div><button class="button button-secondary button-small" type="button" data-view-target="students">Open directory</button></div>
+              <div class="record-list" id="recent-students"><div class="skeleton-line"></div></div>
+            </article>
+            <article class="surface finance-pulse">
+              <div class="surface-head"><div><p class="overline">Finance pulse</p><h3>Imported ledger</h3></div><span class="icon-tile" data-icon="trend"></span></div>
+              <div id="finance-pulse-body"><div class="skeleton-line"></div></div>
+            </article>
           </div>
         </section>
 
-        <section class="dashboard-spotlight-grid">
-          <article class="dashboard-spotlight-card dark">
-            <p class="eyebrow">Growth Narrative</p>
-            <h3>Own the funnel.</h3>
-            <p>Move from raw enquiry to predictable admissions with cleaner lead control and faster follow-up execution.</p>
-          </article>
-          <article class="dashboard-spotlight-card light">
-            <p class="eyebrow">Academic Narrative</p>
-            <h3>Protect quality.</h3>
-            <p>Keep attendance, tests, faculty load, and student weak areas visible before they become reputation problems.</p>
-          </article>
-          <article class="dashboard-spotlight-card accent">
-            <p class="eyebrow">Finance Narrative</p>
-            <h3>Control cash.</h3>
-            <p>Make collections, dues, and discount decisions part of one disciplined leadership rhythm.</p>
+        <section class="app-view" id="admissions" aria-labelledby="admissions-heading">
+          <div class="page-heading"><div><p class="overline">Admissions CRM</p><h2 id="admissions-heading">Enquiry pipeline</h2><p>Capture, counsel and convert every family through one accountable workflow.</p></div><button class="button button-primary" id="new-lead-button" type="button"><span data-icon="plus"></span>New enquiry</button></div>
+          <div class="compact-metrics" id="admissions-metrics"></div>
+          <article class="surface table-surface">
+            <div class="toolbar"><label class="search-field"><span data-icon="search"></span><input id="lead-search" type="search" placeholder="Search enquiries" aria-label="Search enquiries"></label><select id="lead-stage-filter" aria-label="Filter by stage"><option value="">All stages</option></select><button class="button button-secondary" id="refresh-leads" type="button"><span data-icon="refresh"></span>Refresh</button></div>
+            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Program</th><th>Owner</th><th>Stage</th><th>Next action</th><th></th></tr></thead><tbody id="leads-table-body"></tbody></table></div>
+            <div class="mobile-records" id="leads-mobile-list"></div>
           </article>
         </section>
 
-        <div class="grid two-thirds">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Executive Summary</p>
-                <h3>Business Performance</h3>
-              </div>
-              <span class="tag green">Healthy</span>
-            </div>
-            <div class="stats-grid" id="dashboard-stats"></div>
+        <section class="app-view" id="students" aria-labelledby="students-heading">
+          <div class="page-heading"><div><p class="overline">Student records</p><h2 id="students-heading">Student directory</h2><p>Every imported admission, enrollment and data-quality decision in one place.</p></div><button class="button button-secondary" id="export-students" type="button"><span data-icon="download"></span>Export view</button></div>
+          <div class="compact-metrics" id="student-metrics"></div>
+          <article class="surface table-surface">
+            <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="student-search" type="search" placeholder="Search name, mobile or admission number" aria-label="Search student directory"></label><select id="student-program-filter" aria-label="Filter by program"><option value="">All programs</option></select><select id="student-quality-filter" aria-label="Filter by data quality"><option value="">All quality states</option><option value="ready">Ready</option><option value="review">Review</option><option value="blocked">Blocked</option></select></div>
+            <div class="table-meta"><span id="student-result-count">Loading students…</span><span>Updated from Supabase</span></div>
+            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Admission ID</th><th>Program</th><th>Contact</th><th>Enrollment</th><th>Data quality</th><th></th></tr></thead><tbody id="students-table-body"></tbody></table></div>
+            <div class="mobile-records" id="students-mobile-list"></div>
           </article>
+        </section>
 
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Leadership Queue</p>
-                <h3>Today's Focus</h3>
-              </div>
-            </div>
-            <div class="timeline" id="priority-list"></div>
+        <section class="app-view" id="finance" aria-labelledby="finance-heading">
+          <div class="page-heading"><div><p class="overline">Fees &amp; finance</p><h2 id="finance-heading">Finance control</h2><p>Verified agreements and staged legacy payments, separated from official receipts.</p></div><button class="button button-primary" type="button" disabled title="Receipt workflow is coming next"><span data-icon="receipt"></span>Record payment</button></div>
+          <div class="compact-metrics" id="finance-metrics"></div>
+          <nav class="segmented-control" aria-label="Finance views"><button class="active" type="button" data-finance-tab="agreements">Fee agreements</button><button type="button" data-finance-tab="payments">Payment review <span id="payment-review-count"></span></button></nav>
+          <article class="surface table-surface finance-tab active" id="finance-agreements-panel">
+            <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search fee agreements"></label></div>
+            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Admission ID</th><th>Agreed fee</th><th>Legacy registration</th><th>Status</th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
+            <div class="mobile-records" id="agreements-mobile-list"></div>
           </article>
-        </div>
+          <article class="surface table-surface finance-tab" id="finance-payments-panel">
+            <div class="toolbar"><div class="inline-notice"><span data-icon="info"></span><span>These entries are staged from Excel and are not official receipts.</span></div><select id="payment-status-filter" aria-label="Filter reconciliation status"><option value="">All review states</option><option value="ready">Ready</option><option value="review">Review</option><option value="do_not_import">Do not import</option></select></div>
+            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Date</th><th>Amount</th><th>Mode</th><th>Source note</th><th>Review state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
+            <div class="mobile-records" id="payments-mobile-list"></div>
+          </article>
+        </section>
 
-        <div class="grid equal">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Growth Pipeline</p>
-                <h3>This Week</h3>
-              </div>
-            </div>
-            <div class="funnel" id="funnel"></div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Portfolio Mix</p>
-                <h3>Current Enrollment</h3>
-              </div>
-            </div>
-            <div class="batch-stack" id="batch-mix"></div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Risk Desk</p>
-                <h3>Watchlist</h3>
-              </div>
-            </div>
-            <ul class="simple-list" id="alerts"></ul>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="admissions">
-        <div class="grid equal">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Lead Sources</p>
-                <h3>Campaign Performance</h3>
-              </div>
-            </div>
-            <div class="source-list" id="lead-sources"></div>
-          </article>
-
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Counsellor Pipeline</p>
-                <h3>Recent Enquiries</h3>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden">Recent admissions enquiries and counsellor status</caption>
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Course</th>
-                    <th>Lead Source</th>
-                    <th>Counsellor</th>
-                    <th>Status</th>
-                    <th>Next Action</th>
-                  </tr>
-                </thead>
-                <tbody id="admission-rows"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="students">
-        <div class="grid equal">
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Student Master</p>
-                <h3>Academic + Parent + Fee Snapshot</h3>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden">Student records including parent, attendance, fees, and test snapshot</caption>
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Batch</th>
-                    <th>Parent</th>
-                    <th>Attendance</th>
-                    <th>Fees</th>
-                    <th>Last Test</th>
-                  </tr>
-                </thead>
-                <tbody id="student-rows"></tbody>
-              </table>
-            </div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Student Profile</p>
-                <h3>Featured Student Record</h3>
-              </div>
-            </div>
-            <div class="profile-card" id="student-profile"></div>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="attendance">
-        <div class="grid equal">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Today</p>
-                <h3>Attendance Summary</h3>
-              </div>
-            </div>
-            <div class="stats-grid compact" id="attendance-summary"></div>
-          </article>
-
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Batch-wise Monitor</p>
-                <h3>Late, Absent and Parent Alerts</h3>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden">Batch attendance summary with late, absent, and parent alerts</caption>
-                <thead>
-                  <tr>
-                    <th>Batch</th>
-                    <th>Strength</th>
-                    <th>Present</th>
-                    <th>Late</th>
-                    <th>Absent</th>
-                    <th>Auto Action</th>
-                  </tr>
-                </thead>
-                <tbody id="attendance-rows"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="fees">
-        <div class="grid equal">
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Fees Management</p>
-                <h3>Collection and Due Tracking</h3>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden">Fee plans, payments, dues, and next due dates</caption>
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Plan</th>
-                    <th>Total</th>
-                    <th>Paid</th>
-                    <th>Due</th>
-                    <th>Next Due Date</th>
-                  </tr>
-                </thead>
-                <tbody id="fee-rows"></tbody>
-              </table>
-            </div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Finance Snapshot</p>
-                <h3>Owner Summary</h3>
-              </div>
-            </div>
-            <ul class="simple-list" id="finance-summary"></ul>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="academics">
-        <div class="grid equal">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Exam Calendar</p>
-                <h3>This Month</h3>
-              </div>
-            </div>
-            <div class="timeline" id="exam-calendar"></div>
-          </article>
-
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Result Analytics</p>
-                <h3>Top Performing Batches</h3>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden">Academic batch performance with weak subject and action</caption>
-                <thead>
-                  <tr>
-                    <th>Batch</th>
-                    <th>Exam</th>
-                    <th>Average</th>
-                    <th>Top Score</th>
-                    <th>Weakest Subject</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="academic-rows"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="faculty">
-        <div class="grid equal">
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Faculty Console</p>
-                <h3>Faculty Load and Timetable</h3>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden">Faculty workload, utilization, and next class timing</caption>
-                <thead>
-                  <tr>
-                    <th>Faculty</th>
-                    <th>Subject</th>
-                    <th>Batches</th>
-                    <th>Hours / Week</th>
-                    <th>Utilization</th>
-                    <th>Next Class</th>
-                  </tr>
-                </thead>
-                <tbody id="faculty-rows"></tbody>
-              </table>
-            </div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Timetable Health</p>
-                <h3>Operational Notes</h3>
-              </div>
-            </div>
-            <ul class="simple-list" id="timetable-notes"></ul>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="communication">
-        <div class="grid equal">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Auto Messages</p>
-                <h3>WhatsApp / SMS Journeys</h3>
-              </div>
-            </div>
-            <div class="timeline" id="message-flows"></div>
-          </article>
-
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Broadcast Center</p>
-                <h3>Recent Communication Log</h3>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <caption class="visually-hidden">Communication campaigns, channels, timing, and delivery rates</caption>
-                <thead>
-                  <tr>
-                    <th>Audience</th>
-                    <th>Purpose</th>
-                    <th>Channel</th>
-                    <th>Sent</th>
-                    <th>Delivery</th>
-                    <th>Owner</th>
-                  </tr>
-                </thead>
-                <tbody id="communication-rows"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="reports">
-        <div class="grid equal">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Downloadable Reports</p>
-                <h3>Owner and Admin Views</h3>
-              </div>
-            </div>
-            <ul class="report-list" id="report-list"></ul>
-          </article>
-
-          <article class="panel span-2">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Executive Summary</p>
-                <h3>Monthly Performance Board</h3>
-              </div>
-            </div>
-            <div class="board" id="executive-board"></div>
-          </article>
-        </div>
-      </section>
-
-      <section class="content-view" id="settings">
-        <div class="grid equal">
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Parent App</p>
-                <h3>What parents can see</h3>
-              </div>
-            </div>
-            <ul class="simple-list" id="parent-features"></ul>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Admin Controls</p>
-                <h3>Core ERP Settings</h3>
-              </div>
-            </div>
-            <ul class="simple-list" id="admin-settings"></ul>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Implementation Plan</p>
-                <h3>How Lakshya can go live</h3>
-              </div>
-            </div>
-            <div class="timeline" id="rollout-plan"></div>
-          </article>
-        </div>
-      </section>
+        <section class="app-view placeholder-view" id="attendance" data-module="Attendance" data-description="Session registers, correction workflows and absence escalation."></section>
+        <section class="app-view placeholder-view" id="academics" data-module="Academics" data-description="Courses, assignments, exams, results and intervention notes."></section>
+        <section class="app-view placeholder-view" id="timetable" data-module="Faculty &amp; timetable" data-description="Faculty workload, rooms, schedules, substitutions and conflicts."></section>
+        <section class="app-view placeholder-view" id="communication" data-module="Communication" data-description="Templates, audiences, notices and delivery history."></section>
+        <section class="app-view placeholder-view" id="reports" data-module="Reports" data-description="Admissions, collections, attendance and academic risk reporting."></section>
+        <section class="app-view placeholder-view" id="settings" data-module="Settings &amp; audit" data-description="Users, roles, branches, approvals and immutable audit history."></section>
+      </div>
     </main>
   </div>
 
-  <div class="install-sheet-backdrop hidden" id="install-sheet-backdrop"></div>
-  <section class="install-sheet hidden" id="install-sheet" aria-labelledby="install-sheet-title" aria-modal="true" role="dialog">
-    <div class="install-sheet-head">
-      <p class="eyebrow" id="install-sheet-kicker">Apple Install</p>
-      <button class="install-sheet-close" id="install-sheet-close" type="button" aria-label="Close install help">Close</button>
-    </div>
-    <h3 id="install-sheet-title">Add Lakshya ERP to your device.</h3>
-    <div class="install-steps" id="install-steps"></div>
-  </section>
+  <aside class="detail-drawer" id="detail-drawer" aria-hidden="true" aria-labelledby="drawer-title">
+    <div class="detail-drawer-head"><div><p class="overline">Student profile</p><h2 id="drawer-title">Record details</h2></div><button class="icon-button" id="detail-close" type="button" aria-label="Close details" data-icon="x"></button></div>
+    <div class="detail-drawer-body" id="detail-drawer-body"></div>
+  </aside>
+  <div class="drawer-overlay" id="detail-overlay"></div>
 
-  <script>
-    (() => {
-      const normalized = window.location.pathname.replace(/index\.html$/, "").replace(/\.html$/, "/");
-      if (normalized !== window.location.pathname) {
-        window.history.replaceState({}, "", `${normalized}${window.location.search}${window.location.hash}`);
-      }
-    })();
-  </script>
-  <script src="/app.js"></script>
+  <div class="command-overlay hidden" id="command-overlay" role="dialog" aria-modal="true" aria-labelledby="command-title">
+    <div class="command-palette">
+      <label><span data-icon="search"></span><input id="global-search" type="search" placeholder="Search students or navigate…" autocomplete="off" aria-label="Global search"></label>
+      <div class="command-results" id="command-results"><p id="command-title">Quick navigation</p></div>
+      <footer><span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span><span><kbd>Esc</kbd> Close</span></footer>
+    </div>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="./app.js?v=12" defer></script>
 </body>
 </html>

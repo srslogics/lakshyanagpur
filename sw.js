@@ -1,17 +1,16 @@
-const CACHE_NAME = "lakshya-erp-demo-v7";
+const CACHE_NAME = "lakshya-erp-app-v12";
 const ASSETS = [
-  "/",
-  "/health/",
-  "/roles/",
-  "/modules/",
-  "/styles.css",
-  "/app.js",
-  "/manifest.webmanifest",
-  "/icon.svg",
-  "/icon-maskable.svg",
-  "/apple-touch-icon.png",
-  "/icon-512.png",
-  "/share-card.png"
+  "./",
+  "./styles.css?v=12",
+  "./app.js?v=12",
+  "./manifest.webmanifest",
+  "./icon.svg",
+  "./icon-maskable.svg",
+  "./apple-touch-icon.png",
+  "./icon-512.png",
+  "./share-card.png",
+  "./src/modules/admissions/index.js",
+  "./src/modules/admissions/data.js"
 ];
 
 self.addEventListener("install", event => {
@@ -61,7 +60,7 @@ self.addEventListener("fetch", event => {
             }
           }
 
-          return caches.match("/");
+          return caches.match("./");
         });
     })
   );

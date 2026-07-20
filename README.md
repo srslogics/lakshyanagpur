@@ -1,40 +1,113 @@
 # Lakshya ERP
 
-This is a browser-based ERP presentation for Lakshya Institute. It is designed to show a complete coaching-institute workflow without needing a backend first.
+This repository is now the product foundation for the real Lakshya ERP application, with the frontend and FastAPI backend deployable together as one service.
 
-## What the demo covers
+## Current direction
 
-- Owner dashboard
-- Admissions CRM and enquiry tracking
-- Student master records
-- Attendance monitoring
-- Fees and collections
-- Academics, exams, and test analytics
-- Faculty and timetable management
-- Parent communication workflows
-- Reports and rollout plan
-- PWA support for installable app behavior and offline shell caching
+- Build admissions first as the primary working module
+- Keep the interface modular and product-ready
+- Replace presentation-oriented screens with operational workflows
+- Move toward reusable state, forms, role behavior, and backend-ready structure
 
-## How to open it
+## Product blueprint
 
-Run a simple local server from this folder and open `http://127.0.0.1:4173/`.
+- [Software architecture](docs/software-architecture.md): modules, data model, API boundaries, roles, deployment, and delivery order.
+- [Product design system](docs/design-system.md): UI rules, colour and typography tokens, responsive layout, components, and accessibility baseline.
+- [Admissions module blueprint](docs/admissions-module-blueprint.md): detailed first-module workflow and data requirements.
 
-Example:
+## Current product areas
+
+- Dashboard shell
+- Admissions CRM workspace
+- Student records shell
+- Attendance shell
+- Fees and finance shell
+- Academics and exams shell
+- Faculty and timetable shell
+- Communication shell
+- Reports shell
+- Parent app and settings shell
+
+## How to run locally
+
+Run the FastAPI backend from the `backend` directory. It now serves the frontend as well.
+
+Backend:
 
 ```bash
-python3 -m http.server 4173
+cd backend
+python3 -m venv ../.venv
+source ../.venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-## Suggested demo flow
+Then open:
 
-1. Start on `Dashboard` and position the system as the owner's control room.
-2. Open `Admissions CRM` to show how leads move from enquiry to admission.
-3. Open `Student Records` to show one unified profile with parent, attendance, fees, and test data.
-4. Open `Attendance` and `Fees & Finance` to show operational automation.
-5. Open `Academics & Exams` and `Faculty & Timetable` to show academic control.
-6. End with `Communication`, `Reports`, and `Parent App & Settings` to show how the institute scales professionally.
-7. Point out the app badge in the header to explain that the ERP can be installed on mobile or desktop like an app.
+- `http://127.0.0.1:8000/docs` for API docs
+- `http://127.0.0.1:8000/` for the product UI
 
-## Important note
+## Deploy on Render
 
-This is a polished front-end demo with realistic institute data. The next step can be turning it into a live product with authentication, database, forms, exports, and role-based access.
+This app can be deployed as a single Render web service.
+
+Render settings:
+
+- Root directory: `backend`
+- Runtime: `Python`
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- Health check path: `/api/health`
+
+Required environment variables:
+
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `CORS_ORIGINS` (the deployed Render URL)
+
+Optional:
+
+- `APP_HOST=0.0.0.0`
+- `APP_PORT=10000`
+- `ACCESS_TOKEN_MINUTES=480`
+- `SEED_DEMO_DATA=false` (keep false outside local development)
+
+Database migrations run automatically during the Render build. For local work, run `alembic upgrade head` from `backend` before starting the API. The application does not create production tables implicitly.
+
+## Implemented production foundation
+
+- Signed bearer authentication with PBKDF2 password hashing
+- Backend-enforced admissions roles and counsellor ownership filtering
+- Validated lead sources, stages, mobile numbers, priorities, and follow-up dates
+- Duplicate active-mobile detection with a stable conflict response
+- Immutable lead activities and audit events
+- Atomic, idempotent conversion from confirmed lead to student, guardian link, enrollment draft, and finance handoff
+- Alembic migration for shared users, leads, students, guardians, enrollments, finance handoffs, and audit records
+- Automated checks for conversion, duplicate detection, permission denial, and bypass prevention
+- Idempotent Excel admissions importer with source-row preservation and full financial reconciliation
+- Student and finance read APIs for imported enrollments, fee agreements, and staged payments
+
+## Admission workbook import
+
+The reviewed workbook is converted to a canonical manifest with the staging builder. The manifest is intentionally ignored by Git because it contains student personal data.
+
+```bash
+node scripts/build_admission_import_staging.mjs
+cd backend
+alembic upgrade head
+python -m app.importers.legacy_admissions data/imports/admission_2026_27.json --dry-run
+python -m app.importers.legacy_admissions data/imports/admission_2026_27.json
+```
+
+The importer is idempotent by source-file hash. Active rows create central students, enrollments, finance handoffs, and fee agreements. Cancelled rows remain migration-audit records only. Parsed payment entries remain immutable `staged` transactions until Accounts verifies them; they are not receipts.
+
+The other interface areas remain product shells. Finance transactions, attendance locking, inventory movements, academics, communication adapters, and reporting still need their domain migrations and APIs before those modules should be treated as production-complete.
+
+You can deploy either by using the included `render.yaml` blueprint or by creating the web service manually in the Render dashboard.
+
+## Build approach
+
+1. Finish admissions as the first usable module.
+2. Keep admissions connected to the FastAPI + Postgres backend.
+3. Add reusable patterns for tables, forms, filters, notes, and profile panels.
+4. Expand the same system into the remaining institute modules.
