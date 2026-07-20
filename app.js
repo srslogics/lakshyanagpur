@@ -60,7 +60,8 @@ async function api(path, options = {}) {
 function toast(message, tone = "success") {
   const node = document.createElement("div");
   node.className = "toast";
-  node.innerHTML = `<span class="status status-${tone === "error" ? "blocked" : "ready"}">${tone === "error" ? "Issue" : "Done"}</span><span>${esc(message)}</span>`;
+  node.classList.toggle("toast-error", tone === "error");
+  node.textContent = message;
   $("#toast-region").append(node);
   setTimeout(() => node.remove(), 3600);
 }
@@ -68,10 +69,8 @@ function toast(message, tone = "success") {
 function setAuthMode(setup) {
   state.setupRequired = setup;
   $$(".setup-only").forEach(node => node.classList.toggle("hidden", !setup));
-  $("#auth-kicker").textContent = setup ? "First-time setup" : "Secure workspace";
-  $("#auth-title").textContent = setup ? "Create the owner account" : "Welcome back";
-  $("#auth-description").textContent = setup ? "Set up the first accountable administrator for Lakshya ERP." : "Sign in to continue to institution operations.";
-  $("#auth-submit-label").textContent = setup ? "Create owner workspace" : "Sign in securely";
+  $("#auth-title").textContent = setup ? "Create owner" : "Sign in";
+  $("#auth-submit-label").textContent = setup ? "Create account" : "Sign in";
   $("#password-help").textContent = setup ? "Use at least 10 characters." : "Use at least 8 characters.";
   $("#auth-password").autocomplete = setup ? "new-password" : "current-password";
 }
@@ -90,7 +89,7 @@ async function initialize() {
     } else showAuth();
   } catch (error) {
     showAuth();
-    $("#auth-error").textContent = "The ERP service is unavailable. Please start the backend and refresh.";
+    $("#auth-error").textContent = "Service unavailable. Refresh to retry.";
     $("#auth-error").classList.remove("hidden");
   }
 }
@@ -136,7 +135,7 @@ async function handleAuth(event) {
   if (!/^\S+@\S+\.\S+$/.test(email)) { $('[data-error-for="email"]').textContent = "Enter a valid email address."; invalid = true; }
   if (password.length < (state.setupRequired ? 10 : 8)) { $('[data-error-for="password"]').textContent = `Use at least ${state.setupRequired ? 10 : 8} characters.`; invalid = true; }
   if (invalid) return;
-  const button = $("#auth-submit"); button.disabled = true; $("#auth-submit-label").textContent = state.setupRequired ? "Creating workspace…" : "Signing in…";
+  const button = $("#auth-submit"); button.disabled = true; $("#auth-submit-label").textContent = state.setupRequired ? "Creating…" : "Signing in…";
   try {
     const payload = state.setupRequired ? { fullName, email, password } : { email, password };
     const result = await api(state.setupRequired ? "/api/auth/bootstrap" : "/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
@@ -148,7 +147,7 @@ async function handleAuth(event) {
     $("#auth-password").value = "";
     $("#auth-password").focus();
   } finally {
-    button.disabled = false; $("#auth-submit-label").textContent = state.setupRequired ? "Create owner workspace" : "Sign in securely";
+    button.disabled = false; $("#auth-submit-label").textContent = state.setupRequired ? "Create account" : "Sign in";
   }
 }
 
@@ -157,7 +156,7 @@ async function enterWorkspace() {
   const name = state.user?.fullName || "Lakshya Director";
   const label = state.user?.role?.replaceAll("_", " ") || "Owner";
   $("#sidebar-user-name").textContent = name; $("#sidebar-user-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
-  $("#greeting-name").textContent = name.split(" ")[0];
+  $("#dashboard-date").textContent = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   $("#account-menu-name").textContent = name; $("#account-menu-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
   [$("#user-avatar"), $("#topbar-avatar"), $("#account-menu-avatar")].forEach(node => node.textContent = initials(name));
   await loadWorkspace();
@@ -193,44 +192,43 @@ function renderAll() {
   renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderCommandResults(); injectIcons();
 }
 
-function metricCard(label, value, note, iconName, featured = false) {
-  return `<article class="metric-card ${featured ? "metric-card-featured" : ""}"><div class="metric-card-head"><span class="metric-label">${esc(label)}</span><span class="metric-icon">${icon(iconName)}</span></div><div><p class="metric-value">${esc(value)}</p><span class="metric-note">${esc(note)}</span></div></article>`;
+function metricCard(label, value, iconName, featured = false) {
+  return `<article class="metric-card ${featured ? "metric-card-featured" : ""}"><div class="metric-card-head"><span class="metric-label">${esc(label)}</span><span class="metric-icon">${icon(iconName)}</span></div><p class="metric-value">${esc(value)}</p></article>`;
 }
 
 function renderDashboard() {
   const agreed = state.agreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0);
   const registration = state.agreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
-  const review = state.students.filter(item => item.dataQualityStatus !== "ready").length;
   $("#dashboard-metrics").innerHTML = [
-    metricCard("Active students", String(state.students.length), "Imported from the 2026–27 admission sheet", "users", true),
-    metricCard("Agreed fees", shortMoney(agreed), `${state.agreements.length} verified agreements`, "wallet"),
-    metricCard("Registration total", shortMoney(registration), "Legacy registration entries", "receipt"),
-    metricCard("Quality review", String(review), review ? "Records need a decision" : "All records are import-ready", "alert")
+    metricCard("Active students", String(state.students.length), "users", true),
+    metricCard("Agreed fees", shortMoney(agreed), "wallet"),
+    metricCard("Registration", shortMoney(registration), "receipt"),
+    metricCard("Enquiries", String(state.leads.length), "spark")
   ].join("");
 
   const programs = state.students.reduce((map, item) => map.set(item.program || "Unassigned", (map.get(item.program || "Unassigned") || 0) + 1), new Map());
   const sortedPrograms = [...programs.entries()].sort((a, b) => b[1] - a[1]);
   const max = Math.max(...sortedPrograms.map(([, count]) => count), 1);
-  $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments yet", "Imported enrollments will appear here.");
+  $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments");
 
   const quality = ["review", "blocked"].map(kind => ({ kind, count: state.students.filter(item => item.dataQualityStatus === kind).length })).filter(item => item.count);
   const paymentReview = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
   if (paymentReview) quality.push({ kind: "payment review", count: paymentReview });
   $("#attention-count").textContent = quality.reduce((sum, item) => sum + item.count, 0);
-  $("#attention-list").innerHTML = quality.length ? quality.map(item => `<button class="attention-item" type="button" data-view-target="${item.kind === "payment review" ? "finance" : "students"}"><span>${icon("alert")}</span><span><strong>${esc(item.kind.replace(/\b\w/g, c => c.toUpperCase()))}</strong><small>${item.kind === "payment review" ? "Staged ledger lines" : "Student source records"}</small></span><em>${item.count} ${item.count === 1 ? "item" : "items"}</em></button>`).join("") : `<div class="attention-item"><span>${icon("shield")}</span><span><strong>Import checks complete</strong><small>No blocked or review records</small></span>${status("ready")}</div>`;
+  $("#attention-list").innerHTML = quality.length ? quality.map(item => `<button class="attention-item" type="button" data-view-target="${item.kind === "payment review" ? "finance" : "students"}"><span>${icon("alert")}</span><strong>${esc(item.kind.replace(/\b\w/g, c => c.toUpperCase()))}</strong><em>${item.count}</em></button>`).join("") : `<div class="attention-item"><span>${icon("shield")}</span><strong>No review items</strong></div>`;
 
   const recent = [...state.students].sort((a, b) => String(b.enrollmentDate).localeCompare(String(a.enrollmentDate))).slice(0, 5);
-  $("#recent-students").innerHTML = recent.map(student => `<button class="record-item" type="button" data-student-id="${esc(student.id)}"><span class="record-avatar">${initials(student.fullName)}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span><span class="record-program">${esc(student.program)}</span><span class="record-date">${formatDate(student.enrollmentDate)}</span>${status(student.dataQualityStatus)}</button>`).join("");
+  $("#recent-students").innerHTML = recent.length ? recent.map(student => `<button class="record-item" type="button" data-student-id="${esc(student.id)}"><span class="record-avatar">${initials(student.fullName)}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span><span class="record-program">${esc(student.program)}</span><span class="record-date">${formatDate(student.enrollmentDate)}</span>${status(student.dataQualityStatus)}</button>`).join("") : emptyState("users", "No admissions");
 
   const stagedTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const readyPayments = state.payments.filter(item => item.reconciliationStatus === "ready").length;
   const readyPercent = state.payments.length ? Math.round(readyPayments / state.payments.length * 100) : 0;
-  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} payment and adjustment lines staged from Excel</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} ready</span><span>${state.payments.length - readyPayments} need review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open finance control ${icon("arrow-right")}</button></div>`;
+  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} staged entries</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} ready</span><span>${state.payments.length - readyPayments} review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">View ledger ${icon("arrow-right")}</button></div>`;
 }
 
 function compactMetrics(items) { return items.map(item => `<div class="compact-metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`).join(""); }
 function studentPrimary(name, detail = "") { return `<div class="table-primary"><span class="record-avatar">${initials(name)}</span><span><strong>${esc(name)}</strong><small>${esc(detail)}</small></span></div>`; }
-function emptyState(iconName, title, copy) { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3><p>${esc(copy)}</p></div></div>`; }
+function emptyState(iconName, title, copy = "") { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3>${copy ? `<p>${esc(copy)}</p>` : ""}</div></div>`; }
 
 function filteredStudents() {
   const search = $("#student-search").value.trim().toLowerCase(), program = $("#student-program-filter").value, quality = $("#student-quality-filter").value;
@@ -251,7 +249,7 @@ function renderStudents() {
 function renderStudentRows() {
   const rows = filteredStudents(); $("#student-result-count").textContent = `${rows.length} of ${state.students.length} students`;
   $("#students-table-body").innerHTML = rows.length ? rows.map(student => `<tr><td>${studentPrimary(student.fullName, student.previousSchool || "School not captured")}</td><td><strong>${esc(student.admissionNumber)}</strong></td><td>${esc(student.program)}<br><small>${esc(student.batch || "—")}</small></td><td>${esc(student.mobile || "—")}</td><td>${formatDate(student.enrollmentDate)}</td><td>${status(student.dataQualityStatus)}</td><td><button class="icon-button table-action" type="button" aria-label="View ${esc(student.fullName)}" data-student-id="${esc(student.id)}">${icon("chevron-right")}</button></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching students", "Try clearing one of the directory filters.")}</td></tr>`;
-  $("#students-mobile-list").innerHTML = rows.map(student => `<article class="mobile-record-card"><div>${studentPrimary(student.fullName, student.admissionNumber)}${status(student.dataQualityStatus)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(student.program)}</strong></div><div><span>Mobile</span><strong>${esc(student.mobile || "—")}</strong></div></div><button class="button button-secondary" type="button" data-student-id="${esc(student.id)}">View complete record</button></article>`).join("");
+  $("#students-mobile-list").innerHTML = rows.map(student => `<article class="mobile-record-card"><div>${studentPrimary(student.fullName, student.admissionNumber)}${status(student.dataQualityStatus)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(student.program)}</strong></div><div><span>Mobile</span><strong>${esc(student.mobile || "—")}</strong></div></div><button class="button button-secondary" type="button" data-student-id="${esc(student.id)}">View record</button></article>`).join("");
 }
 
 function renderFinance() {
@@ -288,13 +286,14 @@ function renderAdmissions() {
 function renderLeadRows() {
   const search = $("#lead-search").value.trim().toLowerCase(), stage = $("#lead-stage-filter").value;
   const rows = state.leads.filter(item => (!search || [item.student, item.mobile, item.program].some(value => String(value || "").toLowerCase().includes(search))) && (!stage || item.stage === stage));
-  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td><span class="icon-button table-action">${icon("chevron-right")}</span></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "Your enquiry pipeline is ready", state.leads.length ? "Change the search or stage filter." : "Create the first enquiry here; imported admissions remain in the student directory.")}</td></tr>`;
+  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td><span class="icon-button table-action">${icon("chevron-right")}</span></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "No enquiries", state.leads.length ? "Clear a filter." : "Create an enquiry to begin.")}</td></tr>`;
   $("#leads-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div></article>`).join("");
 }
 
 async function openStudent(studentId) {
   const drawer = $("#detail-drawer"), body = $("#detail-drawer-body");
   drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false");
+  syncBodyScrollLock();
   body.innerHTML = '<div class="skeleton-line"></div>';
   try {
     const student = await api(`/api/students/${encodeURIComponent(studentId)}`); $("#drawer-title").textContent = student.fullName;
@@ -306,10 +305,11 @@ async function openStudent(studentId) {
   } catch (error) { body.innerHTML = emptyState("alert", "Could not open this record", error.message); }
 }
 function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
-function closeDetail() { $("#detail-drawer").classList.remove("open"); $("#detail-overlay").classList.remove("open"); $("#detail-drawer").setAttribute("aria-hidden", "true"); }
+function closeDetail() { $("#detail-drawer").classList.remove("open"); $("#detail-overlay").classList.remove("open"); $("#detail-drawer").setAttribute("aria-hidden", "true"); syncBodyScrollLock(); }
 
 function openLeadForm() {
   const drawer = $("#detail-drawer"); drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false"); $("#drawer-title").textContent = "New enquiry";
+  syncBodyScrollLock();
   $("#detail-drawer-body").innerHTML = `<form class="auth-form" id="lead-create-form"><label class="field"><span>Student name</span><input name="student" required></label><label class="field"><span>Mobile number</span><input name="mobile" inputmode="numeric" required></label><label class="field"><span>Program</span><input name="program" required></label><label class="field"><span>Parent / guardian</span><input name="parent" required></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(state.user?.fullName || "Admissions desk")}" required></label><label class="field"><span>Source</span><select name="source" required><option value="walk-in">Walk-in</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="website">Website</option><option value="referral">Referral</option><option value="campaign">Campaign</option><option value="seminar">Seminar</option><option value="social media">Social media</option></select></label><label class="field"><span>Next action</span><input name="nextAction" placeholder="Call, campus visit, counselling…" required></label><div class="auth-error hidden" id="lead-form-error" role="alert"></div><button class="button button-primary button-large" type="submit">${icon("plus")}Create enquiry</button></form>`;
   $("#lead-create-form").addEventListener("submit", createLead);
 }
@@ -317,34 +317,38 @@ function openLeadForm() {
 async function createLead(event) {
   event.preventDefault(); const form = new FormData(event.currentTarget); const button = $("button[type=submit]", event.currentTarget); button.disabled = true;
   const payload = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value).trim()]));
-  try { const lead = await api("/api/admissions/leads", { method: "POST", body: JSON.stringify(payload) }); state.leads.unshift(lead); closeDetail(); renderAdmissions(); $("#nav-leads-count").textContent = state.leads.length; toast("Enquiry created and added to the pipeline."); }
+  try { const lead = await api("/api/admissions/leads", { method: "POST", body: JSON.stringify(payload) }); state.leads.unshift(lead); closeDetail(); renderAdmissions(); $("#nav-leads-count").textContent = state.leads.length; toast("Enquiry created."); }
   catch (error) { $("#lead-form-error").textContent = error.message; $("#lead-form-error").classList.remove("hidden"); button.disabled = false; }
 }
 
-const viewTitles = { dashboard: ["Operations / Today", "Command center"], admissions: ["Workspace / Admissions", "Admissions"], students: ["Workspace / Records", "Students"], finance: ["Workspace / Finance", "Fees & finance"], attendance: ["Workspace / Delivery", "Attendance"], academics: ["Workspace / Delivery", "Academics"], timetable: ["Workspace / Resources", "Faculty & timetable"], communication: ["Control / Engagement", "Communication"], reports: ["Control / Intelligence", "Reports"], settings: ["Control / Governance", "Settings & audit"] };
+const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", timetable: "Faculty & timetable", communication: "Communication", reports: "Reports", settings: "Settings & audit" };
 function showView(view) {
   if (!$("#" + view)) return; state.view = view;
   $$(".app-view").forEach(node => node.classList.toggle("active", node.id === view));
   $$(".nav-item").forEach(node => node.classList.toggle("active", node.dataset.view === view));
-  $("#page-kicker").textContent = viewTitles[view][0]; $("#page-title").textContent = viewTitles[view][1];
+  $("#page-title").textContent = viewTitles[view];
   closeSidebar(); closeCommand(); $("#main-content").focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function renderPlaceholders() {
   const moduleIcons = { Attendance: "calendar-check", Academics: "book", "Faculty & timetable": "clock", Communication: "message", Reports: "chart", "Settings & audit": "settings" };
-  $$(".placeholder-view").forEach(node => { const name = node.dataset.module; node.innerHTML = `<article class="module-ready-card"><span class="module-ready-icon">${icon(moduleIcons[name])}</span><p class="overline">Production roadmap</p><h2>${esc(name)}</h2><p>${esc(node.dataset.description)} The shared navigation, access control and data foundation are already in place.</p><div class="module-readiness"><div><strong>Foundation ready</strong><span>Authenticated workspace</span></div><div><strong>Data model aligned</strong><span>Built for ERP records</span></div><div><strong>Next release</strong><span>Workflow implementation</span></div></div></article>`; });
+  $$(".placeholder-view").forEach(node => { const name = node.dataset.module; node.innerHTML = `<article class="module-ready-card"><span class="module-ready-icon">${icon(moduleIcons[name])}</span><h2>${esc(name)}</h2><span class="status status-neutral">Coming soon</span></article>`; });
 }
 
 function renderCommandResults(query = "") {
   const needle = query.trim().toLowerCase();
-  const views = Object.entries(viewTitles).filter(([, values]) => !needle || values.join(" ").toLowerCase().includes(needle)).slice(0, 7);
+  const views = Object.entries(viewTitles).filter(([, title]) => !needle || title.toLowerCase().includes(needle)).slice(0, 7);
   const students = state.students.filter(item => !needle || [item.fullName, item.admissionNumber, item.mobile].some(value => String(value || "").toLowerCase().includes(needle))).slice(0, needle ? 7 : 3);
-  $("#command-results").innerHTML = `<p>${needle ? "Matching results" : "Quick navigation"}</p>${views.map(([key, values]) => `<button class="command-item" type="button" data-command-view="${key}"><span>${icon(key === "dashboard" ? "grid" : key === "finance" ? "wallet" : key === "students" ? "users" : "arrow-right")}</span><span><strong>${esc(values[1])}</strong><small>${esc(values[0])}</small></span><span>${icon("chevron-right")}</span></button>`).join("")}${students.length ? `<p>Students</p>${students.map(student => `<button class="command-item" type="button" data-command-student="${esc(student.id)}"><span>${icon("user")}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)} · ${esc(student.program)}</small></span><span>${icon("chevron-right")}</span></button>`).join("")}` : needle ? emptyState("search", "No student records found", "Try a name, mobile number or admission ID.") : ""}`;
+  $("#command-results").innerHTML = `<p>${needle ? "Results" : "Navigate"}</p>${views.map(([key, title]) => `<button class="command-item" type="button" data-command-view="${key}"><span>${icon(key === "dashboard" ? "grid" : key === "finance" ? "wallet" : key === "students" ? "users" : "arrow-right")}</span><strong>${esc(title)}</strong><span>${icon("chevron-right")}</span></button>`).join("")}${students.length ? `<p>Students</p>${students.map(student => `<button class="command-item" type="button" data-command-student="${esc(student.id)}"><span>${icon("user")}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)} · ${esc(student.program)}</small></span><span>${icon("chevron-right")}</span></button>`).join("")}` : needle ? emptyState("search", "No results") : ""}`;
 }
-function openCommand() { $("#command-overlay").classList.remove("hidden"); $("#global-search").value = ""; renderCommandResults(); setTimeout(() => $("#global-search").focus(), 10); }
-function closeCommand() { $("#command-overlay").classList.add("hidden"); }
-function openSidebar() { $("#sidebar").classList.add("open"); $("#drawer-scrim").classList.add("open"); $("#menu-button").setAttribute("aria-expanded", "true"); }
-function closeSidebar() { $("#sidebar").classList.remove("open"); $("#drawer-scrim").classList.remove("open"); $("#menu-button").setAttribute("aria-expanded", "false"); }
+function syncBodyScrollLock() {
+  const overlayOpen = $("#detail-drawer").classList.contains("open") || !$("#command-overlay").classList.contains("hidden") || $("#sidebar").classList.contains("open");
+  document.body.classList.toggle("no-scroll", overlayOpen);
+}
+function openCommand() { $("#command-overlay").classList.remove("hidden"); $("#global-search").value = ""; renderCommandResults(); syncBodyScrollLock(); setTimeout(() => $("#global-search").focus(), 10); }
+function closeCommand() { $("#command-overlay").classList.add("hidden"); syncBodyScrollLock(); }
+function openSidebar() { $("#sidebar").classList.add("open"); $("#drawer-scrim").classList.add("open"); $("#menu-button").setAttribute("aria-expanded", "true"); syncBodyScrollLock(); }
+function closeSidebar() { $("#sidebar").classList.remove("open"); $("#drawer-scrim").classList.remove("open"); $("#menu-button").setAttribute("aria-expanded", "false"); syncBodyScrollLock(); }
 
 let accountMenuTrigger = null;
 function closeAccountMenu(restoreFocus = false) {
@@ -380,7 +384,7 @@ async function logout(notify = true) {
   clearSession();
   resetAuthForm();
   showAuth();
-  if (notify) toast("You have been signed out securely.");
+  if (notify) toast("Signed out.");
 }
 
 function exportStudents() {
@@ -408,7 +412,7 @@ function bindEvents() {
   $("#logout-button").addEventListener("click", () => logout());
   $("#student-search").addEventListener("input", renderStudentRows); $("#student-program-filter").addEventListener("change", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
   $("#agreement-search").addEventListener("input", renderAgreementRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
-  $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Admissions pipeline refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => { $$("[data-finance-tab]").forEach(item => item.classList.toggle("active", item === button)); $$(".finance-tab").forEach(panel => panel.classList.toggle("active", panel.id === `finance-${button.dataset.financeTab}-panel`)); }));
   document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); } });

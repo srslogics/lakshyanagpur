@@ -25,8 +25,13 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
 def test_frontend_shell_is_served(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "Every student journey" in response.text
-    assert "Student directory" in response.text
+    assert "Institution ERP" in response.text
+    assert "Students" in response.text
+    assert 'property="og:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=1"' in response.text
+
+    share_card = client.get("/share-card.png")
+    assert share_card.status_code == 200
+    assert share_card.headers["content-type"] == "image/png"
 
 
 def test_health_checks_support_get_and_head(client):

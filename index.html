@@ -6,6 +6,22 @@
   <title>Lakshya ERP · Institution Operations</title>
   <meta name="theme-color" content="#181b4b">
   <meta name="description" content="Lakshya Institution ERP for admissions, students, finance, academics and daily operations.">
+  <link rel="canonical" href="https://lakshyaedutech.onrender.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Lakshya Institution ERP">
+  <meta property="og:url" content="https://lakshyaedutech.onrender.com/">
+  <meta property="og:title" content="Lakshya Institution ERP · One trusted system">
+  <meta property="og:description" content="Admissions, students, fees and institution operations—connected in one secure workspace.">
+  <meta property="og:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=1">
+  <meta property="og:image:secure_url" content="https://lakshyaedutech.onrender.com/share-card.png?v=1">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Lakshya Institution ERP — every student journey in one trusted system">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Lakshya Institution ERP · One trusted system">
+  <meta name="twitter:description" content="Admissions, students, fees and institution operations—connected in one secure workspace.">
+  <meta name="twitter:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=1">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,7 +31,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=14">
+  <link rel="stylesheet" href="./styles.css?v=16">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -26,16 +42,7 @@
         <div class="official-logo-card auth-official-logo">
           <img src="./lakshya-logo.png" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
         </div>
-        <div class="auth-statement">
-          <span class="auth-badge"><span class="status-dot"></span> Institution operations, connected</span>
-          <h1>Every student journey.<br>One trusted system.</h1>
-          <p>Admissions, enrollments and finance—designed around the way Lakshya’s team actually works.</p>
-        </div>
-        <div class="auth-proof-grid" aria-label="Platform safeguards">
-          <div><strong>Secure</strong><span>Role-based workspace access</span></div>
-          <div><strong>Auditable</strong><span>Every important action traceable</span></div>
-          <div><strong>Connected</strong><span>Admissions and finance in sync</span></div>
-        </div>
+        <div class="auth-statement"><h1>Institution ERP</h1></div>
       </div>
       <div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div>
     </div>
@@ -45,11 +52,7 @@
         <div class="mobile-auth-brand official-logo-card">
           <img src="./lakshya-logo.png" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
         </div>
-        <div class="auth-heading">
-          <p class="overline" id="auth-kicker">Secure workspace</p>
-          <h2 id="auth-title">Welcome back</h2>
-          <p id="auth-description">Sign in to continue to institution operations.</p>
-        </div>
+        <div class="auth-heading"><h2 id="auth-title">Sign in</h2></div>
         <form class="auth-form" id="auth-form" novalidate>
           <label class="field setup-only hidden" for="auth-name">
             <span>Full name</span>
@@ -72,10 +75,9 @@
           </label>
           <div class="auth-error hidden" id="auth-error" role="alert"></div>
           <button class="button button-primary button-large" id="auth-submit" type="submit">
-            <span id="auth-submit-label">Sign in securely</span><span data-icon="arrow-right"></span>
+            <span id="auth-submit-label">Sign in</span><span data-icon="arrow-right"></span>
           </button>
         </form>
-        <p class="auth-footnote"><span data-icon="shield"></span> Protected by role-based access and an auditable activity history.</p>
       </div>
     </div>
   </section>
@@ -92,13 +94,13 @@
 
       <div class="branch-switcher">
         <span class="branch-icon" data-icon="building"></span>
-        <span><small>Active branch</small><strong>Sadar · Nagpur</strong></span>
+        <span><strong>Sadar · Nagpur</strong></span>
         <span data-icon="chevron-down"></span>
       </div>
 
       <nav class="primary-nav" aria-label="Application navigation">
         <p class="nav-label">Workspace</p>
-        <button class="nav-item active" type="button" data-view="dashboard"><span data-icon="grid"></span><span>Command center</span></button>
+        <button class="nav-item active" type="button" data-view="dashboard"><span data-icon="grid"></span><span>Overview</span></button>
         <button class="nav-item" type="button" data-view="admissions"><span data-icon="spark"></span><span>Admissions</span><em id="nav-leads-count">0</em></button>
         <button class="nav-item" type="button" data-view="students"><span data-icon="users"></span><span>Students</span><em id="nav-students-count">64</em></button>
         <button class="nav-item" type="button" data-view="finance"><span data-icon="wallet"></span><span>Fees &amp; finance</span><em id="nav-finance-count">3</em></button>
@@ -113,7 +115,7 @@
       </nav>
 
       <div class="sidebar-footer">
-        <div class="system-health"><span class="status-dot"></span><span><strong>All systems operational</strong><small>Supabase connected</small></span></div>
+        <div class="system-health"><span class="status-dot"></span><strong>Online</strong></div>
         <button class="user-card" id="user-menu-button" type="button" aria-label="Open account menu" aria-haspopup="menu" aria-controls="account-menu" aria-expanded="false">
           <span class="user-avatar" id="user-avatar">LI</span>
           <span><strong id="sidebar-user-name">Lakshya Director</strong><small id="sidebar-user-role">Owner</small></span>
@@ -126,12 +128,11 @@
       <header class="topbar">
         <div class="topbar-left">
           <button class="icon-button menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false" data-icon="menu"></button>
-          <div><p class="breadcrumb" id="page-kicker">Operations / Today</p><h1 id="page-title">Command center</h1></div>
+          <div><h1 id="page-title">Overview</h1></div>
         </div>
         <div class="topbar-actions">
           <button class="search-trigger" id="search-trigger" type="button"><span data-icon="search"></span><span>Search students, leads…</span><kbd>⌘ K</kbd></button>
           <button class="icon-button" id="theme-toggle" type="button" aria-label="Switch appearance" data-icon="moon"></button>
-          <button class="icon-button notification-button" type="button" aria-label="Notifications" data-icon="bell"><span class="notification-dot"></span></button>
           <button class="topbar-profile" id="topbar-profile-button" type="button" aria-label="Open account menu" aria-haspopup="menu" aria-controls="account-menu" aria-expanded="false"><span class="user-avatar" id="topbar-avatar">LI</span></button>
         </div>
       </header>
@@ -139,7 +140,7 @@
       <div class="page-container">
         <section class="app-view active" id="dashboard" aria-labelledby="dashboard-heading">
           <div class="welcome-row">
-            <div><p class="overline">Monday · 20 July 2026</p><h2 id="dashboard-heading">Good morning, <span id="greeting-name">Director</span>.</h2><p>Your institution is ready for today. Here is what needs attention.</p></div>
+            <div><p class="overline" id="dashboard-date"></p><h2 id="dashboard-heading">Overview</h2></div>
             <button class="button button-primary" type="button" data-view-target="admissions"><span data-icon="plus"></span>Create enquiry</button>
           </div>
 
@@ -150,26 +151,26 @@
 
           <div class="dashboard-grid">
             <article class="surface surface-wide">
-              <div class="surface-head"><div><p class="overline">Enrollment portfolio</p><h3>Program distribution</h3></div><button class="button button-quiet" type="button" data-view-target="students">View students<span data-icon="arrow-right"></span></button></div>
+              <div class="surface-head"><h3>Program distribution</h3><button class="button button-quiet" type="button" data-view-target="students">View all<span data-icon="arrow-right"></span></button></div>
               <div class="program-chart" id="program-chart"><div class="skeleton-line"></div></div>
             </article>
             <article class="surface attention-panel">
-              <div class="surface-head"><div><p class="overline">Quality desk</p><h3>Needs attention</h3></div><span class="count-badge" id="attention-count">—</span></div>
+              <div class="surface-head"><h3>Needs attention</h3><span class="count-badge" id="attention-count">—</span></div>
               <div class="attention-list" id="attention-list"><div class="skeleton-line"></div></div>
             </article>
             <article class="surface surface-wide">
-              <div class="surface-head"><div><p class="overline">Newest records</p><h3>Recent admissions</h3></div><button class="button button-secondary button-small" type="button" data-view-target="students">Open directory</button></div>
+              <div class="surface-head"><h3>Recent admissions</h3><button class="button button-secondary button-small" type="button" data-view-target="students">View all</button></div>
               <div class="record-list" id="recent-students"><div class="skeleton-line"></div></div>
             </article>
             <article class="surface finance-pulse">
-              <div class="surface-head"><div><p class="overline">Finance pulse</p><h3>Imported ledger</h3></div><span class="icon-tile" data-icon="trend"></span></div>
+              <div class="surface-head"><h3>Finance</h3><span class="icon-tile" data-icon="trend"></span></div>
               <div id="finance-pulse-body"><div class="skeleton-line"></div></div>
             </article>
           </div>
         </section>
 
         <section class="app-view" id="admissions" aria-labelledby="admissions-heading">
-          <div class="page-heading"><div><p class="overline">Admissions CRM</p><h2 id="admissions-heading">Enquiry pipeline</h2><p>Capture, counsel and convert every family through one accountable workflow.</p></div><button class="button button-primary" id="new-lead-button" type="button"><span data-icon="plus"></span>New enquiry</button></div>
+          <div class="page-heading"><h2 id="admissions-heading">Enquiries</h2><button class="button button-primary" id="new-lead-button" type="button"><span data-icon="plus"></span>New enquiry</button></div>
           <div class="compact-metrics" id="admissions-metrics"></div>
           <article class="surface table-surface">
             <div class="toolbar"><label class="search-field"><span data-icon="search"></span><input id="lead-search" type="search" placeholder="Search enquiries" aria-label="Search enquiries"></label><select id="lead-stage-filter" aria-label="Filter by stage"><option value="">All stages</option></select><button class="button button-secondary" id="refresh-leads" type="button"><span data-icon="refresh"></span>Refresh</button></div>
@@ -179,18 +180,18 @@
         </section>
 
         <section class="app-view" id="students" aria-labelledby="students-heading">
-          <div class="page-heading"><div><p class="overline">Student records</p><h2 id="students-heading">Student directory</h2><p>Every imported admission, enrollment and data-quality decision in one place.</p></div><button class="button button-secondary" id="export-students" type="button"><span data-icon="download"></span>Export view</button></div>
+          <div class="page-heading"><h2 id="students-heading">Students</h2><button class="button button-secondary" id="export-students" type="button"><span data-icon="download"></span>Export</button></div>
           <div class="compact-metrics" id="student-metrics"></div>
           <article class="surface table-surface">
             <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="student-search" type="search" placeholder="Search name, mobile or admission number" aria-label="Search student directory"></label><select id="student-program-filter" aria-label="Filter by program"><option value="">All programs</option></select><select id="student-quality-filter" aria-label="Filter by data quality"><option value="">All quality states</option><option value="ready">Ready</option><option value="review">Review</option><option value="blocked">Blocked</option></select></div>
-            <div class="table-meta"><span id="student-result-count">Loading students…</span><span>Updated from Supabase</span></div>
+            <div class="table-meta"><span id="student-result-count">Loading…</span></div>
             <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Admission ID</th><th>Program</th><th>Contact</th><th>Enrollment</th><th>Data quality</th><th></th></tr></thead><tbody id="students-table-body"></tbody></table></div>
             <div class="mobile-records" id="students-mobile-list"></div>
           </article>
         </section>
 
         <section class="app-view" id="finance" aria-labelledby="finance-heading">
-          <div class="page-heading"><div><p class="overline">Fees &amp; finance</p><h2 id="finance-heading">Finance control</h2><p>Verified agreements and staged legacy payments, separated from official receipts.</p></div><button class="button button-primary" type="button" disabled title="Receipt workflow is coming next"><span data-icon="receipt"></span>Record payment</button></div>
+          <div class="page-heading"><h2 id="finance-heading">Finance</h2><button class="button button-primary" type="button" disabled title="Coming soon"><span data-icon="receipt"></span>Record payment</button></div>
           <div class="compact-metrics" id="finance-metrics"></div>
           <nav class="segmented-control" aria-label="Finance views"><button class="active" type="button" data-finance-tab="agreements">Fee agreements</button><button type="button" data-finance-tab="payments">Payment review <span id="payment-review-count"></span></button></nav>
           <article class="surface table-surface finance-tab active" id="finance-agreements-panel">
@@ -205,18 +206,18 @@
           </article>
         </section>
 
-        <section class="app-view placeholder-view" id="attendance" data-module="Attendance" data-description="Session registers, correction workflows and absence escalation."></section>
-        <section class="app-view placeholder-view" id="academics" data-module="Academics" data-description="Courses, assignments, exams, results and intervention notes."></section>
-        <section class="app-view placeholder-view" id="timetable" data-module="Faculty &amp; timetable" data-description="Faculty workload, rooms, schedules, substitutions and conflicts."></section>
-        <section class="app-view placeholder-view" id="communication" data-module="Communication" data-description="Templates, audiences, notices and delivery history."></section>
-        <section class="app-view placeholder-view" id="reports" data-module="Reports" data-description="Admissions, collections, attendance and academic risk reporting."></section>
-        <section class="app-view placeholder-view" id="settings" data-module="Settings &amp; audit" data-description="Users, roles, branches, approvals and immutable audit history."></section>
+        <section class="app-view placeholder-view" id="attendance" data-module="Attendance"></section>
+        <section class="app-view placeholder-view" id="academics" data-module="Academics"></section>
+        <section class="app-view placeholder-view" id="timetable" data-module="Faculty &amp; timetable"></section>
+        <section class="app-view placeholder-view" id="communication" data-module="Communication"></section>
+        <section class="app-view placeholder-view" id="reports" data-module="Reports"></section>
+        <section class="app-view placeholder-view" id="settings" data-module="Settings &amp; audit"></section>
       </div>
     </main>
   </div>
 
   <aside class="detail-drawer" id="detail-drawer" aria-hidden="true" aria-labelledby="drawer-title">
-    <div class="detail-drawer-head"><div><p class="overline">Student profile</p><h2 id="drawer-title">Record details</h2></div><button class="icon-button" id="detail-close" type="button" aria-label="Close details" data-icon="x"></button></div>
+    <div class="detail-drawer-head"><h2 id="drawer-title">Record</h2><button class="icon-button" id="detail-close" type="button" aria-label="Close details" data-icon="x"></button></div>
     <div class="detail-drawer-body" id="detail-drawer-body"></div>
   </aside>
   <div class="drawer-overlay" id="detail-overlay"></div>
@@ -234,10 +235,10 @@
       <span class="user-avatar" id="account-menu-avatar">LI</span>
       <span><strong id="account-menu-name">Lakshya Director</strong><small id="account-menu-role">Owner</small></span>
     </div>
-    <button class="account-menu-action" id="logout-button" type="button" role="menuitem"><span data-icon="logout"></span><span><strong>Sign out</strong><small>End this session securely</small></span></button>
+    <button class="account-menu-action" id="logout-button" type="button" role="menuitem"><span data-icon="logout"></span><span><strong>Sign out</strong></span></button>
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=14" defer></script>
+  <script src="./app.js?v=16" defer></script>
 </body>
 </html>
