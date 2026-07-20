@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
-from .models import User
+from .models import RevokedToken, User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -31,16 +31,29 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def create_token(user: User) -> str:
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
-    return jwt.encode({"sub": user.id, "role": user.role, "exp": expires}, settings.secret_key, algorithm="HS256")
+    return jwt.encode(
+        {"sub": user.id, "role": user.role, "jti": token_hex(16), "exp": expires},
+        settings.secret_key,
+        algorithm="HS256",
+    )
+
+
+def decode_token(token: str) -> dict:
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        raise HTTPException(401, "Invalid or expired token", headers={"WWW-Authenticate": "Bearer"})
+    if not payload.get("sub") or not payload.get("jti"):
+        raise HTTPException(401, "Invalid or expired token", headers={"WWW-Authenticate": "Bearer"})
+    return payload
 
 
 def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)) -> User:
     if not credentials:
         raise HTTPException(401, "Authentication required", headers={"WWW-Authenticate": "Bearer"})
-    try:
-        payload = jwt.decode(credentials.credentials, settings.secret_key, algorithms=["HS256"])
-    except jwt.PyJWTError:
-        raise HTTPException(401, "Invalid or expired token", headers={"WWW-Authenticate": "Bearer"})
+    payload = decode_token(credentials.credentials)
+    if db.get(RevokedToken, payload["jti"]):
+        raise HTTPException(401, "Session has been signed out", headers={"WWW-Authenticate": "Bearer"})
     user = db.get(User, payload.get("sub"))
     if not user or not user.is_active:
         raise HTTPException(401, "User is inactive or unavailable")

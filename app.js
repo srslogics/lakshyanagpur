@@ -49,7 +49,7 @@ async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers });
   let body = null;
   try { body = await response.json(); } catch { body = {}; }
-  if (response.status === 401 && state.token) { logout(false); throw new Error("Your session expired. Please sign in again."); }
+  if (response.status === 401 && state.token) { expireSession(); throw new Error("Your session expired. Please sign in again."); }
   if (!response.ok) {
     const detail = body?.detail;
     throw new Error(typeof detail === "string" ? detail : detail?.message || body?.error?.message || "Something went wrong. Please try again.");
@@ -95,7 +95,33 @@ async function initialize() {
   }
 }
 
-function showAuth() { $("#auth-screen").classList.remove("hidden"); $("#app-shell").classList.add("hidden"); }
+function clearSession() {
+  state.token = null;
+  state.user = null;
+  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [] });
+  sessionStorage.removeItem("lakshya_token");
+}
+
+function resetAuthForm() {
+  $("#auth-password").value = "";
+  $("#auth-password").type = "password";
+  $(".password-toggle").setAttribute("aria-label", "Show password");
+  $$(".field-error").forEach(node => node.textContent = "");
+  $("#auth-error").classList.add("hidden");
+}
+
+function showAuth(message = "") {
+  closeAccountMenu();
+  $("#auth-screen").classList.remove("hidden");
+  $("#app-shell").classList.add("hidden");
+  if (message) { $("#auth-error").textContent = message; $("#auth-error").classList.remove("hidden"); }
+}
+
+function expireSession() {
+  clearSession();
+  resetAuthForm();
+  showAuth("Your session expired. Please sign in again.");
+}
 
 async function handleAuth(event) {
   event.preventDefault();
@@ -119,6 +145,8 @@ async function handleAuth(event) {
     await enterWorkspace();
   } catch (error) {
     $("#auth-error").textContent = error.message; $("#auth-error").classList.remove("hidden");
+    $("#auth-password").value = "";
+    $("#auth-password").focus();
   } finally {
     button.disabled = false; $("#auth-submit-label").textContent = state.setupRequired ? "Create owner workspace" : "Sign in securely";
   }
@@ -130,7 +158,8 @@ async function enterWorkspace() {
   const label = state.user?.role?.replaceAll("_", " ") || "Owner";
   $("#sidebar-user-name").textContent = name; $("#sidebar-user-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
   $("#greeting-name").textContent = name.split(" ")[0];
-  [$("#user-avatar"), $("#topbar-avatar")].forEach(node => node.textContent = initials(name));
+  $("#account-menu-name").textContent = name; $("#account-menu-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
+  [$("#user-avatar"), $("#topbar-avatar"), $("#account-menu-avatar")].forEach(node => node.textContent = initials(name));
   await loadWorkspace();
 }
 
@@ -317,12 +346,42 @@ function closeCommand() { $("#command-overlay").classList.add("hidden"); }
 function openSidebar() { $("#sidebar").classList.add("open"); $("#drawer-scrim").classList.add("open"); $("#menu-button").setAttribute("aria-expanded", "true"); }
 function closeSidebar() { $("#sidebar").classList.remove("open"); $("#drawer-scrim").classList.remove("open"); $("#menu-button").setAttribute("aria-expanded", "false"); }
 
+let accountMenuTrigger = null;
+function closeAccountMenu(restoreFocus = false) {
+  $("#account-menu").classList.add("hidden");
+  [$("#user-menu-button"), $("#topbar-profile-button")].forEach(button => button.setAttribute("aria-expanded", "false"));
+  if (restoreFocus && accountMenuTrigger) accountMenuTrigger.focus();
+  accountMenuTrigger = null;
+}
+function toggleAccountMenu(trigger) {
+  const menu = $("#account-menu");
+  const reopening = menu.classList.contains("hidden") || accountMenuTrigger !== trigger;
+  closeAccountMenu();
+  if (!reopening) return;
+  accountMenuTrigger = trigger;
+  menu.classList.toggle("from-sidebar", trigger.id === "user-menu-button");
+  menu.classList.remove("hidden");
+  trigger.setAttribute("aria-expanded", "true");
+  $("#logout-button").focus();
+}
+
 function initializeTheme() {
   const saved = localStorage.getItem("lakshya_theme") || "light"; document.documentElement.dataset.theme = saved; updateThemeIcon();
 }
 function updateThemeIcon() { const dark = document.documentElement.dataset.theme === "dark"; $("#theme-toggle").dataset.icon = dark ? "sun" : "moon"; $("#theme-toggle").setAttribute("aria-label", dark ? "Use light appearance" : "Use dark appearance"); injectIcons($("#theme-toggle")); }
 function toggleTheme() { const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark"; document.documentElement.dataset.theme = next; localStorage.setItem("lakshya_theme", next); updateThemeIcon(); }
-function logout(notify = true) { state.token = null; state.user = null; sessionStorage.removeItem("lakshya_token"); showAuth(); if (notify) toast("You have been signed out."); }
+async function logout(notify = true) {
+  const token = state.token;
+  closeAccountMenu();
+  if (token) {
+    try { await fetch("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }); }
+    catch { /* Local sign-out must still complete when the network is unavailable. */ }
+  }
+  clearSession();
+  resetAuthForm();
+  showAuth();
+  if (notify) toast("You have been signed out securely.");
+}
 
 function exportStudents() {
   const rows = filteredStudents(), fields = [["Admission number", "Student", "Mobile", "Previous school", "Program", "Batch", "Enrollment date", "Data quality"], ...rows.map(item => [item.admissionNumber, item.fullName, item.mobile, item.previousSchool, item.program, item.batch, item.enrollmentDate, item.dataQualityStatus])];
@@ -338,18 +397,21 @@ function bindEvents() {
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
+    if (!event.target.closest("#account-menu, #user-menu-button, #topbar-profile-button")) closeAccountMenu();
   });
   $("#menu-button").addEventListener("click", openSidebar); $("#sidebar-close").addEventListener("click", closeSidebar); $("#drawer-scrim").addEventListener("click", closeSidebar);
   $("#detail-close").addEventListener("click", closeDetail); $("#detail-overlay").addEventListener("click", closeDetail);
   $("#search-trigger").addEventListener("click", openCommand); $("#command-overlay").addEventListener("click", event => { if (event.target === event.currentTarget) closeCommand(); });
   $("#global-search").addEventListener("input", event => renderCommandResults(event.target.value));
-  $("#theme-toggle").addEventListener("click", toggleTheme); $("#user-menu-button").addEventListener("click", () => logout());
+  $("#theme-toggle").addEventListener("click", toggleTheme);
+  [$("#user-menu-button"), $("#topbar-profile-button")].forEach(button => button.addEventListener("click", event => toggleAccountMenu(event.currentTarget)));
+  $("#logout-button").addEventListener("click", () => logout());
   $("#student-search").addEventListener("input", renderStudentRows); $("#student-program-filter").addEventListener("change", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
   $("#agreement-search").addEventListener("input", renderAgreementRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Admissions pipeline refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => { $$("[data-finance-tab]").forEach(item => item.classList.toggle("active", item === button)); $$(".finance-tab").forEach(panel => panel.classList.toggle("active", panel.id === `finance-${button.dataset.financeTab}-panel`)); }));
-  document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeCommand(); closeDetail(); closeSidebar(); } });
+  document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); } });
 }
 
 initialize();

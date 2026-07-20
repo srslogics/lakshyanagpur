@@ -114,7 +114,7 @@
 
       <div class="sidebar-footer">
         <div class="system-health"><span class="status-dot"></span><span><strong>All systems operational</strong><small>Supabase connected</small></span></div>
-        <button class="user-card" id="user-menu-button" type="button">
+        <button class="user-card" id="user-menu-button" type="button" aria-label="Open account menu" aria-haspopup="menu" aria-controls="account-menu" aria-expanded="false">
           <span class="user-avatar" id="user-avatar">LI</span>
           <span><strong id="sidebar-user-name">Lakshya Director</strong><small id="sidebar-user-role">Owner</small></span>
           <span data-icon="more"></span>
@@ -132,7 +132,7 @@
           <button class="search-trigger" id="search-trigger" type="button"><span data-icon="search"></span><span>Search students, leads…</span><kbd>⌘ K</kbd></button>
           <button class="icon-button" id="theme-toggle" type="button" aria-label="Switch appearance" data-icon="moon"></button>
           <button class="icon-button notification-button" type="button" aria-label="Notifications" data-icon="bell"><span class="notification-dot"></span></button>
-          <button class="topbar-profile" type="button" aria-label="Open profile"><span class="user-avatar" id="topbar-avatar">LI</span></button>
+          <button class="topbar-profile" id="topbar-profile-button" type="button" aria-label="Open account menu" aria-haspopup="menu" aria-controls="account-menu" aria-expanded="false"><span class="user-avatar" id="topbar-avatar">LI</span></button>
         </div>
       </header>
 
@@ -229,7 +229,15 @@
     </div>
   </div>
 
+  <div class="account-menu hidden" id="account-menu" role="menu" aria-label="Account options">
+    <div class="account-menu-profile">
+      <span class="user-avatar" id="account-menu-avatar">LI</span>
+      <span><strong id="account-menu-name">Lakshya Director</strong><small id="account-menu-role">Owner</small></span>
+    </div>
+    <button class="account-menu-action" id="logout-button" type="button" role="menuitem"><span data-icon="logout"></span><span><strong>Sign out</strong><small>End this session securely</small></span></button>
+  </div>
+
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=12" defer></script>
+  <script src="./app.js?v=14" defer></script>
 </body>
 </html>

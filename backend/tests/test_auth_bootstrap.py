@@ -27,3 +27,28 @@ def test_frontend_shell_is_served(client):
     assert response.status_code == 200
     assert "Every student journey" in response.text
     assert "Student directory" in response.text
+
+
+def test_health_checks_support_get_and_head(client):
+    for path in ("/health", "/api/health"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "service": "lakshya-erp"}
+        assert client.head(path).status_code == 200
+
+
+def test_login_logout_revokes_the_active_token(client):
+    logged_in = client.post(
+        "/api/auth/login",
+        json={"email": "owner@example.com", "password": "Password123!"},
+    )
+    assert logged_in.status_code == 200
+    token = logged_in.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/auth/me", headers=headers).status_code == 200
+    assert client.post("/api/auth/logout", headers=headers).status_code == 204
+
+    rejected = client.get("/api/auth/me", headers=headers)
+    assert rejected.status_code == 401
+    assert rejected.json()["detail"] == "Session has been signed out"

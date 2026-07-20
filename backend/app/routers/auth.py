@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models import User
+from ..models import RevokedToken, User
 from ..schemas import BootstrapOwnerRequest, LoginRequest, TokenResponse
-from ..security import create_token, current_user, hash_password, verify_password
+from ..security import bearer, create_token, current_user, decode_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
@@ -37,3 +40,17 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(user: User = Depends(current_user)):
     return {"id": user.id, "email": user.email, "fullName": user.full_name, "role": user.role}
+
+
+@router.post("/logout", status_code=204)
+def logout(
+    response: Response,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    payload = decode_token(credentials.credentials)
+    expires_at = datetime.fromtimestamp(payload["exp"], timezone.utc)
+    db.add(RevokedToken(id=payload["jti"], user_id=user.id, expires_at=expires_at))
+    db.commit()
+    response.status_code = 204

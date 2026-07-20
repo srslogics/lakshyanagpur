@@ -33,6 +33,14 @@ class User(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
 class Lead(TimestampMixin, Base):
     __tablename__ = "leads"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("lead"))

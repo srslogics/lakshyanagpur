@@ -19,8 +19,8 @@ TestingSession = sessionmaker(bind=engine, expire_on_commit=False)
 def database():
     Base.metadata.drop_all(engine); Base.metadata.create_all(engine)
     db = TestingSession()
-    owner = User(email="owner@test.local", full_name="Owner", role="owner", password_hash=hash_password("Password123!"))
-    parent = User(email="parent@test.local", full_name="Parent", role="parent_student", password_hash=hash_password("Password123!"))
+    owner = User(email="owner@example.com", full_name="Owner", role="owner", password_hash=hash_password("Password123!"))
+    parent = User(email="parent@example.com", full_name="Parent", role="parent_student", password_hash=hash_password("Password123!"))
     db.add_all([owner, parent]); db.commit()
     yield db
     db.close(); Base.metadata.drop_all(engine)

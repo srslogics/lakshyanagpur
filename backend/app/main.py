@@ -39,8 +39,10 @@ async def validation_error(request: Request, exc: RequestValidationError):
         status_code=422,
     )
 
-@app.get("/api/health")
-def health(): return {"status": "ok", "service": "lakshya-erp"}
+@app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
+@app.api_route("/api/health", methods=["GET", "HEAD"])
+def health():
+    return {"status": "ok", "service": "lakshya-erp"}
 
 for static_dir in ("assets", "src"):
     directory = FRONTEND_DIR / static_dir

@@ -321,6 +321,17 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .command-item strong { display: block; font-size: .78rem; }
 .command-item small { display: block; color: var(--ink-500); font-size: .66rem; }
 .command-palette footer { min-height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid var(--line); color: var(--ink-500); font-size: .65rem; }
+.account-menu { position: fixed; right: 22px; top: 68px; z-index: 180; width: min(280px, calc(100vw - 28px)); overflow: hidden; padding: 8px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow-lg); transform-origin: top right; animation: account-menu-in var(--motion-fast) var(--ease); }
+.account-menu.from-sidebar { right: auto; top: auto; left: 18px; bottom: 86px; transform-origin: bottom left; }
+.account-menu-profile { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 11px; padding: 10px; border-bottom: 1px solid var(--line); }
+.account-menu-profile .user-avatar { width: 40px; height: 40px; }
+.account-menu-profile strong, .account-menu-profile small, .account-menu-action strong, .account-menu-action small { display: block; }
+.account-menu-profile strong, .account-menu-action strong { color: var(--ink-950); font-size: .78rem; }
+.account-menu-profile small, .account-menu-action small { margin-top: 3px; color: var(--ink-500); font-size: .67rem; }
+.account-menu-action { width: 100%; display: grid; grid-template-columns: 36px 1fr; align-items: center; gap: 10px; margin-top: 7px; padding: 9px 10px; border: 0; border-radius: 10px; color: var(--danger); background: transparent; text-align: left; cursor: pointer; }
+.account-menu-action:hover, .account-menu-action:focus-visible { background: var(--danger-bg); }
+.account-menu-action > [data-icon] { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: var(--danger-bg); }
+@keyframes account-menu-in { from { opacity: 0; transform: translateY(-5px) scale(.98); } }
 .toast-region { position: fixed; right: 18px; bottom: 18px; z-index: 300; display: grid; gap: 8px; }
 .toast { min-width: 280px; display: flex; align-items: center; gap: 10px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink-800); background: var(--surface); box-shadow: var(--shadow-lg); animation: toast-in var(--motion-base) var(--ease); font-size: .76rem; }
 @keyframes toast-in { from { opacity:0; transform: translateY(8px); } }
