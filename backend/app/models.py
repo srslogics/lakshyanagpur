@@ -193,6 +193,100 @@ def payment_transactions_are_immutable(mapper, connection, target):
     raise ValueError("Payment transactions are immutable; create a reversal or adjustment instead")
 
 
+class Batch(TimestampMixin, Base):
+    __tablename__ = "batches"
+    __table_args__ = (UniqueConstraint("name", "program", name="uq_batch_name_program"),)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("bat"))
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    program: Mapped[str] = mapped_column(String(255), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class Subject(TimestampMixin, Base):
+    __tablename__ = "subjects"
+    code: Mapped[str] = mapped_column(String(24), unique=True, index=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("sub"))
+    name: Mapped[str] = mapped_column(String(120), index=True)
+    program: Mapped[str] = mapped_column(String(255), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class Room(TimestampMixin, Base):
+    __tablename__ = "rooms"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("rom"))
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    capacity: Mapped[int] = mapped_column(Integer, default=40)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class ClassSession(TimestampMixin, Base):
+    __tablename__ = "class_sessions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("ses"))
+    batch_id: Mapped[str] = mapped_column(ForeignKey("batches.id"), index=True)
+    subject_id: Mapped[str] = mapped_column(ForeignKey("subjects.id"), index=True)
+    faculty_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    room_id: Mapped[str] = mapped_column(ForeignKey("rooms.id"), index=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="scheduled", index=True)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    override_reason: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class AttendanceRegister(TimestampMixin, Base):
+    __tablename__ = "attendance_registers"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("reg"))
+    class_session_id: Mapped[str] = mapped_column(ForeignKey("class_sessions.id", ondelete="CASCADE"), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(24), default="draft", index=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+
+
+class AttendanceEntry(Base):
+    __tablename__ = "attendance_entries"
+    register_id: Mapped[str] = mapped_column(ForeignKey("attendance_registers.id", ondelete="CASCADE"), primary_key=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), default="present", index=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    marked_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+
+
+class Assignment(TimestampMixin, Base):
+    __tablename__ = "assignments"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("asg"))
+    batch_id: Mapped[str] = mapped_column(ForeignKey("batches.id"), index=True)
+    subject_id: Mapped[str] = mapped_column(ForeignKey("subjects.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    external_url: Mapped[str] = mapped_column(String(1000))
+    status: Mapped[str] = mapped_column(String(24), default="published", index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class AssignmentRecipient(Base):
+    __tablename__ = "assignment_recipients"
+    assignment_id: Mapped[str] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), primary_key=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(24), default="published", index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+
+
+class Notice(TimestampMixin, Base):
+    __tablename__ = "notices"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("not"))
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    audience: Mapped[str] = mapped_column(String(32), index=True)
+    channel: Mapped[str] = mapped_column(String(24), default="in_app", index=True)
+    batch_id: Mapped[str | None] = mapped_column(ForeignKey("batches.id"), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="published", index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("aud"))

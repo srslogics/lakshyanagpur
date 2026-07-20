@@ -31,7 +31,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=17">
+  <link rel="stylesheet" href="./styles.css?v=18">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -190,7 +190,7 @@
         </section>
 
         <section class="app-view" id="finance" aria-labelledby="finance-heading">
-          <div class="page-heading"><h2 id="finance-heading">Finance</h2><button class="button button-primary" type="button" disabled title="Coming soon"><span data-icon="receipt"></span>Record payment</button></div>
+          <div class="page-heading"><h2 id="finance-heading">Finance</h2></div>
           <div class="compact-metrics" id="finance-metrics"></div>
           <nav class="segmented-control" aria-label="Finance views"><button class="active" type="button" data-finance-tab="agreements">Fee agreements</button><button type="button" data-finance-tab="payments">Payment review <span id="payment-review-count"></span></button></nav>
           <article class="surface table-surface finance-tab active" id="finance-agreements-panel">
@@ -205,12 +205,41 @@
           </article>
         </section>
 
-        <section class="app-view placeholder-view" id="attendance" data-module="Attendance"></section>
-        <section class="app-view placeholder-view" id="academics" data-module="Academics"></section>
-        <section class="app-view placeholder-view" id="timetable" data-module="Faculty &amp; timetable"></section>
-        <section class="app-view placeholder-view" id="communication" data-module="Communication"></section>
-        <section class="app-view placeholder-view" id="reports" data-module="Reports"></section>
-        <section class="app-view placeholder-view" id="settings" data-module="Settings &amp; audit"></section>
+        <section class="app-view" id="attendance" aria-labelledby="attendance-heading">
+          <div class="page-heading"><h2 id="attendance-heading">Attendance</h2><button class="button button-secondary" id="refresh-attendance" type="button"><span data-icon="refresh"></span>Refresh</button></div>
+          <div class="compact-metrics" id="attendance-metrics"></div>
+          <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Class</th><th>Faculty</th><th>Room</th><th>Students</th><th>Register</th><th></th></tr></thead><tbody id="attendance-table-body"></tbody></table></div><div class="mobile-records" id="attendance-mobile-list"></div></article>
+        </section>
+
+        <section class="app-view" id="academics" aria-labelledby="academics-heading">
+          <div class="page-heading"><h2 id="academics-heading">Assignments</h2><button class="button button-primary" id="new-assignment" type="button"><span data-icon="plus"></span>New assignment</button></div>
+          <div class="compact-metrics" id="academics-metrics"></div>
+          <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Assignment</th><th>Batch</th><th>Subject</th><th>Due</th><th>Students</th><th>Status</th></tr></thead><tbody id="assignments-table-body"></tbody></table></div><div class="mobile-records" id="assignments-mobile-list"></div></article>
+        </section>
+
+        <section class="app-view" id="timetable" aria-labelledby="timetable-heading">
+          <div class="page-heading"><h2 id="timetable-heading">Faculty &amp; timetable</h2><button class="button button-primary" id="new-session" type="button"><span data-icon="plus"></span>Schedule class</button></div>
+          <div class="compact-metrics" id="timetable-metrics"></div>
+          <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date &amp; time</th><th>Batch</th><th>Subject</th><th>Faculty</th><th>Room</th><th>Status</th></tr></thead><tbody id="sessions-table-body"></tbody></table></div><div class="mobile-records" id="sessions-mobile-list"></div></article>
+        </section>
+
+        <section class="app-view" id="communication" aria-labelledby="communication-heading">
+          <div class="page-heading"><h2 id="communication-heading">Communication</h2><button class="button button-primary" id="new-notice" type="button"><span data-icon="plus"></span>New notice</button></div>
+          <div class="compact-metrics" id="communication-metrics"></div>
+          <div class="notice-grid" id="notice-list"></div>
+        </section>
+
+        <section class="app-view" id="reports" aria-labelledby="reports-heading">
+          <div class="page-heading"><h2 id="reports-heading">Reports</h2><button class="button button-secondary" id="refresh-reports" type="button"><span data-icon="refresh"></span>Refresh</button></div>
+          <div class="metric-grid" id="report-metrics"></div>
+          <div class="dashboard-grid reports-grid"><article class="surface"><div class="surface-head"><h3>Admissions funnel</h3></div><div class="program-chart" id="report-leads"></div></article><article class="surface"><div class="surface-head"><h3>Attendance</h3></div><div class="program-chart" id="report-attendance"></div></article><article class="surface surface-wide"><div class="surface-head"><h3>Recent activity</h3></div><div class="audit-list" id="report-audit"></div></article></div>
+        </section>
+
+        <section class="app-view" id="settings" aria-labelledby="settings-heading">
+          <div class="page-heading"><h2 id="settings-heading">Settings &amp; audit</h2><div class="heading-actions"><button class="button button-secondary" id="new-user" type="button"><span data-icon="plus"></span>User</button><button class="button button-primary" id="new-master" type="button"><span data-icon="plus"></span>Academic setup</button></div></div>
+          <div class="compact-metrics" id="settings-metrics"></div>
+          <div class="settings-grid"><article class="surface"><div class="surface-head"><h3>Users</h3></div><div class="master-list" id="settings-users"></div></article><article class="surface"><div class="surface-head"><h3>Batches</h3></div><div class="master-list" id="settings-batches"></div></article><article class="surface"><div class="surface-head"><h3>Subjects</h3></div><div class="master-list" id="settings-subjects"></div></article><article class="surface"><div class="surface-head"><h3>Rooms</h3></div><div class="master-list" id="settings-rooms"></div></article><article class="surface settings-audit"><div class="surface-head"><h3>Audit trail</h3></div><div class="audit-list" id="settings-audit"></div></article></div>
+        </section>
       </div>
     </main>
   </div>
@@ -238,6 +267,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=16" defer></script>
+  <script src="./app.js?v=19" defer></script>
 </body>
 </html>

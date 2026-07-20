@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import SessionLocal
-from .routers import admissions, auth, finance, students
+from .routers import academics, admissions, attendance, auth, communication, finance, reports, settings as settings_router, students, timetable
 from .seed import seed_development_data
 
 @asynccontextmanager
@@ -24,6 +24,12 @@ app.include_router(auth.router)
 app.include_router(admissions.router)
 app.include_router(students.router)
 app.include_router(finance.router)
+app.include_router(timetable.router)
+app.include_router(academics.router)
+app.include_router(attendance.router)
+app.include_router(communication.router)
+app.include_router(reports.router)
+app.include_router(settings_router.router)
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):

@@ -5,8 +5,8 @@ def seed_development_data(db):
     """Explicit local-only seed; enabled only with SEED_DEMO_DATA=true."""
     if not db.query(User).first():
         db.add_all([
-            User(email="owner@lakshya.local", full_name="Lakshya Director", role="owner", password_hash=hash_password("ChangeMe123!")),
-            User(email="counsellor@lakshya.local", full_name="Priya Kulkarni", role="counsellor", password_hash=hash_password("ChangeMe123!")),
+            User(email="owner@lakshyanagpur.in", full_name="Lakshya Director", role="owner", password_hash=hash_password("ChangeMe123!")),
+            User(email="counsellor@lakshyanagpur.in", full_name="Priya Kulkarni", role="counsellor", password_hash=hash_password("ChangeMe123!")),
         ]); db.flush()
     if not db.query(Lead).first():
         owner = db.query(User).filter_by(role="owner").first()
