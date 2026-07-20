@@ -81,10 +81,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .auth-brand-panel { position: relative; overflow: hidden; display: flex; min-height: 100dvh; padding: 52px clamp(36px, 5vw, 84px); color: #fff; background: var(--forest-950); isolation: isolate; }
 .auth-brand-panel::before { content: ""; position: absolute; inset: 0; z-index: -2; opacity: .32; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 48px 48px; }
 .auth-brand-panel::after { content: ""; position: absolute; width: 520px; height: 520px; right: -220px; top: -210px; z-index: -1; border-radius: 50%; background: rgba(214,185,30,.18); filter: blur(2px); }
-.auth-brand-content { display: flex; width: 100%; flex-direction: column; justify-content: space-between; position: relative; z-index: 2; }
+.auth-brand-content { display: flex; width: 100%; align-items: center; justify-content: center; position: relative; z-index: 2; }
 .official-logo-card { width: fit-content; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; padding: 7px 10px; border: 1px solid rgba(255,255,255,.16); border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.16); }
 .official-logo-card img { width: 220px; height: auto; display: block; }
-.auth-official-logo { align-self: flex-start; }
+.auth-official-logo { align-self: center; }
 .auth-statement { max-width: 700px; margin: auto 0; padding: 80px 0; }
 .auth-badge { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; color: rgba(255,255,255,.76); background: rgba(255,255,255,.06); font-size: .78rem; font-weight: 600; }
 .auth-statement h1 { margin: 0; max-width: 680px; font: 700 clamp(2.8rem, 5vw, 4.6rem)/1.02 "Manrope", sans-serif; letter-spacing: -.055em; }

@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
         with SessionLocal() as db: seed_development_data(db)
     yield
 
-app = FastAPI(title="Lakshya Institution ERP API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Lakshya Operations API", version="1.0.0", lifespan=lifespan)
 FRONTEND_DIR = Path(__file__).resolve().parents[2]
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth.router)
