@@ -7,6 +7,10 @@ from app.importers.legacy_admissions import import_manifest
 from app.models import Enrollment, FeeAgreement, ImportBatch, LegacyAdmissionRow, PaymentTransaction, Student
 
 MANIFEST = Path(__file__).parents[1] / "data" / "imports" / "admission_2026_27.json"
+pytestmark = pytest.mark.skipif(
+    not MANIFEST.exists(),
+    reason="Private admission manifest is intentionally excluded from the repository",
+)
 
 
 def load_manifest():

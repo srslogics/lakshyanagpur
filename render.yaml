@@ -2,9 +2,9 @@ services:
   - type: web
     name: lakshya-erp
     runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt && alembic upgrade head
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r backend/requirements.txt && cd backend && alembic upgrade head
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
         sync: false
