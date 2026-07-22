@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.models import AssignmentRecipient, AuditLog, Batch, Enrollment, Room, Student, Subject, User
+from app.models import AssignmentRecipient, AuditLog, Batch, Enrollment, Room, Student, StudentAccount, Subject, User
 from app.security import create_token, hash_password
 
 
@@ -74,3 +74,33 @@ def test_settings_are_owner_only(client, database, owner_headers, parent_headers
     created = client.post("/api/settings/rooms", json={"name": "Lab 1", "capacity": 36}, headers=owner_headers)
     assert created.status_code == 201
     assert created.json()["capacity"] == 36
+
+
+def test_student_portal_returns_only_the_linked_student(client, database, owner_headers, parent_headers):
+    faculty, batch, subject, room, _, student, other_student = operational_setup(database)
+    parent = database.query(User).filter_by(role="parent_student").one()
+    database.add(StudentAccount(user_id=parent.id, student_id=student.id)); database.commit()
+    scheduled = client.post("/api/timetable/sessions", json=session_payload(faculty, batch, subject, room), headers=owner_headers)
+    assert scheduled.status_code == 201
+    assignment = client.post("/api/academics/assignments", json={"batchId": batch.id, "subjectId": subject.id, "title": "Portal practice", "instructions": "Complete the worksheet", "dueAt": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(), "externalUrl": "https://example.com/work.pdf", "status": "published"}, headers=owner_headers)
+    assert assignment.status_code == 201
+    portal = client.get("/api/portal/bootstrap", headers=parent_headers)
+    assert portal.status_code == 200
+    body = portal.json()
+    assert body["profile"]["id"] == student.id
+    assert body["profile"]["id"] != other_student.id
+    assert [item["title"] for item in body["assignments"]] == ["Portal practice"]
+    assert body["schedule"][0]["subject"] == "Physics"
+    assert client.get("/api/portal/bootstrap", headers=owner_headers).status_code == 403
+
+
+def test_owner_can_provision_one_portal_account_per_student(client, database, owner_headers):
+    _, _, _, _, _, student, _ = operational_setup(database)
+    payload = {"studentId": student.id, "email": "aarav.student@example.com", "password": "StudentPass123!"}
+    created = client.post("/api/settings/student-access", json=payload, headers=owner_headers)
+    assert created.status_code == 201
+    assert created.json()["studentId"] == student.id
+    duplicate = client.post("/api/settings/student-access", json={**payload, "email": "second@example.com"}, headers=owner_headers)
+    assert duplicate.status_code == 409
+    account = database.query(StudentAccount).filter_by(student_id=student.id).one()
+    assert database.get(User, account.user_id).role == "parent_student"

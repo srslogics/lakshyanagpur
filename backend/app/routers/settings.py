@@ -3,8 +3,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import AuditLog, Batch, Room, Subject, User
-from ..operations_schemas import BatchCreate, RoomCreate, SubjectCreate, UserCreate
+from ..models import AuditLog, Batch, Room, Student, StudentAccount, Subject, User
+from ..operations_schemas import BatchCreate, RoomCreate, StudentAccessCreate, SubjectCreate, UserCreate
 from ..security import hash_password, require_roles
 from ..services import audit
 
@@ -31,6 +31,7 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
         "batches": [_batch(item) for item in db.query(Batch).order_by(Batch.program, Batch.name).all()],
         "subjects": [_subject(item) for item in db.query(Subject).order_by(Subject.program, Subject.name).all()],
         "rooms": [_room(item) for item in db.query(Room).order_by(Room.name).all()],
+        "studentAccess": [{"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
     }
 
 
@@ -44,6 +45,26 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User 
     audit(db, actor, "settings.user.create", "user", row.id, after={"email": row.email, "role": row.role})
     db.commit()
     return {"id": row.id, "fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active}
+
+
+@router.post("/student-access", status_code=201)
+def create_student_access(payload: StudentAccessCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    student = db.get(Student, payload.student_id)
+    if not student:
+        raise HTTPException(404, "Student not found")
+    if db.query(StudentAccount).filter_by(student_id=student.id).first():
+        raise HTTPException(409, "This student already has portal access")
+    if db.query(StudentAccount).count() >= 100:
+        raise HTTPException(409, "The student portal is configured for a maximum of 100 accounts")
+    email = payload.email.lower()
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(409, "A user with this email already exists")
+    account_user = User(email=email, full_name=student.full_name, role="parent_student", password_hash=hash_password(payload.password))
+    db.add(account_user); db.flush()
+    db.add(StudentAccount(user_id=account_user.id, student_id=student.id))
+    audit(db, actor, "settings.student_access.create", "student", student.id, after={"user_id": account_user.id, "email": email})
+    db.commit()
+    return {"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": email, "isActive": True}
 
 
 def _commit_master(db: Session, actor: User, row, kind: str, after: dict):

@@ -27,7 +27,7 @@ const icons = {
   "chevron-right": '<path d="m9 18 6-6-6-6"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', logout: '<path d="M10 17l5-5-5-5M15 12H3M15 3h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5"/>'
 };
 
-const state = { token: sessionStorage.getItem("lakshya_token"), user: null, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [] }, audit: [] };
+const state = { token: sessionStorage.getItem("lakshya_token"), user: null, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [] }, audit: [] };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
@@ -99,7 +99,7 @@ function clearSession() {
   state.token = null;
   state.user = null;
   state.view = "dashboard";
-  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [] }, audit: [] });
+  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
 }
 
@@ -184,7 +184,7 @@ async function loadWorkspace() {
   try {
     const [students, agreements, payments, leads, admissionMeta, timetable, assignments, attendanceSessions, notices, report, masters, auditRows] = await Promise.all([
       optional(() => fetchAll("/api/students"), []), optional(() => fetchAll("/api/finance/agreements"), []), optional(() => fetchAll("/api/finance/staged-payments"), []), optional(() => fetchAll("/api/admissions/leads"), []), optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
-      optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [] }), optional(() => api("/api/settings/audit"), [])
+      optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [] }), optional(() => api("/api/settings/audit"), [])
     ]);
     Object.assign(state, { students, agreements, payments, leads, stages: admissionMeta.stageOrder || [], sessions: timetable.sessions || [], timetable, assignments, attendanceSessions, notices, report, masters, audit: auditRows });
     renderAll();
@@ -345,6 +345,8 @@ function renderSettings() {
   const masters = state.masters;
   $("#settings-metrics").innerHTML = compactMetrics([{ label: "Users", value: String(masters.users?.length || 0) }, { label: "Batches", value: String(masters.batches?.length || 0) }, { label: "Subjects", value: String(masters.subjects?.length || 0) }, { label: "Rooms", value: String(masters.rooms?.length || 0) }]);
   $("#settings-users").innerHTML = masterRows(masters.users || [], item => [item.fullName, item.role.replaceAll("_", " "), item.isActive ? "active" : "inactive"]);
+  $("#student-access-count").textContent = `${masters.studentAccess?.length || 0} / 100`;
+  $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${item.email}`, item.isActive ? "active" : "inactive"]);
   $("#settings-batches").innerHTML = masterRows(masters.batches || [], item => [item.name, item.program, item.isActive ? "active" : "inactive"]);
   $("#settings-subjects").innerHTML = masterRows(masters.subjects || [], item => [item.name, `${item.code} · ${item.program}`, item.isActive ? "active" : "inactive"]);
   $("#settings-rooms").innerHTML = masterRows(masters.rooms || [], item => [item.name, `${item.capacity} seats`, item.isActive ? "active" : "inactive"]);
@@ -459,6 +461,13 @@ function openUserForm() {
   $("#user-form").addEventListener("submit", async event => { event.preventDefault(); const form = new FormData(event.currentTarget), button = $('button[type="submit"]', event.currentTarget); button.disabled = true; try { await api("/api/settings/users", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) }); state.masters = await api("/api/settings/bootstrap"); closeDetail(); renderSettings(); toast("User created."); } catch (error) { showFormError("#user-form-error", error); button.disabled = false; } });
 }
 
+function openStudentAccessForm() {
+  const linked = new Set((state.masters.studentAccess || []).map(item => item.studentId));
+  const available = state.students.filter(item => !linked.has(item.id));
+  openDrawer("Student portal access", `<form class="auth-form" id="student-access-form"><div class="inline-notice">${icon("shield")}<span>${state.masters.studentAccess?.length || 0} of 100 accounts active</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(available, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Login email</span><input name="email" type="email" required></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" required></label>${formError("student-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create student access</button></form>`);
+  $("#student-access-form").addEventListener("submit", async event => { event.preventDefault(); const form=new FormData(event.currentTarget),button=$("button[type=submit]",event.currentTarget);button.disabled=true;try{await api("/api/settings/student-access",{method:"POST",body:JSON.stringify(Object.fromEntries(form.entries()))});state.masters=await api("/api/settings/bootstrap");closeDetail();renderSettings();toast("Student portal access created.");}catch(error){showFormError("#student-access-error",error);button.disabled=false;} });
+}
+
 function openMasterForm() {
   openDrawer("Academic setup", `<div class="setup-forms"><form class="auth-form master-form" data-kind="batches"><h3>Batch</h3><label class="field"><span>Name</span><input name="name" required></label><label class="field"><span>Program</span><input name="program" required></label><button class="button button-secondary" type="submit">Add batch</button></form><form class="auth-form master-form" data-kind="subjects"><h3>Subject</h3><label class="field"><span>Name</span><input name="name" required></label><div class="form-pair"><label class="field"><span>Code</span><input name="code" required></label><label class="field"><span>Program</span><input name="program" required></label></div><button class="button button-secondary" type="submit">Add subject</button></form><form class="auth-form master-form" data-kind="rooms"><h3>Room</h3><label class="field"><span>Name</span><input name="name" required></label><label class="field"><span>Capacity</span><input name="capacity" type="number" min="1" value="40" required></label><button class="button button-secondary" type="submit">Add room</button></form>${formError("master-form-error")}</div>`);
   $$(".master-form").forEach(form => form.addEventListener("submit", submitMaster));
@@ -558,7 +567,7 @@ function bindEvents() {
   $("#agreement-search").addEventListener("input", renderAgreementRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
-  $("#new-session").addEventListener("click", openSessionForm); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-master").addEventListener("click", openMasterForm);
+  $("#new-session").addEventListener("click", openSessionForm); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-master").addEventListener("click", openMasterForm);
   $("#refresh-attendance").addEventListener("click", async () => { try { state.attendanceSessions = await api("/api/attendance/sessions"); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => { $$("[data-finance-tab]").forEach(item => item.classList.toggle("active", item === button)); $$(".finance-tab").forEach(panel => panel.classList.toggle("active", panel.id === `finance-${button.dataset.financeTab}-panel`)); }));

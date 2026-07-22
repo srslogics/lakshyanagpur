@@ -28,6 +28,13 @@ class UserCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class StudentAccessCreate(BaseModel):
+    student_id: str = Field(alias="studentId")
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=128)
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class ClassSessionCreate(BaseModel):
     batch_id: str = Field(alias="batchId")
     subject_id: str = Field(alias="subjectId")

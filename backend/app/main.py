@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import SessionLocal
-from .routers import academics, admissions, attendance, auth, communication, finance, reports, settings as settings_router, students, timetable
+from .routers import academics, admissions, attendance, auth, communication, finance, portal, reports, settings as settings_router, students, timetable
 from .seed import seed_development_data
 
 @asynccontextmanager
@@ -19,6 +19,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Lakshya Operations API", version="1.0.0", lifespan=lifespan)
 FRONTEND_DIR = Path(__file__).resolve().parents[2]
+STUDENT_APP_DIR = FRONTEND_DIR / "student-app"
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth.router)
 app.include_router(admissions.router)
@@ -30,6 +31,7 @@ app.include_router(attendance.router)
 app.include_router(communication.router)
 app.include_router(reports.router)
 app.include_router(settings_router.router)
+app.include_router(portal.router)
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):
@@ -53,6 +55,9 @@ def health():
 for static_dir in ("assets", "src"):
     directory = FRONTEND_DIR / static_dir
     if directory.exists(): app.mount(f"/{static_dir}", StaticFiles(directory=directory), name=static_dir)
+
+if STUDENT_APP_DIR.exists():
+    app.mount("/student-app", StaticFiles(directory=STUDENT_APP_DIR, html=True), name="student-app")
 
 @app.get("/", include_in_schema=False)
 def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")

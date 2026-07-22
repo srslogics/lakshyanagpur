@@ -104,6 +104,12 @@ class StudentGuardian(Base):
     is_primary: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class StudentAccount(TimestampMixin, Base):
+    __tablename__ = "student_accounts"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), unique=True, index=True)
+
+
 class Enrollment(TimestampMixin, Base):
     __tablename__ = "enrollments"
     __table_args__ = (UniqueConstraint("student_id", "program", "batch", "is_active", name="uq_active_enrollment"),)

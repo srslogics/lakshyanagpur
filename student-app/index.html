@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#171a4b">
+  <meta name="description" content="Lakshya student portal for classes, assignments, attendance, notices and fees.">
+  <title>Lakshya Student</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="icon" href="../pwa-icon-192.png">
+  <link rel="stylesheet" href="./styles.css?v=2">
+</head>
+<body>
+  <a class="skip-link" href="#student-main">Skip to content</a>
+
+  <section class="login-screen" id="login-screen" aria-labelledby="login-title">
+    <div class="login-brand">
+      <img src="../lakshya-logo.png" alt="Lakshya">
+      <span>Student portal</span>
+    </div>
+    <div class="login-card">
+      <p class="eyebrow">WELCOME BACK</p>
+      <h1 id="login-title">Your learning, organised.</h1>
+      <form id="login-form">
+        <label><span>Email</span><input id="login-email" name="email" type="email" autocomplete="username" required></label>
+        <label><span>Password</span><input id="login-password" name="password" type="password" autocomplete="current-password" minlength="8" required></label>
+        <div class="form-error hidden" id="login-error" role="alert"></div>
+        <button class="primary-button" id="login-button" type="submit">Sign in <span data-icon="arrow"></span></button>
+      </form>
+    </div>
+  </section>
+
+  <div class="student-shell hidden" id="student-shell">
+    <header class="student-header">
+      <a class="mini-brand" href="#home" aria-label="Lakshya student home"><img src="../lakshya-logo.png" alt=""></a>
+      <div><span id="header-kicker">Student portal</span><strong id="header-title">Home</strong></div>
+      <button class="avatar-button" id="profile-button" type="button" aria-label="Open profile"><span id="header-avatar">LS</span></button>
+    </header>
+
+    <main id="student-main" tabindex="-1">
+      <section class="portal-view active" id="home" aria-labelledby="home-heading">
+        <article class="welcome-card">
+          <div><p id="today-label"></p><h1 id="home-heading">Hello, <span id="student-first-name">Student</span></h1><p id="student-program"></p></div>
+          <div class="welcome-mark" data-icon="spark"></div>
+        </article>
+        <div class="summary-strip" id="summary-strip"></div>
+        <section class="content-block"><div class="section-head"><h2>Next class</h2><button type="button" data-go="schedule">View schedule</button></div><div id="next-class"></div></section>
+        <section class="content-block"><div class="section-head"><h2>Due soon</h2><button type="button" data-go="assignments">View all</button></div><div class="stack-list" id="home-assignments"></div></section>
+        <section class="content-block"><div class="section-head"><h2>Latest notice</h2><button type="button" data-go="more">View all</button></div><div id="latest-notice"></div></section>
+      </section>
+
+      <section class="portal-view" id="schedule" aria-labelledby="schedule-heading"><div class="view-heading"><p class="eyebrow">CLASSES</p><h1 id="schedule-heading">Schedule</h1></div><div class="date-filter" id="schedule-dates"></div><div class="timeline" id="schedule-list"></div></section>
+      <section class="portal-view" id="assignments" aria-labelledby="assignments-heading"><div class="view-heading"><p class="eyebrow">ACADEMICS</p><h1 id="assignments-heading">Assignments</h1></div><div class="filter-pills"><button class="active" data-assignment-filter="open" type="button">Open</button><button data-assignment-filter="all" type="button">All</button></div><div class="assignment-grid" id="assignment-list"></div></section>
+      <section class="portal-view" id="attendance" aria-labelledby="attendance-heading"><div class="view-heading"><p class="eyebrow">PRESENCE</p><h1 id="attendance-heading">Attendance</h1></div><article class="attendance-hero" id="attendance-hero"></article><div class="stack-list" id="attendance-list"></div></section>
+      <section class="portal-view" id="more" aria-labelledby="more-heading"><div class="view-heading"><p class="eyebrow">ACCOUNT</p><h1 id="more-heading">More</h1></div><article class="profile-card" id="profile-card"></article><section class="content-block fees-block"><div class="section-head"><h2>Fees</h2></div><div id="fee-summary"></div></section><section class="content-block"><div class="section-head"><h2>Notices</h2></div><div class="notice-list" id="notice-list"></div></section><button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button></section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Student navigation">
+      <button class="active" type="button" data-view="home"><span data-icon="home"></span><em>Home</em></button>
+      <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
+      <button type="button" data-view="assignments"><span data-icon="book"></span><em>Work</em><i id="assignment-badge" class="hidden">0</i></button>
+      <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em></button>
+      <button type="button" data-view="more"><span data-icon="more"></span><em>More</em></button>
+    </nav>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="./app.js?v=2" defer></script>
+</body>
+</html>
