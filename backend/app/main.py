@@ -39,6 +39,8 @@ async def request_context(request: Request, call_next):
     request_id = request.headers.get("x-request-id", str(uuid4()))
     response = await call_next(request)
     response.headers.update({"x-request-id": request_id, "x-content-type-options": "nosniff", "x-frame-options": "DENY"})
+    if request.url.path.startswith("/api/"):
+        response.headers["cache-control"] = "no-store"
     return response
 
 @app.exception_handler(RequestValidationError)

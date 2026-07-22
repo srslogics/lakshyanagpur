@@ -48,13 +48,21 @@ function injectIcons(root = document) {
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch(path, { ...options, headers });
+  const method = String(options.method || "GET").toUpperCase();
+  const requestPath = method === "GET" && path.startsWith("/api/")
+    ? `${path}${path.includes("?") ? "&" : "?"}_fresh=${Date.now()}`
+    : path;
+  const response = await fetch(requestPath, { ...options, headers, cache: method === "GET" ? "no-store" : undefined });
   let body = null;
   try { body = await response.json(); } catch { body = {}; }
-  if (response.status === 401 && state.token) { expireSession(); throw new Error("Your session expired. Please sign in again."); }
   if (!response.ok) {
     const detail = body?.detail;
-    throw new Error(typeof detail === "string" ? detail : detail?.message || body?.error?.message || "Something went wrong. Please try again.");
+    const error = new Error(response.status === 401 && state.token
+      ? "Your session expired. Please sign in again."
+      : typeof detail === "string" ? detail : detail?.message || body?.error?.message || "Something went wrong. Please try again.");
+    error.status = response.status;
+    if (response.status === 401 && state.token) expireSession();
+    throw error;
   }
   return body;
 }
@@ -81,18 +89,37 @@ async function initialize() {
   injectIcons();
   initializeTheme();
   bindEvents();
+  refreshServiceWorker();
   try {
     const setup = await api("/api/auth/bootstrap-status");
     setAuthMode(setup.setupRequired);
     if (state.token) {
       try { state.user = await api("/api/auth/me"); await enterWorkspace(); }
-      catch { showAuth(); }
+      catch (error) {
+        if (error.status !== 401 && state.token) showBootError("Workspace unavailable", error.message);
+      }
     } else showAuth();
   } catch (error) {
-    showAuth();
-    $("#auth-error").textContent = "Service unavailable. Refresh to retry.";
-    $("#auth-error").classList.remove("hidden");
+    if (error.status !== 401) showBootError("Service unavailable", "The latest workspace data could not be loaded.");
   }
+}
+
+async function refreshServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const registration = await navigator.serviceWorker.register("./sw.js");
+    await registration.update();
+  } catch {}
+}
+
+function showBootError(title, message) {
+  $("#auth-screen").classList.add("hidden");
+  $("#app-shell").classList.add("hidden");
+  $("#boot-screen").classList.remove("hidden");
+  $("#boot-screen").classList.add("has-error");
+  $("#boot-title").textContent = title;
+  $("#boot-message").textContent = message;
+  $("#boot-retry").classList.remove("hidden");
 }
 
 function clearSession() {
@@ -113,6 +140,7 @@ function resetAuthForm() {
 
 function showAuth(message = "") {
   closeAccountMenu();
+  $("#boot-screen").classList.add("hidden");
   $("#auth-screen").classList.remove("hidden");
   $("#app-shell").classList.add("hidden");
   if (message) { $("#auth-error").textContent = message; $("#auth-error").classList.remove("hidden"); }
@@ -154,8 +182,6 @@ async function handleAuth(event) {
 }
 
 async function enterWorkspace() {
-  $("#auth-screen").classList.add("hidden"); $("#app-shell").classList.remove("hidden");
-  showView("dashboard");
   const name = state.user?.fullName || "Lakshya Director";
   const label = state.user?.role?.replaceAll("_", " ") || "Owner";
   $("#sidebar-user-name").textContent = name; $("#sidebar-user-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
@@ -163,6 +189,10 @@ async function enterWorkspace() {
   $("#account-menu-name").textContent = name; $("#account-menu-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
   [$("#user-avatar"), $("#topbar-avatar"), $("#account-menu-avatar")].forEach(node => node.textContent = initials(name));
   await loadWorkspace();
+  $("#boot-screen").classList.add("hidden");
+  $("#auth-screen").classList.add("hidden");
+  $("#app-shell").classList.remove("hidden");
+  showView("dashboard");
 }
 
 async function fetchAll(path, pageSize = 100) {
@@ -177,18 +207,20 @@ async function fetchAll(path, pageSize = 100) {
 }
 
 async function optional(load, fallback) {
-  try { return await load(); } catch { return fallback; }
+  try { return await load(); }
+  catch (error) {
+    if (error.status === 403 || error.status === 404) return fallback;
+    throw error;
+  }
 }
 
 async function loadWorkspace() {
-  try {
-    const [students, agreements, payments, leads, admissionMeta, timetable, assignments, attendanceSessions, notices, report, masters, auditRows] = await Promise.all([
-      optional(() => fetchAll("/api/students"), []), optional(() => fetchAll("/api/finance/agreements"), []), optional(() => fetchAll("/api/finance/staged-payments"), []), optional(() => fetchAll("/api/admissions/leads"), []), optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
-      optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [] }), optional(() => api("/api/settings/audit"), [])
-    ]);
-    Object.assign(state, { students, agreements, payments, leads, stages: admissionMeta.stageOrder || [], sessions: timetable.sessions || [], timetable, assignments, attendanceSessions, notices, report, masters, audit: auditRows });
-    renderAll();
-  } catch (error) { toast(error.message, "error"); }
+  const [students, agreements, payments, leads, admissionMeta, timetable, assignments, attendanceSessions, notices, report, masters, auditRows] = await Promise.all([
+    optional(() => fetchAll("/api/students"), []), optional(() => fetchAll("/api/finance/agreements"), []), optional(() => fetchAll("/api/finance/staged-payments"), []), optional(() => fetchAll("/api/admissions/leads"), []), optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
+    optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [] }), optional(() => api("/api/settings/audit"), [])
+  ]);
+  Object.assign(state, { students, agreements, payments, leads, stages: admissionMeta.stageOrder || [], sessions: timetable.sessions || [], timetable, assignments, attendanceSessions, notices, report, masters, audit: auditRows });
+  renderAll();
 }
 
 function renderAll() {
@@ -546,6 +578,7 @@ function exportStudents() {
 }
 
 function bindEvents() {
+  $("#boot-retry").addEventListener("click", () => window.location.reload());
   $("#auth-form").addEventListener("submit", handleAuth);
   $(".password-toggle").addEventListener("click", event => { const field = $("#auth-password"), visible = field.type === "text"; field.type = visible ? "password" : "text"; event.currentTarget.setAttribute("aria-label", visible ? "Show password" : "Hide password"); });
   document.addEventListener("click", event => {

@@ -35,9 +35,18 @@
   <link rel="stylesheet" href="./auth-shared.css?v=4">
 </head>
 <body>
+  <div class="boot-screen" id="boot-screen" role="status" aria-live="polite">
+    <div class="boot-card">
+      <div class="official-logo-card"><img src="./lakshya-logo.png" width="1536" height="1024" alt="Lakshya"></div>
+      <span class="boot-spinner" aria-hidden="true"></span>
+      <strong id="boot-title">Opening workspace</strong>
+      <p id="boot-message">Loading the latest institutional data.</p>
+      <button class="button button-primary hidden" id="boot-retry" type="button">Retry</button>
+    </div>
+  </div>
   <a class="skip-link" href="#main-content">Skip to main content</a>
 
-  <section class="auth-screen" id="auth-screen" aria-labelledby="auth-title">
+  <section class="auth-screen hidden" id="auth-screen" aria-labelledby="auth-title">
     <div class="auth-brand-panel">
       <div class="auth-brand-content">
         <div class="official-logo-card auth-official-logo">
@@ -268,6 +277,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=21" defer></script>
+  <script src="./app.js?v=22" defer></script>
 </body>
 </html>
