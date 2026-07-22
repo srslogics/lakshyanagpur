@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>
+    if (window.location.protocol === "file:") {
+      window.location.replace("http://127.0.0.1:8000/parent-app/" + window.location.search + window.location.hash);
+    }
+  </script>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#171a4b">
+  <meta name="description" content="Lakshya Parent keeps families informed about attendance, classes, assignments, notices and fees.">
+  <meta property="og:title" content="Lakshya Parent">
+  <meta property="og:description" content="A clear view of your child’s progress at Lakshya Institute.">
+  <meta property="og:image" content="../share-card.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Lakshya Parent</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="icon" href="../pwa-icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=2">
+</head>
+<body>
+  <a class="skip-link" href="#parent-main">Skip to content</a>
+
+  <section class="login-screen" id="login-screen" aria-labelledby="login-title">
+    <div class="login-brand">
+      <img src="../lakshya-logo.png" width="1536" height="1024" alt="Lakshya">
+      <span>Parent</span>
+    </div>
+    <div class="login-copy" aria-hidden="true">
+      <p>CONNECTED LEARNING</p>
+      <strong>Stay close to their progress.</strong>
+    </div>
+    <div class="login-card">
+      <p class="eyebrow">PARENT ACCESS</p>
+      <h1 id="login-title">Welcome back.</h1>
+      <p class="login-intro">Use the account issued by Lakshya Institute.</p>
+      <form id="login-form" novalidate>
+        <label for="login-email"><span>Email address</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" required></label>
+        <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span></label>
+        <div class="form-error hidden" id="login-error" role="alert"></div>
+        <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
+      </form>
+    </div>
+  </section>
+
+  <div class="parent-shell hidden" id="parent-shell">
+    <header class="app-header">
+      <a class="mini-brand" href="#overview" aria-label="Lakshya Parent home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""></a>
+      <div><span>LAKSHYA PARENT</span><strong id="header-title">Overview</strong></div>
+      <button class="avatar-button" id="profile-button" type="button" aria-label="Open parent account"><span id="header-avatar">P</span></button>
+    </header>
+
+    <main id="parent-main" tabindex="-1">
+      <section class="app-view active" id="overview" aria-labelledby="overview-heading">
+        <article class="child-hero">
+          <div class="child-identity"><span class="child-avatar" id="child-avatar">ST</span><div><p id="guardian-greeting">Good day</p><h1 id="overview-heading"><span id="child-name">Student</span></h1><span id="child-program">Program pending</span></div></div>
+          <span class="verified-mark"><span data-icon="shield"></span>Linked record</span>
+        </article>
+        <div class="metric-grid" id="overview-metrics" aria-label="Student summary"></div>
+        <div class="overview-grid">
+          <section class="panel next-panel"><div class="section-head"><div><p class="eyebrow">NEXT</p><h2>Upcoming class</h2></div><button type="button" data-go="academics">Full schedule</button></div><div id="next-class"></div></section>
+          <section class="panel"><div class="section-head"><div><p class="eyebrow">ACTION</p><h2>Pending work</h2></div><button type="button" data-go="academics">View academics</button></div><div class="stack-list" id="pending-work"></div></section>
+          <section class="panel updates-panel"><div class="section-head"><div><p class="eyebrow">INSTITUTE</p><h2>Latest update</h2></div><button type="button" data-go="more">All notices</button></div><div id="latest-notice"></div></section>
+        </div>
+      </section>
+
+      <section class="app-view" id="attendance" aria-labelledby="attendance-heading">
+        <div class="view-heading"><p class="eyebrow">CONSISTENCY</p><h1 id="attendance-heading">Attendance</h1><p>Class-by-class presence recorded by the institute.</p></div>
+        <article class="attendance-summary" id="attendance-summary"></article>
+        <section class="panel"><div class="section-head"><div><h2>Attendance history</h2></div></div><div class="attendance-list" id="attendance-list"></div></section>
+      </section>
+
+      <section class="app-view" id="academics" aria-labelledby="academics-heading">
+        <div class="view-heading"><p class="eyebrow">LEARNING</p><h1 id="academics-heading">Academics</h1><p>Upcoming classes and published assignments.</p></div>
+        <section class="panel"><div class="section-head"><div><h2>Class schedule</h2></div></div><div class="timeline" id="schedule-list"></div></section>
+        <section class="panel"><div class="section-head"><div><h2>Assignments</h2></div></div><div class="assignment-list" id="assignment-list"></div></section>
+      </section>
+
+      <section class="app-view" id="fees" aria-labelledby="fees-heading">
+        <div class="view-heading"><p class="eyebrow">FINANCE</p><h1 id="fees-heading">Fees</h1><p>Your child’s agreed fee and recorded payment history.</p></div>
+        <article class="fee-hero" id="fee-hero"></article>
+        <section class="panel"><div class="section-head"><div><h2>Payment history</h2></div></div><div class="payment-list" id="payment-list"></div></section>
+      </section>
+
+      <section class="app-view" id="more" aria-labelledby="more-heading">
+        <div class="view-heading"><p class="eyebrow">ACCOUNT</p><h1 id="more-heading">More</h1><p>Linked student details and institute notices.</p></div>
+        <article class="profile-card" id="profile-card"></article>
+        <section class="panel"><div class="section-head"><div><h2>Notices</h2></div></div><div class="notice-list" id="notice-list"></div></section>
+        <button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Parent navigation">
+      <button class="active" type="button" data-view="overview" aria-current="page"><span data-icon="home"></span><em>Overview</em></button>
+      <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em></button>
+      <button type="button" data-view="academics"><span data-icon="book"></span><em>Academics</em><i id="work-badge" class="hidden">0</i></button>
+      <button type="button" data-view="fees"><span data-icon="wallet"></span><em>Fees</em></button>
+      <button type="button" data-view="more"><span data-icon="more"></span><em>More</em></button>
+    </nav>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="./app.js?v=1" defer></script>
+</body>
+</html>

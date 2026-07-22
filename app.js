@@ -482,9 +482,9 @@ const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "
 function showView(view) {
   if (!$("#" + view)) return; state.view = view;
   $$(".app-view").forEach(node => node.classList.toggle("active", node.id === view));
-  $$(".nav-item").forEach(node => node.classList.toggle("active", node.dataset.view === view));
+  $$(".nav-item").forEach(node => { const active = node.dataset.view === view; node.classList.toggle("active", active); active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current"); });
   $("#page-title").textContent = viewTitles[view];
-  closeSidebar(); closeCommand(); $("#main-content").focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: "smooth" });
+  closeSidebar(); closeCommand(); $("#main-content").focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
 function renderCommandResults(query = "") {

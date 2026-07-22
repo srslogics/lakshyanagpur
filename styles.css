@@ -481,3 +481,33 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Production typography and interaction baseline */
+body { font-size: 1rem; line-height: 1.5; }
+h1, h2, h3, h4, .metric-value, .compact-metric strong { font-family: "Manrope", "DM Sans", sans-serif; }
+p, li, td, th, label, input, select, textarea, button { line-height: 1.45; }
+.sidebar-brand-copy small, .sidebar-section-label, .breadcrumb, .eyebrow, .metric-label,
+.compact-metric span, .table-meta, .data-table th, .student-primary small, .status-pill,
+.detail-field span, .mobile-record-meta span, .command-results > p, .field-help, .overline,
+.count-badge, .finance-total small, .reconcile-labels, .search-trigger kbd { font-size: .75rem; }
+.nav-item, .button, .toolbar select, .toolbar input, .search-field input, .field,
+.field input, .field select, .field textarea, .data-table, .record-item, .notice-card p,
+.mobile-record-card p, .mobile-record-meta strong, .detail-field strong, .toast { font-size: .875rem; }
+.field > span, .check-field { font-size: .875rem; font-weight: 700; }
+.data-table th { letter-spacing: .055em; line-height: 1.35; }
+.data-table td { line-height: 1.45; }
+.data-table td, .currency, time, .metric-value, .compact-metric strong { font-variant-numeric: tabular-nums; }
+.student-primary strong, .student-primary small { line-height: 1.4; }
+.notice-card p, .inline-notice p, .detail-section p { max-width: 68ch; line-height: 1.6; }
+.segmented-control button, .table-action { min-width: 44px; min-height: 44px; }
+.search-trigger { min-height: 44px; }
+.button:active, .icon-button:active, .nav-item:active, .segmented-control button:active { opacity: .78; }
+
+@media (max-width: 700px) {
+  .field input, .field select, .field textarea, .toolbar select, .toolbar input, .command-palette input { font-size: 16px; }
+  .button-small { min-height: 44px; }
+  .mobile-record-card h3 { font-size: .875rem; }
+  .mobile-record-card p, .mobile-record-meta strong { font-size: .8125rem; }
+  .mobile-record-meta span { font-size: .75rem; }
+  .compact-metric { min-width: 168px; }
+}

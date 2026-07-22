@@ -20,6 +20,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Lakshya Operations API", version="1.0.0", lifespan=lifespan)
 FRONTEND_DIR = Path(__file__).resolve().parents[2]
 STUDENT_APP_DIR = FRONTEND_DIR / "student-app"
+PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth.router)
 app.include_router(admissions.router)
@@ -58,6 +59,9 @@ for static_dir in ("assets", "src"):
 
 if STUDENT_APP_DIR.exists():
     app.mount("/student-app", StaticFiles(directory=STUDENT_APP_DIR, html=True), name="student-app")
+
+if PARENT_APP_DIR.exists():
+    app.mount("/parent-app", StaticFiles(directory=PARENT_APP_DIR, html=True), name="parent-app")
 
 @app.get("/", include_in_schema=False)
 def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")
