@@ -23,6 +23,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css?v=2">
+  <link rel="stylesheet" href="../auth-shared.css?v=4">
 </head>
 <body>
   <a class="skip-link" href="#parent-main">Skip to content</a>
@@ -37,15 +38,17 @@
       <strong>Stay close to their progress.</strong>
     </div>
     <div class="login-card">
-      <p class="eyebrow">PARENT ACCESS</p>
-      <h1 id="login-title">Welcome back.</h1>
-      <p class="login-intro">Use the account issued by Lakshya Institute.</p>
-      <form id="login-form" novalidate>
-        <label for="login-email"><span>Email address</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" required></label>
-        <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span></label>
-        <div class="form-error hidden" id="login-error" role="alert"></div>
-        <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
-      </form>
+      <div class="login-form-wrap">
+        <p class="eyebrow">PARENT ACCESS</p>
+        <h1 id="login-title">Sign in</h1>
+        <p class="login-intro">Use the account issued by Lakshya Institute.</p>
+        <form id="login-form" novalidate>
+          <label for="login-email"><span>Email address</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="parent@lakshya.edu" required></label>
+          <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span><small class="field-help">Use at least 8 characters.</small></label>
+          <div class="form-error hidden" id="login-error" role="alert"></div>
+          <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
+        </form>
+      </div>
     </div>
   </section>
 
