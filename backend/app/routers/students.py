@@ -20,7 +20,7 @@ def list_students(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*READ_ROLES)),
 ):
-    query = db.query(Student, Enrollment).join(Enrollment, Enrollment.student_id == Student.id)
+    query = db.query(Student, Enrollment).outerjoin(Enrollment, Enrollment.student_id == Student.id)
     if search:
         term = f"%{search.strip()}%"
         query = query.filter(or_(Student.full_name.ilike(term), Student.mobile.ilike(term), Student.admission_number.ilike(term)))
@@ -38,9 +38,9 @@ def list_students(
             "mobile": student.mobile,
             "secondaryMobile": student.secondary_mobile,
             "previousSchool": student.previous_school,
-            "program": enrollment.program,
-            "batch": enrollment.batch,
-            "enrollmentDate": enrollment.enrollment_date,
+            "program": enrollment.program if enrollment else None,
+            "batch": enrollment.batch if enrollment else None,
+            "enrollmentDate": enrollment.enrollment_date if enrollment else None,
             "status": student.status,
             "dataQualityStatus": student.data_quality_status,
             "legacyImportId": student.legacy_import_id,
@@ -56,7 +56,12 @@ def student_detail(student_id: str, db: Session = Depends(get_db), user: User = 
     student = db.get(Student, student_id)
     if not student:
         raise HTTPException(404, "Student not found")
-    enrollment = db.query(Enrollment).filter_by(student_id=student.id, is_active=True).first()
+    enrollment = (
+        db.query(Enrollment)
+        .filter_by(student_id=student.id)
+        .order_by(Enrollment.is_active.desc(), Enrollment.created_at.desc())
+        .first()
+    )
     fee = db.query(FeeAgreement).filter_by(student_id=student.id).first()
     legacy = db.query(LegacyAdmissionRow).filter_by(student_id=student.id).first()
     return {

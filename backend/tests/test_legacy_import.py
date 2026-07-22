@@ -25,8 +25,8 @@ def test_full_workbook_import_reconciles_and_is_idempotent(database):
         "idempotent_rerun": False,
         "active_rows": 64,
         "cancelled_rows": 6,
-        "students": 64,
-        "enrollments": 64,
+        "students": 70,
+        "enrollments": 69,
         "fee_agreements": 64,
         "agreed_fee_total": 4_227_000,
         "registration_total": 830_100,
@@ -37,12 +37,13 @@ def test_full_workbook_import_reconciles_and_is_idempotent(database):
     assert second["batch_id"] == first["batch_id"]
     assert second["idempotent_rerun"] is True
     assert database.query(ImportBatch).count() == 1
-    assert database.query(Student).count() == 64
+    assert database.query(Student).count() == 70
 
 
 def test_source_fields_are_preserved_without_inventing_missing_data(database):
     import_manifest(database, load_manifest())
     kamal = database.query(Student).filter_by(legacy_import_id="LEGACY-ADM-2026-A-001").one()
+    assert kamal.admission_number == "LI-2026-00001"
     assert (kamal.full_name, kamal.mobile, kamal.secondary_mobile, kamal.previous_school) == (
         "Kamal Parsatwar", "9158978800", "9158178887", "Podar International School"
     )
@@ -56,7 +57,12 @@ def test_source_fields_are_preserved_without_inventing_missing_data(database):
     assert nancy.mobile is None
     assert nancy.data_quality_status == "blocked"
     assert database.query(LegacyAdmissionRow).filter_by(record_status="cancelled").count() == 6
-    assert database.query(Student).filter(Student.legacy_import_id.like("%-C-%")).count() == 0
+    forfeited = database.query(Student).filter(Student.legacy_import_id.like("%-C-%")).all()
+    assert len(forfeited) == 6
+    assert {student.status for student in forfeited} == {"forfeited"}
+    forfeited_enrollments = database.query(Enrollment).filter(Enrollment.legacy_import_id.like("%-C-%")).all()
+    assert len(forfeited_enrollments) == 5
+    assert all(not enrollment.is_active and enrollment.status == "forfeited" for enrollment in forfeited_enrollments)
 
 
 def test_imported_payment_lines_are_immutable(database):
@@ -68,12 +74,44 @@ def test_imported_payment_lines_are_immutable(database):
     database.rollback()
 
 
+def test_confirmed_missing_payment_dates_remain_unknown_for_manual_entry(database):
+    manifest = load_manifest()
+    expected_students = {
+        "Aaron Sonkar", "Md. Zaid Ali", "Md.Daniyal Ali", "Nawaz Baig",
+        "Rushada Tabhane", "Priyanshi Wahane", "Abhas Gajbhiye", "Snehlata Mohadikar",
+    }
+    manual_rows = {
+        row["normalized"]["student_name"]
+        for row in manifest["records"]
+        for payment in row["payments"]
+        if payment.get("date_entry_status") == "manual_client_entry"
+    }
+    assert manual_rows == expected_students
+    assert all(
+        payment["transaction_date"] is None
+        for row in manifest["records"]
+        for payment in row["payments"]
+        if payment.get("date_entry_status") == "manual_client_entry"
+    )
+
+    import_manifest(database, manifest)
+    imported = (
+        database.query(PaymentTransaction)
+        .filter(PaymentTransaction.transaction_date.is_(None), PaymentTransaction.transaction_type == "payment")
+        .all()
+    )
+    assert {payment.legacy_import_id for payment in imported} == {
+        row["legacy_id"] for row in manifest["records"]
+        if row["normalized"]["student_name"] in expected_students
+    }
+
+
 def test_imported_records_are_available_through_protected_apis(client, owner_headers, database):
     import_manifest(database, load_manifest())
     students = client.get("/api/students?pageSize=100", headers=owner_headers)
     agreements = client.get("/api/finance/agreements?pageSize=100", headers=owner_headers)
     payments = client.get("/api/finance/staged-payments?pageSize=100", headers=owner_headers)
     assert students.status_code == agreements.status_code == payments.status_code == 200
-    assert students.json()["total"] == 64
+    assert students.json()["total"] == 70
     assert agreements.json()["total"] == 64
     assert payments.json()["total"] == 118

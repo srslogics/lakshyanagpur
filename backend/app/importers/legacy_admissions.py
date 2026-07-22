@@ -18,6 +18,7 @@ from ..models import (
     PaymentTransaction,
     Student,
 )
+from ..services import admission_number
 
 
 class ImportConflict(ValueError):
@@ -29,7 +30,7 @@ def _date(value: str | None) -> date | None:
 
 
 def _validate(manifest: dict) -> None:
-    if manifest.get("schema_version") != 1:
+    if manifest.get("schema_version") != 2:
         raise ImportConflict("Unsupported admission manifest schema")
     records = manifest.get("records", [])
     active = [row for row in records if row["record_status"] == "active"]
@@ -38,6 +39,7 @@ def _validate(manifest: dict) -> None:
     checks = {
         "active_rows": len(active),
         "cancelled_rows": len(cancelled),
+        "student_rows": len(records),
         "fee_total": sum(row["normalized"]["agreed_fee"] for row in active),
         "registration_total": sum(row["normalized"]["registration_total"] for row in active),
         "staged_payment_total": sum(
@@ -95,24 +97,24 @@ def import_manifest(db: Session, manifest: dict, actor_id: str | None = None) ->
                 issues=row["issues"],
             )
             db.add(legacy)
-            if row["record_status"] == "cancelled":
-                continue
-
             data = row["normalized"]
-            suffix = row["legacy_id"].rsplit("-", 1)[-1]
+            is_forfeited = row["record_status"] == "cancelled"
             student = Student(
-                admission_number=f"LI-2026-L{suffix}",
+                admission_number=admission_number(db),
                 full_name=data["student_name"],
                 mobile=data["primary_mobile"],
                 secondary_mobile=data["secondary_mobile"],
                 previous_school=data["previous_school"],
                 legacy_import_id=row["legacy_id"],
                 data_quality_status=row["import_readiness"].lower(),
-                status="active",
+                status="forfeited" if is_forfeited else "active",
             )
             db.add(student)
             db.flush()
             legacy.student_id = student.id
+
+            if not data["program"]:
+                continue
 
             enrollment = Enrollment(
                 student_id=student.id,
@@ -121,11 +123,13 @@ def import_manifest(db: Session, manifest: dict, actor_id: str | None = None) ->
                 enrollment_date=_date(data["admission_date"]),
                 source_type="legacy_excel_import",
                 legacy_import_id=row["legacy_id"],
-                status="active",
-                is_active=True,
+                status="forfeited" if is_forfeited else "active",
+                is_active=not is_forfeited,
             )
             db.add(enrollment)
             db.flush()
+            if is_forfeited:
+                continue
             fee = FeeAgreement(
                 student_id=student.id,
                 enrollment_id=enrollment.id,
@@ -173,8 +177,9 @@ def reconciliation(db: Session, batch_id: str, idempotent: bool = False) -> dict
     if not batch:
         raise ImportConflict("Import batch not found")
     legacy_rows = db.query(LegacyAdmissionRow).filter_by(import_batch_id=batch.id)
+    all_ids = [row.id for row in legacy_rows.all()]
     active_ids = [row.id for row in legacy_rows.filter_by(record_status="active").all()]
-    student_count = db.query(Student).filter(Student.legacy_import_id.in_(active_ids)).count() if active_ids else 0
+    student_count = db.query(Student).filter(Student.legacy_import_id.in_(all_ids)).count() if all_ids else 0
     fee_rows = db.query(FeeAgreement).filter(FeeAgreement.legacy_import_id.in_(active_ids)) if active_ids else None
     fees = fee_rows.all() if fee_rows is not None else []
     payment_rows = db.query(PaymentTransaction).filter(PaymentTransaction.legacy_import_id.in_(active_ids)).all() if active_ids else []
@@ -184,7 +189,7 @@ def reconciliation(db: Session, batch_id: str, idempotent: bool = False) -> dict
         "active_rows": legacy_rows.filter_by(record_status="active").count(),
         "cancelled_rows": legacy_rows.filter_by(record_status="cancelled").count(),
         "students": student_count,
-        "enrollments": db.query(Enrollment).filter(Enrollment.legacy_import_id.in_(active_ids)).count() if active_ids else 0,
+        "enrollments": db.query(Enrollment).filter(Enrollment.legacy_import_id.in_(all_ids)).count() if all_ids else 0,
         "fee_agreements": len(fees),
         "agreed_fee_total": sum(row.agreed_amount for row in fees),
         "registration_total": sum(row.legacy_registration_total for row in fees),
