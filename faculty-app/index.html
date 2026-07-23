@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=1">
+  <link rel="stylesheet" href="./styles.css?v=2">
   <link rel="stylesheet" href="../auth-shared.css?v=4">
 </head>
 <body>
@@ -58,22 +58,26 @@
 
   <div class="faculty-shell hidden" id="faculty-shell">
     <aside class="sidebar" aria-label="Faculty navigation">
-      <a class="sidebar-brand" href="#dashboard" aria-label="Lakshya Faculty home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""><span><strong>Lakshya</strong><small>Faculty</small></span></a>
+      <a class="sidebar-brand" href="#dashboard" data-view="dashboard" aria-label="Lakshya Faculty home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""><span><strong>Lakshya</strong><small>Faculty</small></span></a>
       <nav>
         <button class="active" type="button" data-view="dashboard" aria-current="page"><span data-icon="home"></span><em>Today</em></button>
         <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em><i id="sidebar-attendance-badge" class="hidden">0</i></button>
         <button type="button" data-view="assignments"><span data-icon="book"></span><em>Assignments</em></button>
         <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
-        <button type="button" data-view="more"><span data-icon="more"></span><em>More</em></button>
+        <span class="sidebar-section-label">Faculty services</span>
+        <button type="button" data-view="batches"><span data-icon="users"></span><em>Batches</em></button>
+        <button type="button" data-view="notices"><span data-icon="notice"></span><em>Notices</em></button>
+        <button type="button" data-view="profile"><span data-icon="user"></span><em>Profile</em></button>
       </nav>
       <div class="sidebar-profile">
         <span class="avatar" id="sidebar-avatar">LF</span>
         <span><strong id="sidebar-name">Faculty</strong><small>Faculty account</small></span>
+        <button id="sidebar-signout" type="button" aria-label="Sign out"><span data-icon="logout"></span></button>
       </div>
     </aside>
 
     <header class="app-header">
-      <a class="mini-brand" href="#dashboard" aria-label="Lakshya Faculty home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""></a>
+      <a class="mini-brand" href="#dashboard" data-view="dashboard" aria-label="Lakshya Faculty home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""></a>
       <div><span>LAKSHYA FACULTY</span><strong id="header-title">Today</strong></div>
       <button class="avatar-button" id="profile-button" type="button" aria-label="Open faculty profile"><span id="header-avatar">LF</span></button>
     </header>
@@ -105,7 +109,7 @@
             <div class="stack-list" id="dashboard-assignments"></div>
           </section>
           <section class="panel notice-panel">
-            <div class="section-head"><div><p class="eyebrow">INSTITUTE</p><h2>Latest notice</h2></div><button type="button" data-go="more">All notices</button></div>
+            <div class="section-head"><div><p class="eyebrow">INSTITUTE</p><h2>Latest notice</h2></div><button type="button" data-go="notices">All notices</button></div>
             <div id="latest-notice"></div>
           </section>
         </div>
@@ -116,6 +120,7 @@
           <div><p class="eyebrow">CLASS RECORDS</p><h1 id="attendance-heading">Attendance</h1><p>Open a class, mark every student and submit the register.</p></div>
           <span class="view-count" id="attendance-view-count">0 pending</span>
         </div>
+        <div class="module-metrics" id="attendance-metrics"></div>
         <div class="filter-pills" aria-label="Attendance filter">
           <button class="active" data-attendance-filter="action" type="button" aria-pressed="true">Needs action</button>
           <button data-attendance-filter="upcoming" type="button" aria-pressed="false">Upcoming</button>
@@ -130,26 +135,47 @@
           <div><p class="eyebrow">PUBLISHED WORK</p><h1 id="assignments-heading">Assignments</h1><p>Create work only for batches and subjects assigned to you.</p></div>
           <button class="primary-compact" type="button" data-open-assignment><span data-icon="plus"></span>New assignment</button>
         </div>
+        <div class="module-metrics" id="assignment-metrics"></div>
         <div class="filter-pills" aria-label="Assignment filter">
-          <button class="active" data-assignment-filter="all" type="button" aria-pressed="true">All</button>
-          <button data-assignment-filter="published" type="button" aria-pressed="false">Published</button>
+          <button class="active" data-assignment-filter="active" type="button" aria-pressed="true">Active</button>
           <button data-assignment-filter="draft" type="button" aria-pressed="false">Drafts</button>
+          <button data-assignment-filter="overdue" type="button" aria-pressed="false">Past due</button>
+          <button data-assignment-filter="all" type="button" aria-pressed="false">All</button>
         </div>
         <div class="assignment-grid" id="assignment-list"></div>
       </section>
 
       <section class="app-view" id="schedule" aria-labelledby="schedule-heading">
         <div class="view-heading"><div><p class="eyebrow">TIMETABLE</p><h1 id="schedule-heading">Schedule</h1><p>Your assigned classes, rooms and batches.</p></div></div>
+        <div class="module-metrics" id="schedule-metrics"></div>
         <div class="date-filter" id="schedule-dates" aria-label="Schedule date"></div>
         <div class="timeline" id="schedule-list"></div>
       </section>
 
-      <section class="app-view" id="more" aria-labelledby="more-heading">
-        <div class="view-heading"><div><p class="eyebrow">ACCOUNT</p><h1 id="more-heading">More</h1><p>Your teaching assignments and institute updates.</p></div></div>
+      <section class="app-view" id="batches" aria-labelledby="batches-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">TEACHING LOAD</p><h1 id="batches-heading">Batches</h1><p>Your assigned batches, subjects, students and upcoming classes.</p></div></div>
+        <div class="module-metrics" id="batch-metrics"></div>
+        <div class="faculty-batch-grid" id="batch-list"></div>
+      </section>
+
+      <section class="app-view" id="notices" aria-labelledby="notices-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">INSTITUTE</p><h1 id="notices-heading">Notices</h1><p>Published announcements for faculty and your assigned batches.</p></div></div>
+        <div class="module-metrics" id="notice-metrics"></div>
+        <section class="panel notice-module"><div class="notice-list" id="notice-list"></div></section>
+      </section>
+
+      <section class="app-view" id="profile" aria-labelledby="profile-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">ACCOUNT</p><h1 id="profile-heading">Profile</h1><p>Your faculty identity, portal login and teaching summary.</p></div></div>
         <article class="profile-card" id="profile-card"></article>
-        <div class="more-grid">
-          <section class="panel"><div class="section-head"><div><h2>My batches</h2></div></div><div class="batch-list" id="batch-list"></div></section>
-          <section class="panel"><div class="section-head"><div><h2>Notices</h2></div></div><div class="notice-list" id="notice-list"></div></section>
+        <section class="panel profile-panel"><div class="section-head"><div><h2>Faculty details</h2></div><span class="record-note">Managed by Lakshya</span></div><dl class="detail-grid" id="profile-details"></dl></section>
+      </section>
+
+      <section class="app-view" id="more" aria-labelledby="more-heading">
+        <div class="view-heading"><div><p class="eyebrow">FACULTY SERVICES</p><h1 id="more-heading">More</h1><p>Batches, notices, profile and account access.</p></div></div>
+        <div class="service-grid">
+          <button class="service-card" type="button" data-go="batches"><span class="service-icon" data-icon="users"></span><span><strong>Batches</strong><small id="more-batch-copy">Teaching assignments</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
+          <button class="service-card" type="button" data-go="notices"><span class="service-icon" data-icon="notice"></span><span><strong>Notices</strong><small id="more-notice-copy">Institute announcements</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
+          <button class="service-card" type="button" data-go="profile"><span class="service-icon" data-icon="user"></span><span><strong>Profile</strong><small id="more-profile-copy">Faculty and login details</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
         </div>
         <button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
       </section>
@@ -189,6 +215,7 @@
         <span id="attendance-progress">0 students</span>
         <button type="button" id="mark-all-present">Mark all present</button>
       </div>
+      <p class="attendance-window-note" id="attendance-window-note">Review every student before submitting.</p>
       <form id="attendance-form">
         <div class="roster-list" id="roster-list"></div>
         <div class="modal-error hidden" id="attendance-error" role="alert"></div>
@@ -198,6 +225,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=1" defer></script>
+  <script src="./app.js?v=2" defer></script>
 </body>
 </html>

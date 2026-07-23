@@ -44,3 +44,41 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
     audit(db, actor, "academics.assignment.create", "assignment", row.id, after={"batch_id": batch.id, "subject_id": subject.id, "recipients": len(eligible), "status": payload.status})
     db.commit()
     return _serialize(row, batch, subject, len(eligible))
+
+
+@router.post("/assignments/{assignment_id}/publish")
+def publish_assignment(
+    assignment_id: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*ROLES)),
+):
+    row = db.get(Assignment, assignment_id)
+    if not row:
+        raise HTTPException(404, "Assignment not found")
+    if actor.role == "faculty" and row.created_by != actor.id:
+        raise HTTPException(403, "Faculty can publish only their own assignments")
+    batch, subject = db.get(Batch, row.batch_id), db.get(Subject, row.subject_id)
+    if not batch or not subject:
+        raise HTTPException(409, "Assignment batch or subject is no longer available")
+    if row.status != "published":
+        before = {"status": row.status}
+        row.status = "published"
+        (
+            db.query(AssignmentRecipient)
+            .filter_by(assignment_id=row.id, status="draft")
+            .update({"status": "published"}, synchronize_session=False)
+        )
+        audit(
+            db,
+            actor,
+            "academics.assignment.publish",
+            "assignment",
+            row.id,
+            before=before,
+            after={"status": "published"},
+        )
+        db.commit()
+    recipients = db.query(func.count(AssignmentRecipient.student_id)).filter_by(
+        assignment_id=row.id,
+    ).scalar() or 0
+    return _serialize(row, batch, subject, recipients)

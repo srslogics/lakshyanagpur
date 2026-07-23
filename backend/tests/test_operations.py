@@ -51,7 +51,17 @@ def test_assignment_targets_only_active_students_in_selected_batch(client, datab
 
 def test_submitted_attendance_is_locked_and_corrections_are_audited(client, database, owner_headers, parent_headers):
     faculty, batch, subject, room, _, student, _ = operational_setup(database)
-    scheduled = client.post("/api/timetable/sessions", json=session_payload(faculty, batch, subject, room), headers=owner_headers)
+    scheduled = client.post(
+        "/api/timetable/sessions",
+        json=session_payload(
+            faculty,
+            batch,
+            subject,
+            room,
+            datetime.now(timezone.utc) - timedelta(minutes=30),
+        ),
+        headers=owner_headers,
+    )
     session_id = scheduled.json()["id"]
     marks = {"entries": [{"studentId": student.id, "status": "present", "reason": ""}]}
     submitted = client.post(f"/api/attendance/sessions/{session_id}/submit", json=marks, headers=owner_headers)
@@ -66,6 +76,36 @@ def test_submitted_attendance_is_locked_and_corrections_are_audited(client, data
     log = database.query(AuditLog).filter_by(action="attendance.correction").one()
     assert log.before["status"] == "present"
     assert log.after["status"] == "late"
+
+
+def test_future_class_allows_draft_but_blocks_attendance_submission(client, database, owner_headers):
+    faculty, batch, subject, room, _, student, _ = operational_setup(database)
+    scheduled = client.post(
+        "/api/timetable/sessions",
+        json=session_payload(
+            faculty,
+            batch,
+            subject,
+            room,
+            datetime.now(timezone.utc) + timedelta(days=1),
+        ),
+        headers=owner_headers,
+    )
+    session_id = scheduled.json()["id"]
+    marks = {"entries": [{"studentId": student.id, "status": "present", "reason": ""}]}
+    draft = client.put(
+        f"/api/attendance/sessions/{session_id}",
+        json=marks,
+        headers=owner_headers,
+    )
+    assert draft.status_code == 200
+    blocked = client.post(
+        f"/api/attendance/sessions/{session_id}/submit",
+        json=marks,
+        headers=owner_headers,
+    )
+    assert blocked.status_code == 409
+    assert "after the class begins" in blocked.json()["detail"]
 
 
 def test_settings_are_owner_only(client, database, owner_headers, parent_headers):

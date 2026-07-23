@@ -1,7 +1,7 @@
 {
   "name": "Lakshya Faculty",
   "short_name": "Lakshya Faculty",
-  "description": "Classes, attendance, assignments and institute notices for Lakshya faculty.",
+  "description": "Schedule, attendance, assignments, batches, notices and account access for Lakshya faculty.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

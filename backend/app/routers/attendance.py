@@ -13,6 +13,10 @@ router = APIRouter(prefix="/api/attendance", tags=["attendance"])
 ROLES = ("owner", "academic_coordinator", "faculty")
 
 
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
 def _session_query(db: Session):
     return db.query(ClassSession, Batch, Subject, User, Room, AttendanceRegister).join(Batch, Batch.id == ClassSession.batch_id).join(Subject, Subject.id == ClassSession.subject_id).join(User, User.id == ClassSession.faculty_id).join(Room, Room.id == ClassSession.room_id).outerjoin(AttendanceRegister, AttendanceRegister.class_session_id == ClassSession.id)
 
@@ -87,6 +91,12 @@ def save_attendance(session_id: str, payload: AttendanceSave, db: Session = Depe
 
 @router.post("/sessions/{session_id}/submit")
 def submit_attendance(session_id: str, payload: AttendanceSave, db: Session = Depends(get_db), actor: User = Depends(require_roles(*ROLES))):
+    row = _get_session(db, session_id, actor)
+    session = row[0]
+    if session.status != "scheduled":
+        raise HTTPException(409, "Attendance can be submitted only for a scheduled class")
+    if _aware(session.starts_at) > datetime.now(timezone.utc):
+        raise HTTPException(409, "Attendance can be submitted only after the class begins")
     register = _save(session_id, payload, db, actor)
     register.status = "submitted"; register.submitted_at = datetime.now(timezone.utc); register.submitted_by = actor.id
     audit(db, actor, "attendance.submit", "attendance_register", register.id, after={"session_id": session_id, "status": "submitted"})

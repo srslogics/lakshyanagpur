@@ -17,7 +17,11 @@ const icons = {
   close:'<path d="m6 6 12 12M18 6 6 18"/>',
   users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
-  link:'<path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/>'
+  link:'<path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  "arrow-left":'<path d="m15 18-6-6 6-6M9 12h10"/>',
+  "chevron-right":'<path d="m9 18 6-6-6-6"/>',
+  external:'<path d="M14 4h6v6m0-6-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/>'
 };
 
 const state = {
@@ -25,13 +29,17 @@ const state = {
   data: null,
   view: "dashboard",
   attendanceFilter: "action",
-  assignmentFilter: "all",
-  scheduleDate: null,
+  assignmentFilter: "active",
+  scheduleDate: "all",
   activeSession: null,
   roster: [],
+  rosterLocked: false,
+  rosterUpcoming: false,
+  publishingAssignment: null,
   lastFocus: null
 };
-const PORTAL_VIEWS = new Set(["dashboard", "attendance", "assignments", "schedule", "more"]);
+const PORTAL_VIEWS = new Set(["dashboard", "attendance", "assignments", "schedule", "batches", "notices", "profile", "more"]);
+const OVERFLOW_VIEWS = new Set(["batches", "notices", "profile", "more"]);
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -67,6 +75,15 @@ const localInputValue = (date = new Date(Date.now() + 7 * 86400000)) => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 16);
 };
+const safeExternalUrl = value => {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+};
+const titleCase = value => String(value || "").replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
 
 function injectIcons(root = document) {
   $$("[data-icon]", root).forEach(node => {
@@ -209,14 +226,20 @@ function showView(view, updateHash = true) {
   if (!PORTAL_VIEWS.has(view)) return;
   state.view = view;
   $$(".app-view").forEach(node => node.classList.toggle("active", node.id === view));
-  $$("[data-view]").forEach(node => {
+  $$(".sidebar [data-view]").forEach(node => {
     const active = node.dataset.view === view;
     node.classList.toggle("active", active);
     active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current");
   });
-  const titles = {dashboard:"Today", attendance:"Attendance", assignments:"Assignments", schedule:"Schedule", more:"More"};
+  const mobileView = OVERFLOW_VIEWS.has(view) ? "more" : view;
+  $$(".bottom-nav [data-view]").forEach(node => {
+    const active = node.dataset.view === mobileView;
+    node.classList.toggle("active", active);
+    active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current");
+  });
+  const titles = {dashboard:"Today", attendance:"Attendance", assignments:"Assignments", schedule:"Schedule", batches:"Batches", notices:"Notices", profile:"Profile", more:"More"};
   $("#header-title").textContent = titles[view];
-  if (updateHash) history.replaceState(null, "", `#${view}`);
+  if (updateHash && location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
   $("#faculty-main").focus({preventScroll:true});
   window.scrollTo({top:0, behavior:reducedMotion() ? "auto" : "smooth"});
 }
@@ -246,6 +269,9 @@ function renderAll() {
   renderAttendance();
   renderAssignments();
   renderSchedule();
+  renderBatches();
+  renderNotices();
+  renderProfile();
   renderMore();
   injectIcons();
 }
@@ -256,7 +282,7 @@ function metric(label, value, attention = false) {
 
 function pendingAttendanceSessions() {
   const now = Date.now();
-  return state.data.sessions.filter(item => new Date(item.startsAt).getTime() <= now && item.registerStatus !== "submitted");
+  return state.data.sessions.filter(item => item.status === "scheduled" && new Date(item.startsAt).getTime() <= now && item.registerStatus !== "submitted");
 }
 
 function renderDashboard() {
@@ -268,7 +294,7 @@ function renderDashboard() {
     metric("Active batches", String(summary.activeBatches))
   ].join("");
 
-  const next = sessions.find(item => new Date(item.endsAt).getTime() >= Date.now());
+  const next = sessions.find(item => item.status === "scheduled" && new Date(item.endsAt).getTime() >= Date.now());
   $("#next-class").innerHTML = next ? classCard(next) : empty("calendar", "No upcoming class", "Your next scheduled class will appear here.");
   $("#dashboard-attendance").innerHTML = pendingAttendanceSessions().slice(0, 3).map(item => compactSession(item)).join("")
     || empty("check", "Attendance is up to date");
@@ -283,7 +309,7 @@ function renderDashboard() {
 }
 
 function classCard(item) {
-  const canMark = item.registerStatus !== "submitted" && item.studentCount > 0;
+  const canMark = item.registerStatus !== "submitted" && item.studentCount > 0 && new Date(item.startsAt).getTime() <= Date.now();
   return `
     <article class="class-card">
       <div class="class-time"><strong>${timeText(item.startsAt)}</strong><span>${dateLong(item.startsAt)}</span></div>
@@ -334,7 +360,16 @@ function sessionCard(item) {
 function renderAttendance() {
   const now = Date.now();
   const filter = state.attendanceFilter;
-  const rows = state.data.sessions.filter(item => {
+  const sessions = state.data.sessions.filter(item => item.status === "scheduled");
+  const actionCount = sessions.filter(item => new Date(item.startsAt).getTime() <= now && item.registerStatus !== "submitted").length;
+  const upcomingCount = sessions.filter(item => new Date(item.startsAt).getTime() > now).length;
+  const submittedCount = sessions.filter(item => item.registerStatus === "submitted").length;
+  $("#attendance-metrics").innerHTML = [
+    metric("Needs action", String(actionCount), actionCount > 0),
+    metric("Upcoming", String(upcomingCount)),
+    metric("Submitted", String(submittedCount))
+  ].join("");
+  const rows = sessions.filter(item => {
     if (filter === "action") return new Date(item.startsAt).getTime() <= now && item.registerStatus !== "submitted";
     if (filter === "upcoming") return new Date(item.startsAt).getTime() > now;
     if (filter === "submitted") return item.registerStatus === "submitted";
@@ -348,36 +383,78 @@ function renderAttendance() {
     : empty("check", filter === "action" ? "Nothing needs attention" : "No classes in this view");
 }
 
+function assignmentState(item) {
+  if (item.status === "draft") return "draft";
+  return new Date(item.dueAt).getTime() < Date.now() ? "overdue" : "active";
+}
+
 function renderAssignments() {
-  const rows = state.data.assignments.filter(item => state.assignmentFilter === "all" || item.status === state.assignmentFilter);
-  $("#assignment-list").innerHTML = rows.length ? rows.map(item => `
+  const all = state.data.assignments;
+  const active = all.filter(item => assignmentState(item) === "active").length;
+  const drafts = all.filter(item => assignmentState(item) === "draft").length;
+  const overdue = all.filter(item => assignmentState(item) === "overdue").length;
+  $("#assignment-metrics").innerHTML = [
+    metric("Active", String(active)),
+    metric("Drafts", String(drafts), drafts > 0),
+    metric("Past due", String(overdue))
+  ].join("");
+  const rows = all.filter(item => state.assignmentFilter === "all" || assignmentState(item) === state.assignmentFilter);
+  $("#assignment-list").innerHTML = rows.length ? rows.map(item => {
+    const itemState = assignmentState(item);
+    const resourceUrl = safeExternalUrl(item.externalUrl);
+    const publishing = state.publishingAssignment === item.id;
+    return `
     <article class="assignment-card">
       <header>
         <span class="subject-mark">${esc(item.subject.slice(0, 3).toUpperCase())}</span>
-        <span class="status-pill ${esc(item.status)}">${esc(item.status)}</span>
+        <span class="status-pill ${esc(itemState)}">${esc(titleCase(itemState))}</span>
       </header>
       <h3>${esc(item.title)}</h3>
       <p>${esc(item.instructions || "No additional instructions.")}</p>
       <footer>
         <span><strong>${esc(item.batch)} · ${esc(item.subject)}</strong>Due ${dateLong(item.dueAt)} · ${item.recipientCount} students</span>
-        <a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Material</a>
+        <div class="assignment-actions">
+          ${resourceUrl ? `<a href="${esc(resourceUrl)}" target="_blank" rel="noopener">Material ${icon("external")}</a>` : ""}
+          ${item.status === "draft" ? `<button type="button" data-publish-assignment="${esc(item.id)}" ${publishing ? "disabled" : ""}>${publishing ? "Publishing…" : "Publish"}</button>` : ""}
+        </div>
       </footer>
     </article>
-  `).join("") : empty("book", state.assignmentFilter === "all" ? "No assignments yet" : `No ${state.assignmentFilter} assignments`);
+  `;
+  }).join("") : empty("book", state.assignmentFilter === "all" ? "No assignments yet" : `No ${state.assignmentFilter === "overdue" ? "past due" : state.assignmentFilter} assignments`);
+}
+
+async function publishAssignment(assignmentId) {
+  if (state.publishingAssignment) return;
+  state.publishingAssignment = assignmentId;
+  renderAssignments();
+  try {
+    await api(`/api/academics/assignments/${encodeURIComponent(assignmentId)}/publish`, {method:"POST"});
+    await refreshPortal("Assignment published.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    state.publishingAssignment = null;
+    renderAssignments();
+    injectIcons($("#assignments"));
+  }
 }
 
 function renderSchedule() {
-  const rows = state.data.sessions;
+  const rows = state.data.sessions.filter(item => item.status === "scheduled");
   const dates = [...new Set(rows.map(item => dateKey(item.startsAt)))];
-  if (!state.scheduleDate || !dates.includes(state.scheduleDate)) {
-    state.scheduleDate = dates.find(key => key >= todayKey()) || dates[0] || null;
-  }
-  $("#schedule-dates").innerHTML = dates.map(key => `
+  const upcoming = rows.filter(item => new Date(item.startsAt).getTime() >= Date.now());
+  $("#schedule-metrics").innerHTML = [
+    metric("Upcoming classes", String(upcoming.length)),
+    metric("Scheduled days", String(new Set(upcoming.map(item => dateKey(item.startsAt))).size)),
+    metric("Assigned batches", String(new Set(rows.map(item => item.batchId)).size))
+  ].join("");
+  if (state.scheduleDate !== "all" && !dates.includes(state.scheduleDate)) state.scheduleDate = "all";
+  $("#schedule-dates").innerHTML = [`<button type="button" class="${state.scheduleDate === "all" ? "active" : ""}" data-schedule-date="all" aria-pressed="${state.scheduleDate === "all"}">All classes</button>`].concat(dates.map(key => `
     <button type="button" class="${key === state.scheduleDate ? "active" : ""}" data-schedule-date="${key}" aria-pressed="${key === state.scheduleDate}">
       ${dateLong(`${key}T06:30:00.000Z`)}
     </button>
-  `).join("");
-  const visible = rows.filter(item => !state.scheduleDate || dateKey(item.startsAt) === state.scheduleDate);
+  `)).join("");
+  const visible = state.scheduleDate === "all" ? rows : rows.filter(item => dateKey(item.startsAt) === state.scheduleDate);
   $("#schedule-list").innerHTML = visible.length ? visible.map(item => `
     <article class="timeline-card">
       <div class="timeline-time">${timeText(item.startsAt)}<br>${timeText(item.endsAt)}</div>
@@ -386,7 +463,7 @@ function renderSchedule() {
         <p>${esc(item.batch)} · ${esc(item.program)}</p>
         <footer><span class="tag">${esc(item.room)}</span><span class="tag">${item.studentCount} students</span></footer>
       </div>
-      <span class="timeline-state">${esc(item.registerStatus.replaceAll("_", " "))}</span>
+      <span class="timeline-state state-${esc(item.registerStatus)}">${esc(titleCase(item.registerStatus))}</span>
     </article>
   `).join("") : empty("calendar", rows.length ? "No classes on this day" : "Schedule not published");
 }
@@ -401,19 +478,63 @@ function noticeCard(item) {
   `;
 }
 
-function renderMore() {
-  const {profile, teachingPairs, notices} = state.data;
+function renderBatches() {
+  const pairs = state.data.teachingPairs;
+  const studentsByBatch = new Map();
+  pairs.forEach(item => studentsByBatch.set(item.batchId, Number(item.studentCount || 0)));
+  const totalStudents = [...studentsByBatch.values()].reduce((sum, count) => sum + count, 0);
+  $("#batch-metrics").innerHTML = [
+    metric("Teaching assignments", String(pairs.length)),
+    metric("Unique batches", String(new Set(pairs.map(item => item.batchId)).size)),
+    metric("Assigned students", String(totalStudents))
+  ].join("");
+  $("#batch-list").innerHTML = pairs.length ? pairs.map(item => {
+    const matchingSessions = state.data.sessions.filter(session => session.status === "scheduled" && session.batchId === item.batchId && session.subjectId === item.subjectId);
+    const next = matchingSessions.find(session => new Date(session.startsAt).getTime() >= Date.now());
+    return `
+      <article class="faculty-batch-card">
+        <header><span class="subject-mark">${esc(item.subjectCode)}</span><span>${item.studentCount} students</span></header>
+        <h2>${esc(item.batch)}</h2>
+        <p>${esc(item.subject)} · ${esc(item.program)}</p>
+        <dl><div><dt>Classes</dt><dd>${matchingSessions.length}</dd></div><div><dt>Next class</dt><dd>${next ? `${dateLong(next.startsAt)} · ${timeText(next.startsAt)}` : "Not scheduled"}</dd></div></dl>
+        <button type="button" data-go="schedule">View timetable</button>
+      </article>`;
+  }).join("") : empty("users", "No assigned batches", "Teaching assignments appear after classes are added to the timetable.");
+}
+
+function renderNotices() {
+  const notices = state.data.notices;
+  const batchNotices = notices.filter(item => item.batch).length;
+  $("#notice-metrics").innerHTML = [
+    metric("Published", String(notices.length)),
+    metric("Batch notices", String(batchNotices)),
+    metric("Latest", notices[0] ? dateText(notices[0].publishedAt) : "None")
+  ].join("");
+  $("#notice-list").innerHTML = notices.length ? notices.map(noticeCard).join("") : empty("notice", "No notices published", "Faculty and batch announcements will appear here.");
+}
+
+function renderProfile() {
+  const {profile, teachingPairs, summary} = state.data;
   $("#profile-card").innerHTML = `
     <span class="profile-avatar">${initials(profile.fullName)}</span>
     <span><strong>${esc(profile.fullName)}</strong><span>${esc(profile.email)}</span><span>Faculty account</span></span>
   `;
-  $("#batch-list").innerHTML = teachingPairs.length ? teachingPairs.map(item => `
-    <article class="batch-card">
-      <span><strong>${esc(item.batch)}</strong><small>${esc(item.subject)} · ${esc(item.program)}</small></span>
-      <em>${item.studentCount} students</em>
-    </article>
-  `).join("") : empty("users", "No assigned batches");
-  $("#notice-list").innerHTML = notices.length ? notices.map(noticeCard).join("") : empty("notice", "No notices published");
+  const details = [
+    ["Full name", profile.fullName],
+    ["Portal login", profile.email],
+    ["Role", "Faculty"],
+    ["Teaching assignments", teachingPairs.length],
+    ["Active batches", summary.activeBatches],
+    ["Assigned subjects", new Set(teachingPairs.map(item => item.subjectId)).size]
+  ];
+  $("#profile-details").innerHTML = details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("");
+}
+
+function renderMore() {
+  const {profile, teachingPairs, notices} = state.data;
+  $("#more-batch-copy").textContent = teachingPairs.length ? `${teachingPairs.length} teaching ${teachingPairs.length === 1 ? "assignment" : "assignments"}` : "No teaching assignments";
+  $("#more-notice-copy").textContent = notices.length ? `${notices.length} published ${notices.length === 1 ? "notice" : "notices"}` : "No published notices";
+  $("#more-profile-copy").textContent = profile.email;
 }
 
 function openModal(id, trigger) {
@@ -492,18 +613,24 @@ async function openAttendance(sessionId, trigger) {
   try {
     const result = await api(`/api/attendance/sessions/${encodeURIComponent(sessionId)}`);
     state.roster = result.entries.map(item => ({...item}));
-    renderRoster(result.session.registerStatus === "submitted");
+    state.rosterLocked = result.session.registerStatus === "submitted";
+    state.rosterUpcoming = new Date(result.session.startsAt).getTime() > Date.now();
+    renderRoster();
   } catch (error) {
     $("#roster-list").innerHTML = empty("users", "Unable to load roster", error.message);
   }
 }
 
-function renderRoster(locked = false) {
+function renderRoster() {
+  const locked = state.rosterLocked;
   const statuses = ["present", "late", "absent", "excused"];
   $("#attendance-progress").textContent = `${state.roster.length} ${state.roster.length === 1 ? "student" : "students"}`;
   $("#mark-all-present").disabled = locked;
   $("#save-attendance").classList.toggle("hidden", locked);
   $("#submit-attendance").classList.toggle("hidden", locked);
+  $("#submit-attendance").disabled = state.rosterUpcoming;
+  $("#attendance-window-note").textContent = locked ? "This register is submitted and read-only." : state.rosterUpcoming ? "You can prepare a draft now. Submission opens when the class begins." : "Review every student before submitting.";
+  $("#attendance-window-note").classList.toggle("warning", state.rosterUpcoming);
   $("#roster-list").innerHTML = state.roster.length ? state.roster.map(item => `
     <div class="roster-row" data-student-id="${esc(item.studentId)}">
       <span class="roster-student"><strong>${esc(item.fullName)}</strong><small>${esc(item.admissionNumber)}</small></span>
@@ -560,7 +687,8 @@ function bindEvents() {
   $("#login-form").addEventListener("submit", login);
   $("#password-toggle").addEventListener("click", togglePassword);
   $("#signout-button").addEventListener("click", logout);
-  $("#profile-button").addEventListener("click", () => showView("more"));
+  $("#sidebar-signout").addEventListener("click", logout);
+  $("#profile-button").addEventListener("click", () => showView("profile"));
   $("#assignment-form").addEventListener("submit", createAssignment);
   $("#attendance-form").addEventListener("submit", event => {
     event.preventDefault();
@@ -569,7 +697,7 @@ function bindEvents() {
   $("#save-attendance").addEventListener("click", () => saveAttendance(false));
   $("#mark-all-present").addEventListener("click", () => {
     state.roster.forEach(item => { item.status = "present"; item.reason = ""; });
-    renderRoster(false);
+    renderRoster();
   });
   document.addEventListener("click", event => {
     const view = event.target.closest("[data-view]")?.dataset.view || event.target.closest("[data-go]")?.dataset.go;
@@ -580,6 +708,9 @@ function bindEvents() {
 
     const assignmentTrigger = event.target.closest("[data-open-assignment]");
     if (assignmentTrigger) openAssignmentModal(assignmentTrigger);
+
+    const publishTrigger = event.target.closest("[data-publish-assignment]");
+    if (publishTrigger) publishAssignment(publishTrigger.dataset.publishAssignment);
 
     const closeTrigger = event.target.closest("[data-close-modal]");
     if (closeTrigger) closeModal(closeTrigger.dataset.closeModal);
@@ -617,7 +748,7 @@ function bindEvents() {
       const row = statusButton.closest("[data-student-id]");
       const student = state.roster.find(item => item.studentId === row.dataset.studentId);
       if (student) student.status = statusButton.dataset.status;
-      renderRoster(false);
+      renderRoster();
     }
 
     const backdrop = event.target.classList.contains("modal-backdrop") ? event.target : null;
@@ -628,7 +759,7 @@ function bindEvents() {
     const open = $$(".modal-backdrop:not(.hidden)").at(-1);
     if (open) closeModal(open.id);
   });
-  window.addEventListener("hashchange", () => {
+  window.addEventListener("popstate", () => {
     const view = location.hash.slice(1);
     if (state.data && PORTAL_VIEWS.has(view)) showView(view, false);
   });

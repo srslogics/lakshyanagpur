@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from app.models import (
     Assignment,
     AssignmentRecipient,
+    AuditLog,
     AttendanceRegister,
     Batch,
     ClassSession,
@@ -132,3 +133,85 @@ def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_hea
     assert [row["title"] for row in body["notices"]] == ["Faculty meeting"]
     assert body["teachingPairs"][0]["subjectCode"] == "PHY"
     assert client.get("/api/faculty/bootstrap", headers=parent_headers).status_code == 403
+
+
+def test_faculty_can_publish_only_their_own_draft_assignment(client, database):
+    owner = database.query(User).filter_by(role="owner").one()
+    faculty = User(
+        email="draft.owner@example.com",
+        full_name="Prof Anaya Deshmukh",
+        role="faculty",
+        password_hash=hash_password("FacultyPass123!"),
+    )
+    other_faculty = User(
+        email="draft.other@example.com",
+        full_name="Prof Rohan Kulkarni",
+        role="faculty",
+        password_hash=hash_password("FacultyPass123!"),
+    )
+    batch = Batch(name="JEE 2028 A", program="JEE")
+    subject = Subject(name="Mathematics", code="MAT", program="JEE")
+    room = Room(name="Room 301", capacity=45)
+    student = Student(
+        admission_number="LI-2026-11001",
+        full_name="Ira Joshi",
+        mobile="9000000011",
+        status="active",
+    )
+    database.add_all([faculty, other_faculty, batch, subject, room, student])
+    database.flush()
+    database.add_all([
+        Enrollment(
+            student_id=student.id,
+            program=batch.program,
+            batch=batch.name,
+            status="active",
+        ),
+        ClassSession(
+            batch_id=batch.id,
+            subject_id=subject.id,
+            faculty_id=faculty.id,
+            room_id=room.id,
+            starts_at=datetime.now(timezone.utc) + timedelta(days=1),
+            ends_at=datetime.now(timezone.utc) + timedelta(days=1, hours=1),
+            created_by=owner.id,
+        ),
+    ])
+    database.commit()
+    faculty_headers = {"Authorization": f"Bearer {create_token(faculty)}"}
+    other_headers = {"Authorization": f"Bearer {create_token(other_faculty)}"}
+    created = client.post(
+        "/api/academics/assignments",
+        headers=faculty_headers,
+        json={
+            "batchId": batch.id,
+            "subjectId": subject.id,
+            "title": "Quadratic equations draft",
+            "instructions": "Complete questions 1–12.",
+            "dueAt": (datetime.now(timezone.utc) + timedelta(days=5)).isoformat(),
+            "externalUrl": "https://example.com/quadratics.pdf",
+            "status": "draft",
+        },
+    )
+    assert created.status_code == 201
+    assignment_id = created.json()["id"]
+    denied = client.post(
+        f"/api/academics/assignments/{assignment_id}/publish",
+        headers=other_headers,
+    )
+    assert denied.status_code == 403
+    published = client.post(
+        f"/api/academics/assignments/{assignment_id}/publish",
+        headers=faculty_headers,
+    )
+    assert published.status_code == 200
+    assert published.json()["status"] == "published"
+    assert database.get(Assignment, assignment_id).status == "published"
+    assert database.query(AssignmentRecipient).filter_by(
+        assignment_id=assignment_id,
+        status="published",
+    ).count() == 1
+    assert database.query(AuditLog).filter_by(
+        action="academics.assignment.publish",
+        entity_id=assignment_id,
+    ).count() == 1
