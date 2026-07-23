@@ -89,11 +89,6 @@ def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_hea
     )
     database.add(assignment)
     database.flush()
-    database.add(AssignmentRecipient(
-        assignment_id=assignment.id,
-        student_id=student.id,
-        status="published",
-    ))
     database.add_all([
         Notice(
             title="Faculty meeting",
@@ -130,6 +125,7 @@ def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_hea
         "activeBatches": 1,
     }
     assert [row["title"] for row in body["assignments"]] == ["Kinematics worksheet"]
+    assert body["assignments"][0]["recipientCount"] == 1
     assert [row["title"] for row in body["notices"]] == ["Faculty meeting"]
     assert body["teachingPairs"][0]["subjectCode"] == "PHY"
     assert client.get("/api/faculty/bootstrap", headers=parent_headers).status_code == 403
@@ -195,6 +191,10 @@ def test_faculty_can_publish_only_their_own_draft_assignment(client, database):
     )
     assert created.status_code == 201
     assignment_id = created.json()["id"]
+    assert created.json()["recipientCount"] == 1
+    assert database.query(AssignmentRecipient).filter_by(
+        assignment_id=assignment_id,
+    ).count() == 0
     denied = client.post(
         f"/api/academics/assignments/{assignment_id}/publish",
         headers=other_headers,
@@ -206,11 +206,11 @@ def test_faculty_can_publish_only_their_own_draft_assignment(client, database):
     )
     assert published.status_code == 200
     assert published.json()["status"] == "published"
+    assert published.json()["recipientCount"] == 1
     assert database.get(Assignment, assignment_id).status == "published"
     assert database.query(AssignmentRecipient).filter_by(
         assignment_id=assignment_id,
-        status="published",
-    ).count() == 1
+    ).count() == 0
     assert database.query(AuditLog).filter_by(
         action="academics.assignment.publish",
         entity_id=assignment_id,

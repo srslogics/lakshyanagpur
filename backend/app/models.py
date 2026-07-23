@@ -280,10 +280,12 @@ class Assignment(TimestampMixin, Base):
 
 
 class AssignmentRecipient(Base):
+    """Sparse student progress; no row means the batch assignment is still open."""
+
     __tablename__ = "assignment_recipients"
     assignment_id: Mapped[str] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), primary_key=True)
     student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
-    status: Mapped[str] = mapped_column(String(24), default="published", index=True)
+    status: Mapped[str] = mapped_column(String(24), default="completed", index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
 
 

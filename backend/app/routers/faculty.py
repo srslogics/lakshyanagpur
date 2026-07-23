@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import (
     Assignment,
-    AssignmentRecipient,
     AttendanceEntry,
     AttendanceRegister,
     Batch,
@@ -46,12 +45,20 @@ def bootstrap(
     )
 
     batch_names = {batch.name for _, batch, _, _, _ in session_rows}
-    student_counts = dict(
-        db.query(Enrollment.batch, func.count(func.distinct(Enrollment.student_id)))
+    student_count_rows = (
+        db.query(
+            Enrollment.batch,
+            Enrollment.program,
+            func.count(func.distinct(Enrollment.student_id)),
+        )
         .filter(Enrollment.is_active.is_(True), Enrollment.batch.in_(batch_names))
-        .group_by(Enrollment.batch)
+        .group_by(Enrollment.batch, Enrollment.program)
         .all()
-    ) if batch_names else {}
+    ) if batch_names else []
+    student_counts = {
+        (batch_name, program): count
+        for batch_name, program, count in student_count_rows
+    }
 
     sessions = []
     teaching_pairs = {}
@@ -79,7 +86,7 @@ def bootstrap(
             "status": session.status,
             "notes": session.notes,
             "registerStatus": register.status if register else "not_started",
-            "studentCount": student_counts.get(batch.name, 0),
+            "studentCount": student_counts.get((batch.name, batch.program), 0),
             "markedCount": marked_count,
         })
         teaching_pairs[(batch.id, subject.id)] = {
@@ -89,22 +96,13 @@ def bootstrap(
             "subjectId": subject.id,
             "subject": subject.name,
             "subjectCode": subject.code,
-            "studentCount": student_counts.get(batch.name, 0),
+            "studentCount": student_counts.get((batch.name, batch.program), 0),
         }
 
-    recipient_counts = (
-        db.query(
-            AssignmentRecipient.assignment_id,
-            func.count(AssignmentRecipient.student_id).label("recipients"),
-        )
-        .group_by(AssignmentRecipient.assignment_id)
-        .subquery()
-    )
     assignment_rows = (
-        db.query(Assignment, Batch, Subject, func.coalesce(recipient_counts.c.recipients, 0))
+        db.query(Assignment, Batch, Subject)
         .join(Batch, Batch.id == Assignment.batch_id)
         .join(Subject, Subject.id == Assignment.subject_id)
-        .outerjoin(recipient_counts, recipient_counts.c.assignment_id == Assignment.id)
         .filter(Assignment.created_by == faculty_user.id)
         .order_by(Assignment.due_at.desc())
         .all()
@@ -120,9 +118,9 @@ def bootstrap(
         "dueAt": assignment.due_at,
         "externalUrl": assignment.external_url,
         "status": assignment.status,
-        "recipientCount": recipients,
+        "recipientCount": student_counts.get((batch.name, batch.program), 0),
         "createdAt": assignment.created_at,
-    } for assignment, batch, subject, recipients in assignment_rows]
+    } for assignment, batch, subject in assignment_rows]
 
     assigned_batch_ids = {pair["batchId"] for pair in teaching_pairs.values()}
     notice_filter = Notice.audience.in_(("all", "faculty"))

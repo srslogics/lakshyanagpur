@@ -39,14 +39,13 @@ def test_timetable_rejects_conflicts_and_audits_override(client, database, owner
     assert database.query(AuditLog).filter_by(action="timetable.session.create").count() == 2
 
 
-def test_assignment_targets_only_active_students_in_selected_batch(client, database, owner_headers):
-    _, batch, subject, _, _, student, other_student = operational_setup(database)
+def test_assignment_uses_active_batch_without_recipient_fanout(client, database, owner_headers):
+    _, batch, subject, *_ = operational_setup(database)
     response = client.post("/api/academics/assignments", json={"batchId": batch.id, "subjectId": subject.id, "title": "Kinematics practice", "instructions": "Complete all questions", "dueAt": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(), "externalUrl": "https://example.com/physics.pdf", "status": "published"}, headers=owner_headers)
     assert response.status_code == 201
     assert response.json()["recipientCount"] == 1
     recipients = database.query(AssignmentRecipient).filter_by(assignment_id=response.json()["id"]).all()
-    assert [item.student_id for item in recipients] == [student.id]
-    assert other_student.id not in [item.student_id for item in recipients]
+    assert recipients == []
 
 
 def test_submitted_attendance_is_locked_and_corrections_are_audited(client, database, owner_headers, parent_headers):
@@ -135,6 +134,59 @@ def test_student_portal_returns_only_the_linked_student(client, database, owner_
     assert client.get("/api/portal/bootstrap", headers=owner_headers).status_code == 403
 
 
+def test_student_added_to_batch_after_publication_sees_assignment_without_backfill(client, database, owner_headers):
+    _, batch, subject, *_ = operational_setup(database)
+    assignment = client.post(
+        "/api/academics/assignments",
+        json={
+            "batchId": batch.id,
+            "subjectId": subject.id,
+            "title": "Batch revision sheet",
+            "instructions": "Complete the revision sheet.",
+            "dueAt": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "externalUrl": "https://example.com/revision.pdf",
+            "status": "published",
+        },
+        headers=owner_headers,
+    )
+    assert assignment.status_code == 201
+    late_student = Student(
+        admission_number="LI-2026-00003",
+        full_name="Riya Mehta",
+        mobile="9000000003",
+        status="active",
+    )
+    late_user = User(
+        email="riya.student@example.com",
+        full_name=late_student.full_name,
+        role="student",
+        password_hash=hash_password("StudentPass123!"),
+    )
+    database.add_all([late_student, late_user])
+    database.flush()
+    database.add_all([
+        Enrollment(
+            student_id=late_student.id,
+            program=batch.program,
+            batch=batch.name,
+            status="active",
+        ),
+        StudentAccount(user_id=late_user.id, student_id=late_student.id),
+    ])
+    database.commit()
+    portal = client.get(
+        "/api/portal/bootstrap",
+        headers={"Authorization": f"Bearer {create_token(late_user)}"},
+    )
+    assert portal.status_code == 200
+    assert [item["title"] for item in portal.json()["assignments"]] == [
+        "Batch revision sheet"
+    ]
+    assert database.query(AssignmentRecipient).filter_by(
+        assignment_id=assignment.json()["id"],
+    ).count() == 0
+
+
 def test_student_can_update_only_their_assignment_status(client, database, owner_headers, parent_headers):
     faculty, batch, subject, _, _, student, other_student = operational_setup(database)
     student_user = database.query(User).filter_by(role="parent_student").one()
@@ -176,6 +228,24 @@ def test_student_can_update_only_their_assignment_status(client, database, owner
         action="portal.assignment.status",
         entity_id=f"{assignment_id}:{student.id}",
     ).count() == 1
+    reopened = client.patch(
+        f"/api/portal/assignments/{assignment_id}/status",
+        json={"status": "published"},
+        headers=parent_headers,
+    )
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "published"
+    assert database.query(AssignmentRecipient).filter_by(
+        assignment_id=assignment_id,
+        student_id=student.id,
+    ).count() == 0
+    portal = client.get("/api/portal/bootstrap", headers=parent_headers)
+    assert portal.json()["summary"]["openAssignments"] == 1
+    assert portal.json()["assignments"][0]["status"] == "published"
+    assert database.query(AuditLog).filter_by(
+        action="portal.assignment.status",
+        entity_id=f"{assignment_id}:{student.id}",
+    ).count() == 2
 
     other_user = User(
         email="other.student@example.com",

@@ -75,14 +75,27 @@ def schedule_rows(db: Session, enrollment: Enrollment | None):
     } for session, _, subject, faculty, room in rows]
 
 
-def assignment_rows(db: Session, student: Student):
+def assignment_rows(
+    db: Session,
+    student: Student,
+    enrollment: Enrollment | None,
+):
+    if not enrollment or not enrollment.batch:
+        return []
     rows = (
         db.query(Assignment, Batch, Subject, AssignmentRecipient)
-        .join(AssignmentRecipient, AssignmentRecipient.assignment_id == Assignment.id)
         .join(Batch, Batch.id == Assignment.batch_id)
         .join(Subject, Subject.id == Assignment.subject_id)
+        .outerjoin(
+            AssignmentRecipient,
+            and_(
+                AssignmentRecipient.assignment_id == Assignment.id,
+                AssignmentRecipient.student_id == student.id,
+            ),
+        )
         .filter(
-            AssignmentRecipient.student_id == student.id,
+            Batch.name == enrollment.batch,
+            Batch.program == enrollment.program,
             Assignment.status == "published",
         )
         .order_by(Assignment.due_at)
@@ -96,7 +109,7 @@ def assignment_rows(db: Session, student: Student):
         "batch": batch.name,
         "dueAt": assignment.due_at,
         "externalUrl": assignment.external_url,
-        "status": recipient.status,
+        "status": recipient.status if recipient else "published",
     } for assignment, batch, subject, recipient in rows]
 
 
@@ -219,7 +232,7 @@ def _portal_payload(
     notice_audience: str,
 ):
     schedule = schedule_rows(db, enrollment)
-    assignments = assignment_rows(db, student)
+    assignments = assignment_rows(db, student, enrollment)
     attendance = attendance_rows(db, student)
     notices = notice_rows(db, enrollment, notice_audience)
     fees = fee_summary(db, student)
@@ -273,30 +286,59 @@ def update_student_assignment_status(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles("student", "parent_student")),
 ):
-    _, student, _ = _student_for_account(db, StudentAccount, user)
+    _, student, enrollment = _student_for_account(db, StudentAccount, user)
+    if not enrollment or not enrollment.batch:
+        raise HTTPException(404, "Assignment not found for this student")
+    assignment = (
+        db.query(Assignment)
+        .join(Batch, Batch.id == Assignment.batch_id)
+        .filter(
+            Assignment.id == assignment_id,
+            Assignment.status == "published",
+            Batch.name == enrollment.batch,
+            Batch.program == enrollment.program,
+        )
+        .first()
+    )
+    if not assignment:
+        raise HTTPException(404, "Assignment not found for this student")
     recipient = db.query(AssignmentRecipient).filter_by(
         assignment_id=assignment_id,
         student_id=student.id,
     ).first()
-    assignment = db.get(Assignment, assignment_id)
-    if not recipient or not assignment or assignment.status != "published":
-        raise HTTPException(404, "Assignment not found for this student")
-    before = {"status": recipient.status}
-    recipient.status = payload.status
+    previous_status = recipient.status if recipient else "published"
+    if payload.status == previous_status:
+        return {
+            "assignmentId": assignment_id,
+            "studentId": student.id,
+            "status": payload.status,
+        }
+    if payload.status == "completed":
+        if recipient:
+            recipient.status = "completed"
+        else:
+            recipient = AssignmentRecipient(
+                assignment_id=assignment_id,
+                student_id=student.id,
+                status="completed",
+            )
+            db.add(recipient)
+    elif recipient:
+        db.delete(recipient)
     audit(
         db,
         user,
         "portal.assignment.status",
         "assignment_recipient",
         f"{assignment_id}:{student.id}",
-        before=before,
-        after={"status": recipient.status},
+        before={"status": previous_status},
+        after={"status": payload.status},
     )
     db.commit()
     return {
         "assignmentId": assignment_id,
         "studentId": student.id,
-        "status": recipient.status,
+        "status": payload.status,
     }
 
 

@@ -3,7 +3,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Assignment, AssignmentRecipient, Batch, ClassSession, Enrollment, Subject, User
+from ..models import Assignment, Batch, ClassSession, Enrollment, Subject, User
 from ..operations_schemas import AssignmentCreate
 from ..security import require_roles
 from ..services import audit
@@ -13,8 +13,26 @@ ROLES = ("owner", "academic_coordinator", "faculty")
 
 
 def _assignments(db: Session):
-    counts = db.query(AssignmentRecipient.assignment_id, func.count(AssignmentRecipient.student_id).label("recipients")).group_by(AssignmentRecipient.assignment_id).subquery()
-    return db.query(Assignment, Batch, Subject, func.coalesce(counts.c.recipients, 0)).join(Batch, Batch.id == Assignment.batch_id).join(Subject, Subject.id == Assignment.subject_id).outerjoin(counts, counts.c.assignment_id == Assignment.id)
+    counts = (
+        db.query(
+            Enrollment.batch.label("batch_name"),
+            Enrollment.program.label("program"),
+            func.count(func.distinct(Enrollment.student_id)).label("recipients"),
+        )
+        .filter(Enrollment.is_active.is_(True))
+        .group_by(Enrollment.batch, Enrollment.program)
+        .subquery()
+    )
+    return (
+        db.query(Assignment, Batch, Subject, func.coalesce(counts.c.recipients, 0))
+        .join(Batch, Batch.id == Assignment.batch_id)
+        .join(Subject, Subject.id == Assignment.subject_id)
+        .outerjoin(
+            counts,
+            (counts.c.batch_name == Batch.name)
+            & (counts.c.program == Batch.program),
+        )
+    )
 
 
 def _serialize(row, batch, subject, recipients):
@@ -35,15 +53,24 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
         raise HTTPException(404, "Batch or subject not found")
     if actor.role == "faculty" and not db.query(ClassSession).filter_by(batch_id=batch.id, subject_id=subject.id, faculty_id=actor.id).first():
         raise HTTPException(403, "Faculty can publish only to batches and subjects assigned in the timetable")
-    eligible = db.query(Enrollment.student_id).filter(Enrollment.is_active.is_(True), Enrollment.batch == batch.name).distinct().all()
-    if not eligible:
+    recipient_count = (
+        db.query(func.count(func.distinct(Enrollment.student_id)))
+        .filter(
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == batch.name,
+            Enrollment.program == batch.program,
+        )
+        .scalar()
+        or 0
+    )
+    if not recipient_count:
         raise HTTPException(409, "This batch has no active enrolled students")
     row = Assignment(batch_id=batch.id, subject_id=subject.id, title=payload.title.strip(), instructions=payload.instructions.strip(), due_at=payload.due_at, external_url=str(payload.external_url), status=payload.status, created_by=actor.id)
-    db.add(row); db.flush()
-    db.add_all([AssignmentRecipient(assignment_id=row.id, student_id=student_id, status=payload.status) for (student_id,) in eligible])
-    audit(db, actor, "academics.assignment.create", "assignment", row.id, after={"batch_id": batch.id, "subject_id": subject.id, "recipients": len(eligible), "status": payload.status})
+    db.add(row)
+    db.flush()
+    audit(db, actor, "academics.assignment.create", "assignment", row.id, after={"batch_id": batch.id, "subject_id": subject.id, "recipients": recipient_count, "status": payload.status})
     db.commit()
-    return _serialize(row, batch, subject, len(eligible))
+    return _serialize(row, batch, subject, recipient_count)
 
 
 @router.post("/assignments/{assignment_id}/publish")
@@ -63,11 +90,6 @@ def publish_assignment(
     if row.status != "published":
         before = {"status": row.status}
         row.status = "published"
-        (
-            db.query(AssignmentRecipient)
-            .filter_by(assignment_id=row.id, status="draft")
-            .update({"status": "published"}, synchronize_session=False)
-        )
         audit(
             db,
             actor,
@@ -78,7 +100,14 @@ def publish_assignment(
             after={"status": "published"},
         )
         db.commit()
-    recipients = db.query(func.count(AssignmentRecipient.student_id)).filter_by(
-        assignment_id=row.id,
-    ).scalar() or 0
+    recipients = (
+        db.query(func.count(func.distinct(Enrollment.student_id)))
+        .filter(
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == batch.name,
+            Enrollment.program == batch.program,
+        )
+        .scalar()
+        or 0
+    )
     return _serialize(row, batch, subject, recipients)
