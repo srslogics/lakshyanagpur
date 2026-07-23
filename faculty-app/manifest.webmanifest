@@ -1,0 +1,15 @@
+{
+  "name": "Lakshya Faculty",
+  "short_name": "Lakshya Faculty",
+  "description": "Classes, attendance, assignments and institute notices for Lakshya faculty.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f5ed",
+  "theme_color": "#171a4b",
+  "orientation": "any",
+  "icons": [
+    {"src": "../pwa-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "../pwa-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}

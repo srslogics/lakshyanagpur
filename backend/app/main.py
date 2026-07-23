@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from .config import settings
 from .database import SessionLocal
-from .routers import academics, admissions, attendance, auth, communication, finance, portal, reports, settings as settings_router, students, timetable
+from .routers import academics, admissions, attendance, auth, communication, faculty, finance, portal, reports, settings as settings_router, students, timetable
 from .seed import seed_development_data
 
 @asynccontextmanager
@@ -21,6 +21,7 @@ app = FastAPI(title="Lakshya Operations API", version="1.0.0", lifespan=lifespan
 FRONTEND_DIR = Path(__file__).resolve().parents[2]
 STUDENT_APP_DIR = FRONTEND_DIR / "student-app"
 PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
+FACULTY_APP_DIR = FRONTEND_DIR / "faculty-app"
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(auth.router)
 app.include_router(admissions.router)
@@ -30,6 +31,7 @@ app.include_router(timetable.router)
 app.include_router(academics.router)
 app.include_router(attendance.router)
 app.include_router(communication.router)
+app.include_router(faculty.router)
 app.include_router(reports.router)
 app.include_router(settings_router.router)
 app.include_router(portal.router)
@@ -64,6 +66,9 @@ if STUDENT_APP_DIR.exists():
 
 if PARENT_APP_DIR.exists():
     app.mount("/parent-app", StaticFiles(directory=PARENT_APP_DIR, html=True), name="parent-app")
+
+if FACULTY_APP_DIR.exists():
+    app.mount("/faculty-app", StaticFiles(directory=FACULTY_APP_DIR, html=True), name="faculty-app")
 
 @app.get("/", include_in_schema=False)
 def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")

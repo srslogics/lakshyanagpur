@@ -48,8 +48,9 @@ Then open:
 - `http://127.0.0.1:8000/` for the product UI
 - `http://127.0.0.1:8000/student-app/` for the student portal
 - `http://127.0.0.1:8000/parent-app/` for the parent portal
+- `http://127.0.0.1:8000/faculty-app/` for the faculty portal
 
-Do not open an app by double-clicking its `index.html` file. The student and parent portals require the server above for authentication, API access, and PWA features.
+Do not open an app by double-clicking its `index.html` file. The student, parent, and faculty portals require the server above for authentication, API access, and PWA features.
 
 ## Deploy on Render
 

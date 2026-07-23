@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>
+    if (window.location.protocol === "file:") {
+      window.location.replace("http://127.0.0.1:8000/faculty-app/" + window.location.search + window.location.hash);
+    }
+  </script>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#171a4b">
+  <meta name="description" content="Lakshya Faculty portal for classes, attendance, assignments, batches and institute notices.">
+  <meta property="og:title" content="Lakshya Faculty">
+  <meta property="og:description" content="Classes, attendance and academic work in one focused faculty workspace.">
+  <meta property="og:image" content="../share-card.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Lakshya Faculty</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="icon" href="../pwa-icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css?v=1">
+  <link rel="stylesheet" href="../auth-shared.css?v=4">
+</head>
+<body>
+  <a class="skip-link" href="#faculty-main">Skip to content</a>
+
+  <div class="startup-screen" id="startup-screen" aria-label="Loading Lakshya Faculty">
+    <img src="../lakshya-logo.png" width="1536" height="1024" alt="Lakshya">
+    <span class="startup-loader" aria-hidden="true"></span>
+  </div>
+
+  <section class="login-screen hidden" id="login-screen" aria-labelledby="login-title">
+    <div class="login-brand">
+      <img src="../lakshya-logo.png" width="1536" height="1024" alt="Lakshya">
+      <span>Faculty</span>
+    </div>
+    <div class="login-copy" aria-hidden="true">
+      <p>ACADEMIC WORKSPACE</p>
+      <strong>Teach. Track. Move every batch forward.</strong>
+    </div>
+    <div class="login-card">
+      <div class="login-form-wrap">
+        <p class="eyebrow">FACULTY ACCESS</p>
+        <h1 id="login-title">Sign in</h1>
+        <form id="login-form" novalidate>
+          <label for="login-email"><span>Email address</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="faculty@lakshya.edu" required></label>
+          <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span></label>
+          <div class="form-error hidden" id="login-error" role="alert"></div>
+          <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <div class="faculty-shell hidden" id="faculty-shell">
+    <aside class="sidebar" aria-label="Faculty navigation">
+      <a class="sidebar-brand" href="#dashboard" aria-label="Lakshya Faculty home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""><span><strong>Lakshya</strong><small>Faculty</small></span></a>
+      <nav>
+        <button class="active" type="button" data-view="dashboard" aria-current="page"><span data-icon="home"></span><em>Today</em></button>
+        <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em><i id="sidebar-attendance-badge" class="hidden">0</i></button>
+        <button type="button" data-view="assignments"><span data-icon="book"></span><em>Assignments</em></button>
+        <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
+        <button type="button" data-view="more"><span data-icon="more"></span><em>More</em></button>
+      </nav>
+      <div class="sidebar-profile">
+        <span class="avatar" id="sidebar-avatar">LF</span>
+        <span><strong id="sidebar-name">Faculty</strong><small>Faculty account</small></span>
+      </div>
+    </aside>
+
+    <header class="app-header">
+      <a class="mini-brand" href="#dashboard" aria-label="Lakshya Faculty home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""></a>
+      <div><span>LAKSHYA FACULTY</span><strong id="header-title">Today</strong></div>
+      <button class="avatar-button" id="profile-button" type="button" aria-label="Open faculty profile"><span id="header-avatar">LF</span></button>
+    </header>
+
+    <main id="faculty-main" tabindex="-1">
+      <section class="app-view active" id="dashboard" aria-labelledby="dashboard-heading">
+        <article class="faculty-hero">
+          <div>
+            <p id="today-label"></p>
+            <h1 id="dashboard-heading">Good morning, <span id="faculty-first-name">Faculty</span></h1>
+            <p id="teaching-summary">Your academic workspace is ready.</p>
+          </div>
+          <button class="hero-action" id="hero-attendance-action" type="button" data-go="attendance"><span data-icon="check"></span><span>Attendance<strong id="hero-attendance-count">0 pending</strong></span></button>
+        </article>
+
+        <div class="metric-grid" id="dashboard-metrics" aria-label="Faculty summary"></div>
+
+        <div class="dashboard-grid">
+          <section class="panel next-class-panel">
+            <div class="section-head"><div><p class="eyebrow">UP NEXT</p><h2>Next class</h2></div><button type="button" data-go="schedule">Full schedule</button></div>
+            <div id="next-class"></div>
+          </section>
+          <section class="panel">
+            <div class="section-head"><div><p class="eyebrow">ACTION</p><h2>Attendance</h2></div><button type="button" data-go="attendance">View all</button></div>
+            <div class="stack-list" id="dashboard-attendance"></div>
+          </section>
+          <section class="panel">
+            <div class="section-head"><div><p class="eyebrow">ACADEMICS</p><h2>Recent assignments</h2></div><button type="button" data-open-assignment>New assignment</button></div>
+            <div class="stack-list" id="dashboard-assignments"></div>
+          </section>
+          <section class="panel notice-panel">
+            <div class="section-head"><div><p class="eyebrow">INSTITUTE</p><h2>Latest notice</h2></div><button type="button" data-go="more">All notices</button></div>
+            <div id="latest-notice"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="app-view" id="attendance" aria-labelledby="attendance-heading">
+        <div class="view-heading">
+          <div><p class="eyebrow">CLASS RECORDS</p><h1 id="attendance-heading">Attendance</h1><p>Open a class, mark every student and submit the register.</p></div>
+          <span class="view-count" id="attendance-view-count">0 pending</span>
+        </div>
+        <div class="filter-pills" aria-label="Attendance filter">
+          <button class="active" data-attendance-filter="action" type="button" aria-pressed="true">Needs action</button>
+          <button data-attendance-filter="upcoming" type="button" aria-pressed="false">Upcoming</button>
+          <button data-attendance-filter="submitted" type="button" aria-pressed="false">Submitted</button>
+          <button data-attendance-filter="all" type="button" aria-pressed="false">All</button>
+        </div>
+        <div class="session-list" id="attendance-session-list"></div>
+      </section>
+
+      <section class="app-view" id="assignments" aria-labelledby="assignments-heading">
+        <div class="view-heading">
+          <div><p class="eyebrow">PUBLISHED WORK</p><h1 id="assignments-heading">Assignments</h1><p>Create work only for batches and subjects assigned to you.</p></div>
+          <button class="primary-compact" type="button" data-open-assignment><span data-icon="plus"></span>New assignment</button>
+        </div>
+        <div class="filter-pills" aria-label="Assignment filter">
+          <button class="active" data-assignment-filter="all" type="button" aria-pressed="true">All</button>
+          <button data-assignment-filter="published" type="button" aria-pressed="false">Published</button>
+          <button data-assignment-filter="draft" type="button" aria-pressed="false">Drafts</button>
+        </div>
+        <div class="assignment-grid" id="assignment-list"></div>
+      </section>
+
+      <section class="app-view" id="schedule" aria-labelledby="schedule-heading">
+        <div class="view-heading"><div><p class="eyebrow">TIMETABLE</p><h1 id="schedule-heading">Schedule</h1><p>Your assigned classes, rooms and batches.</p></div></div>
+        <div class="date-filter" id="schedule-dates" aria-label="Schedule date"></div>
+        <div class="timeline" id="schedule-list"></div>
+      </section>
+
+      <section class="app-view" id="more" aria-labelledby="more-heading">
+        <div class="view-heading"><div><p class="eyebrow">ACCOUNT</p><h1 id="more-heading">More</h1><p>Your teaching assignments and institute updates.</p></div></div>
+        <article class="profile-card" id="profile-card"></article>
+        <div class="more-grid">
+          <section class="panel"><div class="section-head"><div><h2>My batches</h2></div></div><div class="batch-list" id="batch-list"></div></section>
+          <section class="panel"><div class="section-head"><div><h2>Notices</h2></div></div><div class="notice-list" id="notice-list"></div></section>
+        </div>
+        <button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Faculty navigation">
+      <button class="active" type="button" data-view="dashboard" aria-current="page"><span data-icon="home"></span><em>Today</em></button>
+      <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em><i id="attendance-badge" class="hidden">0</i></button>
+      <button type="button" data-view="assignments"><span data-icon="book"></span><em>Work</em></button>
+      <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
+      <button type="button" data-view="more"><span data-icon="more"></span><em>More</em></button>
+    </nav>
+  </div>
+
+  <div class="modal-backdrop hidden" id="assignment-modal" role="dialog" aria-modal="true" aria-labelledby="assignment-modal-title">
+    <section class="modal-card">
+      <header><div><p class="eyebrow">ACADEMICS</p><h2 id="assignment-modal-title">New assignment</h2></div><button class="icon-button" type="button" data-close-modal="assignment-modal" aria-label="Close assignment form"><span data-icon="close"></span></button></header>
+      <form id="assignment-form">
+        <label><span>Batch and subject</span><select id="assignment-pair" name="pair" required></select></label>
+        <label><span>Title</span><input name="title" type="text" maxlength="255" placeholder="e.g. Kinematics practice set" required></label>
+        <label><span>Instructions</span><textarea name="instructions" rows="4" maxlength="5000" placeholder="What should students complete?"></textarea></label>
+        <div class="form-grid">
+          <label><span>Due date and time</span><input id="assignment-due" name="dueAt" type="datetime-local" required></label>
+          <label><span>Status</span><select name="status"><option value="published">Publish now</option><option value="draft">Save draft</option></select></label>
+        </div>
+        <label><span>Material link</span><input name="externalUrl" type="url" inputmode="url" placeholder="https://…" required></label>
+        <div class="modal-error hidden" id="assignment-error" role="alert"></div>
+        <footer><button class="secondary-button" type="button" data-close-modal="assignment-modal">Cancel</button><button class="primary-button" id="assignment-submit" type="submit">Create assignment</button></footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="attendance-modal" role="dialog" aria-modal="true" aria-labelledby="attendance-modal-title">
+    <section class="modal-card attendance-modal-card">
+      <header><div><p class="eyebrow" id="attendance-modal-kicker">ATTENDANCE</p><h2 id="attendance-modal-title">Class register</h2><p id="attendance-modal-meta"></p></div><button class="icon-button" type="button" data-close-modal="attendance-modal" aria-label="Close attendance register"><span data-icon="close"></span></button></header>
+      <div class="attendance-toolbar">
+        <span id="attendance-progress">0 students</span>
+        <button type="button" id="mark-all-present">Mark all present</button>
+      </div>
+      <form id="attendance-form">
+        <div class="roster-list" id="roster-list"></div>
+        <div class="modal-error hidden" id="attendance-error" role="alert"></div>
+        <footer><button class="secondary-button" id="save-attendance" type="button">Save draft</button><button class="primary-button" id="submit-attendance" type="submit">Submit attendance</button></footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="./app.js?v=1" defer></script>
+</body>
+</html>
