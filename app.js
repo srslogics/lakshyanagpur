@@ -27,7 +27,11 @@ const icons = {
   "chevron-right": '<path d="m9 18 6-6-6-6"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', logout: '<path d="M10 17l5-5-5-5M15 12H3M15 3h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5"/>'
 };
 
-const state = { token: sessionStorage.getItem("lakshya_token"), user: null, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const cachedUser = (() => {
+  try { return JSON.parse(sessionStorage.getItem("lakshya_user") || "null"); }
+  catch { return null; }
+})();
+const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
@@ -91,14 +95,22 @@ async function initialize() {
   bindEvents();
   refreshServiceWorker();
   try {
-    const setup = await api("/api/auth/bootstrap-status");
-    setAuthMode(setup.setupRequired);
     if (state.token) {
-      try { state.user = await api("/api/auth/me"); await enterWorkspace(); }
+      try {
+        if (!state.user) {
+          state.user = await api("/api/auth/me");
+          sessionStorage.setItem("lakshya_user", JSON.stringify(state.user));
+        }
+        await enterWorkspace();
+      }
       catch (error) {
         if (error.status !== 401 && state.token) showBootError("Workspace unavailable", error.message);
       }
-    } else showAuth();
+    } else {
+      const setup = await api("/api/auth/bootstrap-status");
+      setAuthMode(setup.setupRequired);
+      showAuth();
+    }
   } catch (error) {
     if (error.status !== 401) showBootError("Service unavailable", "The latest workspace data could not be loaded.");
   }
@@ -128,6 +140,7 @@ function clearSession() {
   state.view = "dashboard";
   Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
+  sessionStorage.removeItem("lakshya_user");
 }
 
 function resetAuthForm() {
@@ -170,7 +183,8 @@ async function handleAuth(event) {
     const payload = state.setupRequired ? { fullName, email, password } : { email, password };
     const result = await api(state.setupRequired ? "/api/auth/bootstrap" : "/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
     state.token = result.access_token; sessionStorage.setItem("lakshya_token", state.token);
-    state.user = await api("/api/auth/me");
+    state.user = result.user;
+    sessionStorage.setItem("lakshya_user", JSON.stringify(state.user));
     await enterWorkspace();
   } catch (error) {
     $("#auth-error").textContent = error.message; $("#auth-error").classList.remove("hidden");
@@ -188,11 +202,14 @@ async function enterWorkspace() {
   $("#dashboard-date").textContent = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   $("#account-menu-name").textContent = name; $("#account-menu-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
   [$("#user-avatar"), $("#topbar-avatar"), $("#account-menu-avatar")].forEach(node => node.textContent = initials(name));
-  await loadWorkspace();
+  await loadInitialWorkspace();
   $("#boot-screen").classList.add("hidden");
   $("#auth-screen").classList.add("hidden");
   $("#app-shell").classList.remove("hidden");
   showView("dashboard");
+  loadSecondaryWorkspace().catch(error => {
+    if (state.token && error.status !== 401) toast("Some secondary modules are still loading.", "error");
+  });
 }
 
 async function fetchAll(path, pageSize = 100) {
@@ -214,12 +231,23 @@ async function optional(load, fallback) {
   }
 }
 
-async function loadWorkspace() {
-  const [students, agreements, payments, leads, admissionMeta, timetable, assignments, attendanceSessions, notices, report, masters, auditRows] = await Promise.all([
-    optional(() => fetchAll("/api/students"), []), optional(() => fetchAll("/api/finance/agreements"), []), optional(() => fetchAll("/api/finance/staged-payments"), []), optional(() => fetchAll("/api/admissions/leads"), []), optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
+async function loadInitialWorkspace() {
+  const [students, agreements, payments, leads, admissionMeta] = await Promise.all([
+    optional(() => fetchAll("/api/students"), []),
+    optional(() => fetchAll("/api/finance/agreements"), []),
+    optional(() => fetchAll("/api/finance/staged-payments"), []),
+    optional(() => fetchAll("/api/admissions/leads"), []),
+    optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
+  ]);
+  Object.assign(state, { students, agreements, payments, leads, stages: admissionMeta.stageOrder || [] });
+  renderAll();
+}
+
+async function loadSecondaryWorkspace() {
+  const [timetable, assignments, attendanceSessions, notices, report, masters, auditRows] = await Promise.all([
     optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }), optional(() => api("/api/settings/audit"), [])
   ]);
-  Object.assign(state, { students, agreements, payments, leads, stages: admissionMeta.stageOrder || [], sessions: timetable.sessions || [], timetable, assignments, attendanceSessions, notices, report, masters, audit: auditRows });
+  Object.assign(state, { sessions: timetable.sessions || [], timetable, assignments, attendanceSessions, notices, report, masters, audit: auditRows });
   renderAll();
 }
 

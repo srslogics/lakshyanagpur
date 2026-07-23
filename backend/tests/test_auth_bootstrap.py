@@ -12,6 +12,12 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
     )
     assert created.status_code == 201
     assert created.json()["token_type"] == "bearer"
+    assert created.json()["user"] == {
+        "id": database.query(User).one().id,
+        "email": "director@lakshya.edu",
+        "fullName": "Lakshya Director",
+        "role": "owner",
+    }
     assert client.get("/api/auth/bootstrap-status").json() == {"setupRequired": False}
 
     duplicate = client.post(
@@ -32,6 +38,14 @@ def test_frontend_shell_is_served(client):
     share_card = client.get("/share-card.png")
     assert share_card.status_code == 200
     assert share_card.headers["content-type"] == "image/png"
+    optimized_logo = client.get("/lakshya-logo-576.png")
+    assert optimized_logo.status_code == 200
+    assert len(optimized_logo.content) < len(client.get("/lakshya-logo.png").content)
+
+    versioned_asset = client.get("/student-app/app.js?v=7")
+    assert versioned_asset.status_code == 200
+    assert "immutable" in versioned_asset.headers["cache-control"]
+    assert client.get("/student-app/sw.js").headers["cache-control"] == "no-cache"
 
 
 def test_health_checks_support_get_and_head(client):
@@ -48,6 +62,8 @@ def test_login_logout_revokes_the_active_token(client):
         json={"email": "owner@example.com", "password": "Password123!"},
     )
     assert logged_in.status_code == 200
+    assert logged_in.json()["user"]["role"] == "owner"
+    assert logged_in.json()["user"]["email"] == "owner@example.com"
     token = logged_in.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 

@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
 from .config import settings
 from .database import SessionLocal
 from .routers import academics, admissions, attendance, auth, communication, faculty, finance, portal, reports, settings as settings_router, students, timetable
@@ -23,6 +24,7 @@ STUDENT_APP_DIR = FRONTEND_DIR / "student-app"
 PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
 FACULTY_APP_DIR = FRONTEND_DIR / "faculty-app"
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.include_router(auth.router)
 app.include_router(admissions.router)
 app.include_router(students.router)
@@ -44,6 +46,20 @@ async def request_context(request: Request, call_next):
     response.headers.update({"x-request-id": request_id, "x-content-type-options": "nosniff", "x-frame-options": "DENY"})
     if request.url.path.startswith("/api/"):
         response.headers["cache-control"] = "no-store"
+    elif request.url.path.endswith("/sw.js"):
+        response.headers["cache-control"] = "no-cache"
+    elif request.url.path.endswith(".webmanifest"):
+        response.headers["cache-control"] = "public, max-age=3600, must-revalidate"
+    elif Path(request.url.path).suffix.lower() in {
+        ".css", ".js", ".png", ".jpg", ".jpeg", ".svg", ".webp", ".ico",
+    }:
+        response.headers["cache-control"] = (
+            "public, max-age=31536000, immutable"
+            if request.query_params.get("v")
+            else "public, max-age=2592000, stale-while-revalidate=86400"
+        )
+    else:
+        response.headers["cache-control"] = "no-cache"
     return response
 
 @app.exception_handler(RequestValidationError)

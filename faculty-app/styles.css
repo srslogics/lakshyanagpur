@@ -30,7 +30,7 @@
 
 *{box-sizing:border-box}
 html{background:var(--canvas);scroll-behavior:smooth}
-body{margin:0;color:var(--ink);background:var(--canvas);font-family:"DM Sans",system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body{margin:0;color:var(--ink);background:var(--canvas);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit}
 button,a{touch-action:manipulation}
 button{cursor:pointer}
@@ -54,7 +54,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .login-brand span{font-size:.75rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
 .login-copy{display:none}
 .login-card{width:100%;max-width:470px;position:relative;z-index:1;margin:72px auto 0;padding:28px 22px;border-radius:26px;color:var(--ink);background:var(--surface);box-shadow:0 30px 90px rgba(0,0,0,.28)}
-.login-card h1{margin:0;font-family:"Manrope",sans-serif;font-size:clamp(2rem,9vw,2.65rem);line-height:1.06;letter-spacing:-.045em}
+.login-card h1{margin:0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:clamp(2rem,9vw,2.65rem);line-height:1.06;letter-spacing:-.045em}
 .login-card form{display:grid;gap:18px;margin-top:28px}
 .login-card label{display:grid;gap:7px}
 .login-card label>span:first-child{font-size:.875rem;font-weight:700}
@@ -73,7 +73,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .sidebar-brand{display:flex;align-items:center;gap:12px;padding:0 8px 28px;color:#fff;text-decoration:none}
 .sidebar-brand img{width:54px;height:42px;object-fit:contain;padding:4px 5px;border-radius:9px;background:#fff}
 .sidebar-brand span{display:grid;line-height:1.1}
-.sidebar-brand strong{font-family:"Manrope",sans-serif;font-size:1.05rem}
+.sidebar-brand strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.05rem}
 .sidebar-brand small{margin-top:4px;color:rgba(255,255,255,.58);font-size:.72rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
 .sidebar nav{display:grid;gap:6px}
 .sidebar-section-label{margin:15px 13px 2px;color:rgba(255,255,255,.42);font-size:.62rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
@@ -101,7 +101,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .faculty-hero:after{content:"";position:absolute;right:-78px;top:-110px;width:280px;height:280px;border:1px solid rgba(223,196,45,.2);border-radius:50%;box-shadow:0 0 0 58px rgba(223,196,45,.04),0 0 0 116px rgba(223,196,45,.025)}
 .faculty-hero>div,.hero-action{position:relative;z-index:1}
 .faculty-hero>div>p:first-child{margin:0 0 12px;color:var(--yellow);font-size:.72rem;font-weight:800;letter-spacing:.12em}
-.faculty-hero h1{max-width:760px;margin:0;font-family:"Manrope",sans-serif;font-size:clamp(2rem,4vw,3.35rem);line-height:1.04;letter-spacing:-.055em}
+.faculty-hero h1{max-width:760px;margin:0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:clamp(2rem,4vw,3.35rem);line-height:1.04;letter-spacing:-.055em}
 .faculty-hero>div>p:last-child{margin:14px 0 0;color:rgba(255,255,255,.67)}
 .hero-action{min-width:196px;display:flex;align-items:center;gap:12px;padding:15px 17px;border:1px solid rgba(255,255,255,.13);border-radius:17px;color:#fff;background:rgba(255,255,255,.08);text-align:left;backdrop-filter:blur(12px)}
 .hero-action>span:first-child{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;color:var(--navy-950);background:var(--yellow)}
@@ -111,7 +111,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px}
 .metric-card{min-height:118px;display:flex;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:var(--shadow-sm)}
 .metric-card span{color:var(--muted);font-size:.78rem;font-weight:700}
-.metric-card strong{font-family:"Manrope",sans-serif;font-size:1.75rem;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+.metric-card strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.75rem;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
 .metric-card.attention{color:#fff;border-color:var(--red);background:var(--red)}
 .metric-card.attention span{color:rgba(255,255,255,.76)}
 .module-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:0 0 22px}
@@ -120,7 +120,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .next-class-panel{grid-row:span 2}
 .notice-panel{background:var(--yellow-soft)}
 .section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
-.section-head h2{margin:2px 0 0;font-family:"Manrope",sans-serif;font-size:1.15rem;letter-spacing:-.025em}
+.section-head h2{margin:2px 0 0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.15rem;letter-spacing:-.025em}
 .section-head button{min-height:40px;padding:0 4px;border:0;color:var(--navy-800);background:transparent;font-size:.76rem;font-weight:800}
 .stack-list{display:grid;gap:10px}
 .compact-row{width:100%;display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px;border:0;border-radius:15px;color:inherit;background:var(--surface-soft);text-align:left}
@@ -130,9 +130,9 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .compact-row small{margin-top:2px;color:var(--muted);font-size:.72rem}
 .compact-row time{color:var(--muted);font-size:.72rem;font-weight:700}
 .class-card{display:grid;grid-template-columns:104px minmax(0,1fr);gap:22px;min-height:190px;align-items:center;padding:24px;border-radius:20px;color:#fff;background:var(--navy-900)}
-.class-time strong{display:block;font-family:"Manrope",sans-serif;font-size:1.8rem;letter-spacing:-.04em}
+.class-time strong{display:block;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.8rem;letter-spacing:-.04em}
 .class-time span{color:rgba(255,255,255,.62);font-size:.75rem}
-.class-card h3{margin:0;font-family:"Manrope",sans-serif;font-size:1.5rem;letter-spacing:-.035em}
+.class-card h3{margin:0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.5rem;letter-spacing:-.035em}
 .class-card p{margin:7px 0 0;color:rgba(255,255,255,.66)}
 .class-card footer{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
 .tag{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border:1px solid currentColor;border-radius:999px;font-size:.68rem;font-weight:800}
@@ -144,7 +144,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .notice-card time,.notice-preview time{display:block;margin-top:11px;color:var(--yellow-deep);font-size:.68rem;font-weight:800}
 
 .view-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:2px 0 24px}
-.view-heading h1{margin:2px 0 0;font-family:"Manrope",sans-serif;font-size:clamp(2rem,4vw,3rem);line-height:1.08;letter-spacing:-.05em}
+.view-heading h1{margin:2px 0 0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:clamp(2rem,4vw,3rem);line-height:1.08;letter-spacing:-.05em}
 .view-heading p:last-child{margin:8px 0 0;color:var(--muted)}
 .view-count{display:inline-flex;align-items:center;min-height:36px;padding:0 13px;border-radius:999px;color:var(--red);background:var(--red-soft);font-size:.76rem;font-weight:800}
 .filter-pills,.date-filter{display:flex;gap:8px;overflow-x:auto;padding:0 0 14px;scrollbar-width:none}
@@ -154,7 +154,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .session-list,.timeline{display:grid;gap:12px}
 .session-card{display:grid;grid-template-columns:82px minmax(0,1fr) auto;align-items:center;gap:18px;padding:18px 20px;border:1px solid var(--line);border-radius:19px;background:var(--surface);box-shadow:var(--shadow-sm)}
 .session-date{display:grid;place-items:center;align-self:stretch;border-radius:14px;color:var(--navy-800);background:var(--navy-50);text-align:center}
-.session-date strong{font-family:"Manrope",sans-serif;font-size:1.2rem}
+.session-date strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.2rem}
 .session-date small{font-size:.66rem;font-weight:800;text-transform:uppercase}
 .session-card h3{margin:0;font-size:1rem}
 .session-card p{margin:4px 0 0;color:var(--muted);font-size:.78rem}
@@ -172,7 +172,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .status-pill.draft{color:var(--warning);background:var(--warning-soft)}
 .status-pill.active{color:var(--success);background:var(--success-soft)}
 .status-pill.overdue{color:var(--red);background:var(--red-soft)}
-.assignment-card h3{margin:18px 0 0;font-family:"Manrope",sans-serif;font-size:1.05rem;letter-spacing:-.02em}
+.assignment-card h3{margin:18px 0 0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.05rem;letter-spacing:-.02em}
 .assignment-card p{display:-webkit-box;overflow:hidden;margin:8px 0 0;color:var(--muted);font-size:.8rem;-webkit-box-orient:vertical;-webkit-line-clamp:3}
 .assignment-card footer{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:auto;padding-top:18px}
 .assignment-card footer span{display:grid;color:var(--muted);font-size:.69rem}
@@ -193,7 +193,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .profile-card{display:flex;align-items:center;gap:16px;padding:22px;border-radius:22px;color:#fff;background:var(--navy-900)}
 .profile-avatar{width:58px;height:58px;display:grid;place-items:center;flex:0 0 auto;border-radius:17px;color:var(--navy-950);background:var(--yellow);font-weight:900}
 .profile-card>span:last-child{display:grid}
-.profile-card strong{font-family:"Manrope",sans-serif;font-size:1.08rem}
+.profile-card strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.08rem}
 .profile-card span span{margin-top:3px;color:rgba(255,255,255,.62);font-size:.76rem}
 .notice-list{display:grid;gap:10px}
 .batch-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border-radius:15px;background:var(--surface-soft)}
@@ -214,7 +214,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .faculty-batch-card{display:flex;min-height:250px;flex-direction:column;padding:20px;border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:var(--shadow-sm)}
 .faculty-batch-card header{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .faculty-batch-card header>span:last-child{color:var(--muted);font-size:.72rem;font-weight:800}
-.faculty-batch-card h2{margin:18px 0 0;font-family:"Manrope",sans-serif;font-size:1.25rem;letter-spacing:-.03em}
+.faculty-batch-card h2{margin:18px 0 0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.25rem;letter-spacing:-.03em}
 .faculty-batch-card>p{margin:5px 0 0;color:var(--muted);font-size:.78rem}
 .faculty-batch-card dl{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;margin:20px 0 0}
 .faculty-batch-card dl div{padding:11px;border-radius:12px;background:var(--surface-soft)}
@@ -243,7 +243,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .modal-backdrop{position:fixed;z-index:50;inset:0;display:grid;place-items:center;padding:24px;background:rgba(9,10,30,.58);backdrop-filter:blur(8px)}
 .modal-card{width:min(680px,100%);max-height:min(88dvh,860px);overflow:auto;border:1px solid rgba(255,255,255,.26);border-radius:24px;background:var(--surface);box-shadow:var(--shadow-lg)}
 .modal-card>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:24px 24px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
-.modal-card h2{margin:2px 0 0;font-family:"Manrope",sans-serif;font-size:1.45rem;letter-spacing:-.035em}
+.modal-card h2{margin:2px 0 0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.45rem;letter-spacing:-.035em}
 .modal-card header p:last-child{margin:5px 0 0;color:var(--muted);font-size:.78rem}
 .icon-button{width:44px;height:44px;display:grid;place-items:center;flex:0 0 auto;border:1px solid var(--line);border-radius:12px;color:var(--ink);background:var(--surface)}
 .modal-card>form{display:grid;gap:17px;padding:22px 24px 24px}
@@ -353,7 +353,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .login-brand{grid-column:1/-1;align-self:start}
   .login-copy{display:grid;align-content:end;align-self:end;max-width:680px;padding-bottom:5vh}
   .login-copy p{margin:0 0 18px;color:var(--yellow);font-size:.78rem;font-weight:900;letter-spacing:.16em}
-  .login-copy strong{font-family:"Manrope",sans-serif;font-size:clamp(3rem,5.4vw,5.9rem);line-height:1.01;letter-spacing:-.065em}
+  .login-copy strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:clamp(3rem,5.4vw,5.9rem);line-height:1.01;letter-spacing:-.065em}
   .login-card{grid-column:2;grid-row:2;align-self:center;margin:0;padding:40px;border-radius:30px}
 }
 

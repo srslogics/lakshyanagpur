@@ -1,15 +1,12 @@
-const CACHE_NAME = "lakshya-erp-app-v33";
+const CACHE_NAME = "lakshya-erp-app-v34";
 const ASSETS = [
   "./",
-  "./styles.css?v=20",
+  "./styles.css?v=21",
   "./auth-shared.css?v=4",
-  "./app.js?v=22",
+  "./app.js?v=23",
   "./manifest.webmanifest",
-  "./lakshya-logo.png",
-  "./share-card.png",
-  "./apple-touch-icon.png",
-  "./pwa-icon-192.png",
-  "./pwa-icon-512.png"
+  "./lakshya-logo-576.png",
+  "./pwa-icon-192.png"
 ];
 
 self.addEventListener("install", event => {

@@ -1,14 +1,12 @@
-const CACHE = "lakshya-faculty-v2";
+const CACHE = "lakshya-faculty-v3";
 const ASSETS = [
   "./",
-  "./styles.css?v=2",
+  "./styles.css?v=3",
   "../auth-shared.css?v=4",
   "./app.js?v=2",
   "./manifest.webmanifest",
-  "../lakshya-logo.png",
-  "../pwa-icon-192.png",
-  "../pwa-icon-512.png",
-  "../share-card.png"
+  "../lakshya-logo-576.png",
+  "../pwa-icon-192.png"
 ];
 
 self.addEventListener("install", event => {
@@ -29,14 +27,21 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.pathname.startsWith("/api/")) return;
-  event.respondWith(
-    fetch(event.request)
-      .then(response => {
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request, {cache:"no-cache"}).then(response => {
         if (response.ok && response.type === "basic") {
           caches.open(CACHE).then(cache => cache.put(event.request, response.clone()));
         }
         return response;
-      })
-      .catch(() => caches.match(event.request).then(match => match || caches.match("./")))
-  );
+      }).catch(() => caches.match(event.request).then(match => match || caches.match("./")))
+    );
+    return;
+  }
+  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
+    if (response.ok && response.type === "basic") {
+      caches.open(CACHE).then(cache => cache.put(event.request, response.clone()));
+    }
+    return response;
+  })));
 });

@@ -19,10 +19,19 @@ class BootstrapOwnerRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class AuthenticatedUser(BaseModel):
+    id: str
+    email: str
+    full_name: str = Field(alias="fullName")
+    role: str
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    user: AuthenticatedUser
 
 
 class LeadCreate(BaseModel):

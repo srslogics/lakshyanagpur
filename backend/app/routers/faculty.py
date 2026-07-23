@@ -33,18 +33,37 @@ def bootstrap(
     db: Session = Depends(get_db),
     faculty_user: User = Depends(require_roles("faculty")),
 ):
+    attendance_counts = (
+        db.query(
+            AttendanceEntry.register_id.label("register_id"),
+            func.count(AttendanceEntry.student_id).label("marked_count"),
+        )
+        .group_by(AttendanceEntry.register_id)
+        .subquery()
+    )
     session_rows = (
-        db.query(ClassSession, Batch, Subject, Room, AttendanceRegister)
+        db.query(
+            ClassSession,
+            Batch,
+            Subject,
+            Room,
+            AttendanceRegister,
+            func.coalesce(attendance_counts.c.marked_count, 0),
+        )
         .join(Batch, Batch.id == ClassSession.batch_id)
         .join(Subject, Subject.id == ClassSession.subject_id)
         .join(Room, Room.id == ClassSession.room_id)
         .outerjoin(AttendanceRegister, AttendanceRegister.class_session_id == ClassSession.id)
+        .outerjoin(
+            attendance_counts,
+            attendance_counts.c.register_id == AttendanceRegister.id,
+        )
         .filter(ClassSession.faculty_id == faculty_user.id)
         .order_by(ClassSession.starts_at)
         .all()
     )
 
-    batch_names = {batch.name for _, batch, _, _, _ in session_rows}
+    batch_names = {batch.name for _, batch, _, _, _, _ in session_rows}
     student_count_rows = (
         db.query(
             Enrollment.batch,
@@ -64,14 +83,7 @@ def bootstrap(
     teaching_pairs = {}
     now = datetime.now(timezone.utc)
     today = now.astimezone(INDIA_TZ).date()
-    for session, batch, subject, room, register in session_rows:
-        marked_count = (
-            db.query(AttendanceEntry)
-            .filter_by(register_id=register.id)
-            .count()
-            if register
-            else 0
-        )
+    for session, batch, subject, room, register, marked_count in session_rows:
         sessions.append({
             "id": session.id,
             "batchId": batch.id,

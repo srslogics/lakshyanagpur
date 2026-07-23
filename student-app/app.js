@@ -172,7 +172,7 @@ async function login(event) {
       }),
     });
     state.token = result.access_token;
-    const account = await api("/api/auth/me");
+    const account = result.user;
     if (!["student", "parent_student"].includes(account.role)) {
       throw new Error("This login is not assigned to the Student portal.");
     }
