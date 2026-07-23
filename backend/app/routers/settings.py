@@ -3,8 +3,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import AuditLog, Batch, Room, Student, StudentAccount, Subject, User
-from ..operations_schemas import BatchCreate, RoomCreate, StudentAccessCreate, SubjectCreate, UserCreate
+from ..models import AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User
+from ..operations_schemas import BatchCreate, ParentAccessCreate, RoomCreate, StudentAccessCreate, SubjectCreate, UserCreate
 from ..security import hash_password, require_roles
 from ..services import audit
 
@@ -32,6 +32,18 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
         "subjects": [_subject(item) for item in db.query(Subject).order_by(Subject.program, Subject.name).all()],
         "rooms": [_room(item) for item in db.query(Room).order_by(Room.name).all()],
         "studentAccess": [{"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
+        "parentAccess": [{
+            "userId": account.user_id,
+            "studentId": student.id,
+            "admissionNumber": student.admission_number,
+            "studentName": student.full_name,
+            "fullName": account_user.full_name,
+            "email": account_user.email,
+            "contactType": account.contact_type,
+            "isActive": account_user.is_active,
+        } for account, student, account_user in db.query(ParentAccount, Student, User).join(
+            Student, Student.id == ParentAccount.student_id
+        ).join(User, User.id == ParentAccount.user_id).order_by(Student.full_name, User.full_name).all()],
     }
 
 
@@ -59,12 +71,58 @@ def create_student_access(payload: StudentAccessCreate, db: Session = Depends(ge
     email = payload.email.lower()
     if db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
-    account_user = User(email=email, full_name=student.full_name, role="parent_student", password_hash=hash_password(payload.password))
+    account_user = User(email=email, full_name=student.full_name, role="student", password_hash=hash_password(payload.password))
     db.add(account_user); db.flush()
     db.add(StudentAccount(user_id=account_user.id, student_id=student.id))
     audit(db, actor, "settings.student_access.create", "student", student.id, after={"user_id": account_user.id, "email": email})
     db.commit()
     return {"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": email, "isActive": True}
+
+
+@router.post("/parent-access", status_code=201)
+def create_parent_access(payload: ParentAccessCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    student = db.get(Student, payload.student_id)
+    if not student:
+        raise HTTPException(404, "Student not found")
+    email = payload.email.lower()
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(409, "A user with this email already exists")
+    account_user = User(
+        email=email,
+        full_name=payload.full_name.strip(),
+        role="parent",
+        password_hash=hash_password(payload.password),
+    )
+    db.add(account_user)
+    db.flush()
+    db.add(ParentAccount(
+        user_id=account_user.id,
+        student_id=student.id,
+        contact_type=payload.contact_type,
+    ))
+    audit(
+        db,
+        actor,
+        "settings.parent_access.create",
+        "student",
+        student.id,
+        after={
+            "user_id": account_user.id,
+            "email": email,
+            "contact_type": payload.contact_type,
+        },
+    )
+    db.commit()
+    return {
+        "userId": account_user.id,
+        "studentId": student.id,
+        "admissionNumber": student.admission_number,
+        "studentName": student.full_name,
+        "fullName": account_user.full_name,
+        "email": email,
+        "contactType": payload.contact_type,
+        "isActive": True,
+    }
 
 
 def _commit_master(db: Session, actor: User, row, kind: str, after: dict):

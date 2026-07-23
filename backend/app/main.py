@@ -35,6 +35,7 @@ app.include_router(faculty.router)
 app.include_router(reports.router)
 app.include_router(settings_router.router)
 app.include_router(portal.router)
+app.include_router(portal.parent_router)
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):

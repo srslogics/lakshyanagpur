@@ -24,7 +24,7 @@ class UserCreate(BaseModel):
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
-    role: Literal["admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "storekeeper", "parent_student"]
+    role: Literal["admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "storekeeper", "student", "parent", "parent_student"]
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -32,6 +32,18 @@ class StudentAccessCreate(BaseModel):
     student_id: str = Field(alias="studentId")
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ParentAccessCreate(BaseModel):
+    student_id: str = Field(alias="studentId")
+    full_name: str = Field(alias="fullName", min_length=2, max_length=255)
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=128)
+    contact_type: Literal["primary_contact", "secondary_contact"] = Field(
+        default="primary_contact",
+        alias="contactType",
+    )
     model_config = ConfigDict(populate_by_name=True)
 
 

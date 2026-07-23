@@ -1,6 +1,6 @@
 {
   "name": "Lakshya Student",
-  "short_name": "Lakshya",
+  "short_name": "Lakshya Student",
   "description": "Classes, assignments, attendance and notices for Lakshya students.",
   "start_url": "/student-app/",
   "scope": "/student-app/",

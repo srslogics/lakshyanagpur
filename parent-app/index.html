@@ -22,13 +22,18 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=2">
-  <link rel="stylesheet" href="../auth-shared.css?v=4">
+  <link rel="stylesheet" href="../portal-shared.css?v=1">
+  <link rel="stylesheet" href="./styles.css?v=3">
+  <link rel="stylesheet" href="../auth-shared.css?v=5">
 </head>
 <body>
   <a class="skip-link" href="#parent-main">Skip to content</a>
+  <div class="boot-screen" id="boot-screen" aria-label="Loading Lakshya Parent">
+    <img src="../lakshya-logo.png" width="1536" height="1024" alt="Lakshya">
+    <span class="boot-spinner" aria-hidden="true"></span>
+  </div>
 
-  <section class="login-screen" id="login-screen" aria-labelledby="login-title">
+  <section class="login-screen hidden" id="login-screen" aria-labelledby="login-title">
     <div class="login-brand">
       <img src="../lakshya-logo.png" width="1536" height="1024" alt="Lakshya">
       <span>Parent</span>
@@ -52,7 +57,25 @@
     </div>
   </section>
 
-  <div class="parent-shell hidden" id="parent-shell">
+  <div class="portal-shell parent-shell hidden" id="parent-shell">
+    <aside class="portal-sidebar" aria-label="Parent portal">
+      <a class="sidebar-brand" href="#overview" data-view="overview" aria-label="Lakshya Parent overview">
+        <img src="../lakshya-logo.png" width="1536" height="1024" alt="Lakshya">
+        <span><strong>Parent</strong><small>Progress portal</small></span>
+      </a>
+      <nav class="sidebar-nav" aria-label="Parent navigation">
+        <button class="active" type="button" data-view="overview" aria-current="page"><span data-icon="home"></span><em>Overview</em></button>
+        <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em></button>
+        <button type="button" data-view="academics"><span data-icon="book"></span><em>Academics</em><i id="sidebar-work-badge" class="nav-badge hidden">0</i></button>
+        <button type="button" data-view="fees"><span data-icon="wallet"></span><em>Fees</em></button>
+        <button type="button" data-view="more"><span data-icon="more"></span><em>Account</em></button>
+      </nav>
+      <div class="sidebar-account">
+        <span class="sidebar-avatar" id="sidebar-avatar">P</span>
+        <span><strong id="sidebar-name">Parent</strong><small id="sidebar-meta">Parent account</small></span>
+        <button id="sidebar-signout" type="button" aria-label="Sign out"><span data-icon="logout"></span></button>
+      </div>
+    </aside>
     <header class="app-header">
       <a class="mini-brand" href="#overview" aria-label="Lakshya Parent home"><img src="../lakshya-logo.png" width="1536" height="1024" alt=""></a>
       <div><span>LAKSHYA PARENT</span><strong id="header-title">Overview</strong></div>
@@ -62,7 +85,7 @@
     <main id="parent-main" tabindex="-1">
       <section class="app-view active" id="overview" aria-labelledby="overview-heading">
         <article class="child-hero">
-          <div class="child-identity"><span class="child-avatar" id="child-avatar">ST</span><div><p id="guardian-greeting">Good day</p><h1 id="overview-heading"><span id="child-name">Student</span></h1><span id="child-program">Program pending</span></div></div>
+          <div class="child-identity"><span class="child-avatar" id="child-avatar">ST</span><div><p id="student-context">Student progress</p><h1 id="overview-heading"><span id="child-name">Student</span></h1><span id="child-program">Program pending</span></div></div>
           <span class="verified-mark"><span data-icon="shield"></span>Linked record</span>
         </article>
         <div class="metric-grid" id="overview-metrics" aria-label="Student summary"></div>
@@ -93,7 +116,10 @@
 
       <section class="app-view" id="more" aria-labelledby="more-heading">
         <div class="view-heading"><p class="eyebrow">ACCOUNT</p><h1 id="more-heading">More</h1><p>Linked student details and institute notices.</p></div>
-        <article class="profile-card" id="profile-card"></article>
+        <div class="account-grid">
+          <article class="profile-card" id="account-card"></article>
+          <article class="profile-card linked-student-card" id="profile-card"></article>
+        </div>
         <section class="panel"><div class="section-head"><div><h2>Notices</h2></div></div><div class="notice-list" id="notice-list"></div></section>
         <button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
       </section>
@@ -109,6 +135,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=1" defer></script>
+  <script src="./app.js?v=2" defer></script>
 </body>
 </html>

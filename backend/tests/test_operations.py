@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.models import AssignmentRecipient, AuditLog, Batch, Enrollment, Room, Student, StudentAccount, Subject, User
+from app.models import AssignmentRecipient, AuditLog, Batch, Enrollment, ParentAccount, Room, Student, StudentAccount, Subject, User
 from app.security import create_token, hash_password
 
 
@@ -103,4 +103,65 @@ def test_owner_can_provision_one_portal_account_per_student(client, database, ow
     duplicate = client.post("/api/settings/student-access", json={**payload, "email": "second@example.com"}, headers=owner_headers)
     assert duplicate.status_code == 409
     account = database.query(StudentAccount).filter_by(student_id=student.id).one()
-    assert database.get(User, account.user_id).role == "parent_student"
+    assert database.get(User, account.user_id).role == "student"
+
+
+def test_parent_portal_uses_a_separate_contact_account(client, database, owner_headers):
+    faculty, batch, subject, room, _, student, other_student = operational_setup(database)
+    parent = User(
+        email="aarav.parent@example.com",
+        full_name="Asha Sharma",
+        role="parent",
+        password_hash=hash_password("ParentPass123!"),
+    )
+    database.add(parent)
+    database.flush()
+    database.add(ParentAccount(
+        user_id=parent.id,
+        student_id=student.id,
+        contact_type="primary_contact",
+    ))
+    database.commit()
+
+    scheduled = client.post(
+        "/api/timetable/sessions",
+        json=session_payload(faculty, batch, subject, room),
+        headers=owner_headers,
+    )
+    assert scheduled.status_code == 201
+
+    parent_headers = {"Authorization": f"Bearer {create_token(parent)}"}
+    response = client.get("/api/parent/bootstrap", headers=parent_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["account"] == {
+        "id": parent.id,
+        "fullName": "Asha Sharma",
+        "email": "aarav.parent@example.com",
+        "contactType": "primary_contact",
+    }
+    assert body["profile"]["id"] == student.id
+    assert body["profile"]["id"] != other_student.id
+    assert body["schedule"][0]["subject"] == "Physics"
+    assert client.get("/api/portal/bootstrap", headers=parent_headers).status_code == 403
+
+
+def test_owner_can_provision_parent_access_without_a_guardian_relationship(client, database, owner_headers):
+    _, _, _, _, _, student, _ = operational_setup(database)
+    response = client.post(
+        "/api/settings/parent-access",
+        json={
+            "studentId": student.id,
+            "fullName": "Asha Sharma",
+            "email": "asha.parent@example.com",
+            "password": "ParentPass123!",
+            "contactType": "primary_contact",
+        },
+        headers=owner_headers,
+    )
+    assert response.status_code == 201
+    assert response.json()["studentId"] == student.id
+    account = database.query(ParentAccount).filter_by(student_id=student.id).one()
+    user = database.get(User, account.user_id)
+    assert user.role == "parent"
+    assert account.contact_type == "primary_contact"

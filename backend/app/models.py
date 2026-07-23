@@ -110,6 +110,13 @@ class StudentAccount(TimestampMixin, Base):
     student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), unique=True, index=True)
 
 
+class ParentAccount(TimestampMixin, Base):
+    __tablename__ = "parent_accounts"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    contact_type: Mapped[str] = mapped_column(String(24), default="primary_contact", index=True)
+
+
 class Enrollment(TimestampMixin, Base):
     __tablename__ = "enrollments"
     __table_args__ = (UniqueConstraint("student_id", "program", "batch", "is_active", name="uq_active_enrollment"),)

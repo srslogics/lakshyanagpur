@@ -1,8 +1,10 @@
-const CACHE = "lakshya-student-v10";
-const ASSETS = ["./", "./styles.css?v=5", "../auth-shared.css?v=4", "./app.js?v=4", "./manifest.webmanifest", "../lakshya-logo.png", "../pwa-icon-192.png", "../pwa-icon-512.png"];
+const CACHE = "lakshya-student-v11";
+const ASSETS = ["./", "../portal-shared.css?v=1", "./styles.css?v=6", "../auth-shared.css?v=5", "./app.js?v=5", "./manifest.webmanifest", "../lakshya-logo.png", "../pwa-icon-192.png", "../pwa-icon-512.png", "../share-card.png"];
 self.addEventListener("install", event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener("activate", event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))); self.clients.claim(); });
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/api/")) return;
   event.respondWith(fetch(event.request).then(response => { if (response.ok && response.type === "basic") caches.open(CACHE).then(cache => cache.put(event.request, response.clone())); return response; }).catch(() => caches.match(event.request).then(match => match || caches.match("./"))));
 });
