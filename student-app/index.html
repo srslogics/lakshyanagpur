@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../portal-shared.css?v=2">
-  <link rel="stylesheet" href="./styles.css?v=6">
+  <link rel="stylesheet" href="./styles.css?v=7">
   <link rel="stylesheet" href="../auth-shared.css?v=5">
 </head>
 <body>
@@ -63,7 +63,10 @@
         <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
         <button type="button" data-view="assignments"><span data-icon="book"></span><em>Assignments</em><i id="sidebar-assignment-badge" class="nav-badge hidden">0</i></button>
         <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em></button>
-        <button type="button" data-view="more"><span data-icon="more"></span><em>Account</em></button>
+        <span class="sidebar-section-label">Student services</span>
+        <button type="button" data-view="fees"><span data-icon="wallet"></span><em>Fees</em></button>
+        <button type="button" data-view="notices"><span data-icon="notice"></span><em>Notices</em></button>
+        <button type="button" data-view="profile"><span data-icon="user"></span><em>Profile</em></button>
       </nav>
       <div class="sidebar-account">
         <span class="sidebar-avatar" id="sidebar-avatar">LS</span>
@@ -88,14 +91,64 @@
         <div class="dashboard-grid">
           <section class="content-block next-panel"><div class="section-head"><h2>Next class</h2><button type="button" data-go="schedule">View schedule</button></div><div id="next-class"></div></section>
           <section class="content-block work-panel"><div class="section-head"><h2>Assignments</h2><button type="button" data-go="assignments">View all</button></div><div class="stack-list" id="home-assignments"></div></section>
-          <section class="content-block notice-panel"><div class="section-head"><h2>Latest notice</h2><button type="button" data-go="more">View all</button></div><div id="latest-notice"></div></section>
+          <section class="content-block notice-panel"><div class="section-head"><h2>Latest notice</h2><button type="button" data-go="notices">View all</button></div><div id="latest-notice"></div></section>
         </div>
       </section>
 
-      <section class="portal-view" id="schedule" aria-labelledby="schedule-heading"><div class="view-heading"><p class="eyebrow">CLASSES</p><h1 id="schedule-heading">Schedule</h1></div><div class="date-filter" id="schedule-dates"></div><div class="timeline" id="schedule-list"></div></section>
-      <section class="portal-view" id="assignments" aria-labelledby="assignments-heading"><div class="view-heading"><p class="eyebrow">ACADEMICS</p><h1 id="assignments-heading">Assignments</h1></div><div class="filter-pills" aria-label="Assignment filter"><button class="active" data-assignment-filter="open" type="button" aria-pressed="true">Open</button><button data-assignment-filter="all" type="button" aria-pressed="false">All</button></div><div class="assignment-grid" id="assignment-list"></div></section>
-      <section class="portal-view" id="attendance" aria-labelledby="attendance-heading"><div class="view-heading"><p class="eyebrow">PRESENCE</p><h1 id="attendance-heading">Attendance</h1></div><article class="attendance-hero" id="attendance-hero"></article><div class="stack-list" id="attendance-list"></div></section>
-      <section class="portal-view" id="more" aria-labelledby="more-heading"><div class="view-heading"><p class="eyebrow">ACCOUNT</p><h1 id="more-heading">More</h1></div><article class="profile-card" id="profile-card"></article><section class="content-block fees-block"><div class="section-head"><h2>Fees</h2></div><div id="fee-summary"></div></section><section class="content-block"><div class="section-head"><h2>Notices</h2></div><div class="notice-list" id="notice-list"></div></section><button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button></section>
+      <section class="portal-view" id="schedule" aria-labelledby="schedule-heading">
+        <div class="view-heading"><p class="eyebrow">CLASSES</p><h1 id="schedule-heading">Schedule</h1><p>Your published class timetable with faculty and room details.</p></div>
+        <div class="module-metrics" id="schedule-metrics"></div>
+        <div class="date-filter" id="schedule-dates" aria-label="Schedule date"></div>
+        <section class="content-block module-panel"><div class="section-head"><h2 id="schedule-list-heading">Class timetable</h2></div><div class="timeline" id="schedule-list"></div></section>
+      </section>
+
+      <section class="portal-view" id="assignments" aria-labelledby="assignments-heading">
+        <div class="view-heading"><p class="eyebrow">ACADEMICS</p><h1 id="assignments-heading">Assignments</h1><p>Open published work, follow instructions, and keep your completion status current.</p></div>
+        <div class="module-metrics" id="assignment-metrics"></div>
+        <div class="filter-pills" aria-label="Assignment filter">
+          <button class="active" data-assignment-filter="open" type="button" aria-pressed="true">Open</button>
+          <button data-assignment-filter="overdue" type="button" aria-pressed="false">Overdue</button>
+          <button data-assignment-filter="completed" type="button" aria-pressed="false">Completed</button>
+          <button data-assignment-filter="all" type="button" aria-pressed="false">All</button>
+        </div>
+        <div class="assignment-grid" id="assignment-list"></div>
+      </section>
+
+      <section class="portal-view" id="attendance" aria-labelledby="attendance-heading">
+        <div class="view-heading"><p class="eyebrow">PRESENCE</p><h1 id="attendance-heading">Attendance</h1><p>Submitted attendance records from your scheduled classes.</p></div>
+        <article class="attendance-hero" id="attendance-hero"></article>
+        <div class="module-metrics" id="attendance-metrics"></div>
+        <section class="content-block module-panel"><div class="section-head"><h2>Subject summary</h2></div><div class="subject-attendance-grid" id="attendance-breakdown"></div></section>
+        <section class="content-block module-panel"><div class="section-head"><h2>Class history</h2></div><div class="stack-list" id="attendance-list"></div></section>
+      </section>
+
+      <section class="portal-view" id="fees" aria-labelledby="fees-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">FINANCE</p><h1 id="fees-heading">Fees</h1><p>Your agreed fee and every payment currently recorded by the institute.</p></div></div>
+        <article class="fee-hero" id="student-fee-hero"></article>
+        <section class="content-block module-panel"><div class="section-head"><h2>Payment history</h2><span class="record-note">Read-only record</span></div><div class="payment-list" id="student-payment-list"></div></section>
+      </section>
+
+      <section class="portal-view" id="notices" aria-labelledby="notices-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">INSTITUTE</p><h1 id="notices-heading">Notices</h1><p>Published announcements for students and your batch.</p></div></div>
+        <div class="module-metrics" id="notice-metrics"></div>
+        <section class="content-block module-panel"><div class="notice-list full-notice-list" id="notice-list"></div></section>
+      </section>
+
+      <section class="portal-view" id="profile" aria-labelledby="profile-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">ACCOUNT</p><h1 id="profile-heading">Profile</h1><p>Your student record and portal account details.</p></div></div>
+        <article class="profile-card" id="profile-card"></article>
+        <section class="content-block module-panel"><div class="section-head"><h2>Student details</h2><span class="record-note">Managed by Lakshya</span></div><dl class="detail-grid" id="profile-details"></dl></section>
+      </section>
+
+      <section class="portal-view" id="more" aria-labelledby="more-heading">
+        <div class="view-heading"><p class="eyebrow">STUDENT SERVICES</p><h1 id="more-heading">More</h1><p>Fees, notices, profile, and account access.</p></div>
+        <div class="service-grid">
+          <button class="service-card" type="button" data-go="fees"><span class="service-icon" data-icon="wallet"></span><span><strong>Fees</strong><small id="more-fee-copy">View your fee record</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
+          <button class="service-card" type="button" data-go="notices"><span class="service-icon" data-icon="notice"></span><span><strong>Notices</strong><small id="more-notice-copy">Institute announcements</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
+          <button class="service-card" type="button" data-go="profile"><span class="service-icon" data-icon="user"></span><span><strong>Profile</strong><small id="more-profile-copy">Student and login details</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
+        </div>
+        <button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
+      </section>
     </main>
 
     <nav class="bottom-nav" aria-label="Student navigation">
@@ -108,6 +161,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=5" defer></script>
+  <script src="./app.js?v=6" defer></script>
 </body>
 </html>

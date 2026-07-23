@@ -87,11 +87,73 @@ def test_student_portal_returns_only_the_linked_student(client, database, owner_
     portal = client.get("/api/portal/bootstrap", headers=parent_headers)
     assert portal.status_code == 200
     body = portal.json()
+    assert body["account"]["email"] == parent.email
     assert body["profile"]["id"] == student.id
     assert body["profile"]["id"] != other_student.id
     assert [item["title"] for item in body["assignments"]] == ["Portal practice"]
     assert body["schedule"][0]["subject"] == "Physics"
     assert client.get("/api/portal/bootstrap", headers=owner_headers).status_code == 403
+
+
+def test_student_can_update_only_their_assignment_status(client, database, owner_headers, parent_headers):
+    faculty, batch, subject, _, _, student, other_student = operational_setup(database)
+    student_user = database.query(User).filter_by(role="parent_student").one()
+    database.add(StudentAccount(user_id=student_user.id, student_id=student.id))
+    database.commit()
+    assignment = client.post(
+        "/api/academics/assignments",
+        json={
+            "batchId": batch.id,
+            "subjectId": subject.id,
+            "title": "Student-owned practice",
+            "instructions": "Complete the worksheet",
+            "dueAt": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+            "externalUrl": "https://example.com/work.pdf",
+            "status": "published",
+        },
+        headers=owner_headers,
+    )
+    assert assignment.status_code == 201
+    assignment_id = assignment.json()["id"]
+
+    completed = client.patch(
+        f"/api/portal/assignments/{assignment_id}/status",
+        json={"status": "completed"},
+        headers=parent_headers,
+    )
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "completed"
+    portal = client.get("/api/portal/bootstrap", headers=parent_headers)
+    assert portal.status_code == 200
+    assert portal.json()["summary"]["openAssignments"] == 0
+    assert portal.json()["assignments"][0]["status"] == "completed"
+    recipient = database.query(AssignmentRecipient).filter_by(
+        assignment_id=assignment_id,
+        student_id=student.id,
+    ).one()
+    assert recipient.status == "completed"
+    assert database.query(AuditLog).filter_by(
+        action="portal.assignment.status",
+        entity_id=f"{assignment_id}:{student.id}",
+    ).count() == 1
+
+    other_user = User(
+        email="other.student@example.com",
+        full_name=other_student.full_name,
+        role="student",
+        password_hash=hash_password("OtherStudentPass123!"),
+    )
+    database.add(other_user)
+    database.flush()
+    database.add(StudentAccount(user_id=other_user.id, student_id=other_student.id))
+    database.commit()
+    other_headers = {"Authorization": f"Bearer {create_token(other_user)}"}
+    denied = client.patch(
+        f"/api/portal/assignments/{assignment_id}/status",
+        json={"status": "completed"},
+        headers=other_headers,
+    )
+    assert denied.status_code == 404
 
 
 def test_owner_can_provision_one_portal_account_per_student(client, database, owner_headers):

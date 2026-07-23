@@ -5,6 +5,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..operations_schemas import StudentAssignmentStatusUpdate
 from ..models import (
     Assignment,
     AssignmentRecipient,
@@ -24,6 +25,7 @@ from ..models import (
     User,
 )
 from ..security import require_roles
+from ..services import audit
 
 router = APIRouter(prefix="/api/portal", tags=["student portal"])
 parent_router = APIRouter(prefix="/api/parent", tags=["parent portal"])
@@ -203,6 +205,7 @@ def _student_profile(student: Student, enrollment: Enrollment | None):
         "fullName": student.full_name,
         "admissionNumber": student.admission_number,
         "mobile": student.mobile,
+        "secondaryMobile": student.secondary_mobile,
         "email": student.email,
         "program": enrollment.program if enrollment else None,
         "batch": enrollment.batch if enrollment else None,
@@ -232,7 +235,7 @@ def _portal_payload(
                 1 for row in schedule if _aware(row["startsAt"]) >= now
             ),
             "openAssignments": sum(
-                1 for row in assignments if _aware(row["dueAt"]) >= now
+                1 for row in assignments if row["status"] != "completed"
             ),
             "attendanceRate": (
                 round(present / len(attendance) * 100, 1)
@@ -254,7 +257,47 @@ def student_bootstrap(
     user: User = Depends(require_roles("student", "parent_student")),
 ):
     _, student, enrollment = _student_for_account(db, StudentAccount, user)
-    return _portal_payload(db, student, enrollment, "students")
+    payload = _portal_payload(db, student, enrollment, "students")
+    payload["account"] = {
+        "id": user.id,
+        "fullName": user.full_name,
+        "email": user.email,
+    }
+    return payload
+
+
+@router.patch("/assignments/{assignment_id}/status")
+def update_student_assignment_status(
+    assignment_id: str,
+    payload: StudentAssignmentStatusUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("student", "parent_student")),
+):
+    _, student, _ = _student_for_account(db, StudentAccount, user)
+    recipient = db.query(AssignmentRecipient).filter_by(
+        assignment_id=assignment_id,
+        student_id=student.id,
+    ).first()
+    assignment = db.get(Assignment, assignment_id)
+    if not recipient or not assignment or assignment.status != "published":
+        raise HTTPException(404, "Assignment not found for this student")
+    before = {"status": recipient.status}
+    recipient.status = payload.status
+    audit(
+        db,
+        user,
+        "portal.assignment.status",
+        "assignment_recipient",
+        f"{assignment_id}:{student.id}",
+        before=before,
+        after={"status": recipient.status},
+    )
+    db.commit()
+    return {
+        "assignmentId": assignment_id,
+        "studentId": student.id,
+        "status": recipient.status,
+    }
 
 
 @parent_router.get("/bootstrap")

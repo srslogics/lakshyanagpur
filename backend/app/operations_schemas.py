@@ -47,6 +47,10 @@ class ParentAccessCreate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class StudentAssignmentStatusUpdate(BaseModel):
+    status: Literal["published", "completed"]
+
+
 class ClassSessionCreate(BaseModel):
     batch_id: str = Field(alias="batchId")
     subject_id: str = Field(alias="subjectId")
