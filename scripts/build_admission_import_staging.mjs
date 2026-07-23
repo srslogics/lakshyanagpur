@@ -113,7 +113,7 @@ for (const record of records) {
       kind: incentive ? "Incentive / concession review" : "Payment", raw: part,
       readiness: record.status === "cancelled" ? "DO NOT IMPORT" : incentive || !date || paymentMode(part) === "Unknown" ? "REVIEW" : "READY",
       dateEntryStatus: clientManualDate ? "manual_client_entry" : date ? "source_date" : "unresolved",
-      reviewerNote: clientManualDate ? "Payment date unknown — client will enter manually" : "",
+      reviewerNote: clientManualDate ? "Unknown — client to enter manually" : "",
     });
   });
 }
@@ -238,7 +238,7 @@ paymentSheet.getRangeByIndexes(3,0,payments.length,paymentHeaders.length).values
 paymentSheet.getRange(`F4:F${3+payments.length}`).format.numberFormat = "dd-mm-yyyy"; paymentSheet.getRange(`G4:G${3+payments.length}`).format.numberFormat = moneyFormat;
 paymentSheet.getRange(`K4:K${3+payments.length}`).dataValidation = { rule: { type: "list", values: ["READY","REVIEW","DO NOT IMPORT"] } };
 paymentSheet.tables.add(`A3:M${3+payments.length}`, true, "PaymentReviewTable").style = "TableStyleMedium4";
-paymentSheet.freezePanes.freezeRows(3); paymentSheet.freezePanes.freezeColumns(4); paymentSheet.getRange("A:M").format.font = { name: "Aptos", size: 9 }; paymentSheet.getRange("A:M").format.columnWidth = 15; paymentSheet.getRange("A:A").format.columnWidth = 27; paymentSheet.getRange("D:D").format.columnWidth = 24; paymentSheet.getRange("J:J").format.columnWidth = 38; paymentSheet.getRange("M:M").format.columnWidth = 30; paymentSheet.getRange("J:M").format.wrapText = true; paymentSheet.showGridLines = false;
+paymentSheet.freezePanes.freezeRows(3); paymentSheet.freezePanes.freezeColumns(4); paymentSheet.getRange("A:M").format.font = { name: "Aptos", size: 9 }; paymentSheet.getRange("A:M").format.columnWidth = 15; paymentSheet.getRange("A:A").format.columnWidth = 27; paymentSheet.getRange("D:D").format.columnWidth = 24; paymentSheet.getRange("J:J").format.columnWidth = 38; paymentSheet.getRange("M:M").format.columnWidth = 34; paymentSheet.getRange("J:M").format.wrapText = true; paymentSheet.showGridLines = false;
 
 const exceptionRows = records.filter(r => r.issues.length);
 exceptions.getRange("A1:G1").merge(); exceptions.getRange("A1").values = [["Exceptions requiring review before ERP import"]]; exceptions.getRange("A1:G1").format = titleStyle;
@@ -260,6 +260,9 @@ for (const [sheetName, range] of [["Import Summary","A1:H12"],["ERP Mapping","A1
   const preview = await workbook.render({ sheetName, range: range.split("!").pop(), scale: 1.2, format: "png" });
   await fs.writeFile(`${previewDir}/${sheetName.replace(/[^a-z0-9]+/gi,"_")}.png`, new Uint8Array(await preview.arrayBuffer()));
 }
+checks["Payment Review — manual dates"] = (await workbook.inspect({ kind: "table", range: "Payment Review!A28:M92", include: "values,formulas", tableMaxRows: 70, tableMaxCols: 13, maxChars: 12000 })).ndjson;
+const manualDatePreview = await workbook.render({ sheetName: "Payment Review", range: "A28:M92", scale: 1.2, format: "png" });
+await fs.writeFile(`${previewDir}/Payment_Review_Manual_Dates.png`, new Uint8Array(await manualDatePreview.arrayBuffer()));
 const errors = (await workbook.inspect({ kind: "match", searchTerm: "#REF!|#DIV/0!|#VALUE!|#NAME\\?|#N/A", options: { useRegex: true, maxResults: 300 }, summary: "final formula error scan" })).ndjson;
 await fs.writeFile(`${previewDir}/checks.json`, JSON.stringify({ counts: { active: active.length, cancelled: cancelled.length, payments: payments.length, exceptions: exceptionLines.length, feeTotal: active.reduce((a,r)=>a+r.feeTotal,0), registrationTotal: active.reduce((a,r)=>a+r.registrationTotal,0), ready: records.filter(r=>r.readiness==="READY").length, review: records.filter(r=>r.readiness==="REVIEW").length, blocked: records.filter(r=>r.readiness==="BLOCKED").length }, errors, checks }, null, 2));
 console.log(JSON.stringify({ outputPath, manifestPath, sourceHash, active: active.length, cancelled: cancelled.length, payments: payments.length, stagedPaymentTotal: manifest.expected.staged_payment_total, exceptions: exceptionLines.length, feeTotal: active.reduce((a,r)=>a+r.feeTotal,0), registrationTotal: active.reduce((a,r)=>a+r.registrationTotal,0), ready: records.filter(r=>r.readiness==="READY").length, review: records.filter(r=>r.readiness==="REVIEW").length, blocked: records.filter(r=>r.readiness==="BLOCKED").length, errors }, null, 2));
