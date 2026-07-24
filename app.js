@@ -32,6 +32,9 @@ const cachedUser = (() => {
   catch { return null; }
 })();
 const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
+const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
+const studentHierarchyState = { open: new Set(["batch:Essential", "batch:Tatva"]) };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
@@ -298,26 +301,112 @@ function compactMetrics(items) { return items.map(item => `<div class="compact-m
 function studentPrimary(name, detail = "") { return `<div class="table-primary"><span class="record-avatar">${initials(name)}</span><span><strong>${esc(name)}</strong><small>${esc(detail)}</small></span></div>`; }
 function emptyState(iconName, title, copy = "") { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3>${copy ? `<p>${esc(copy)}</p>` : ""}</div></div>`; }
 
+function studentBatchKey(batch) {
+  const value = String(batch || "").trim().toLowerCase();
+  return STUDENT_BATCH_ORDER.find(name => name.toLowerCase() === value) || "Records for review";
+}
+
+function studentProgramKey(program) {
+  const value = String(program || "").trim().toLowerCase();
+  if (value.includes("mht") || value.includes("cet")) return "MHT-CET";
+  if (value.includes("neet")) return "NEET";
+  if (value.includes("jee")) return "JEE";
+  if (value.includes("board")) return "Boards";
+  return "Unassigned";
+}
+
 function filteredStudents() {
   const search = $("#student-search").value.trim().toLowerCase(), program = $("#student-program-filter").value, quality = $("#student-quality-filter").value;
-  return state.students.filter(item => (!search || [item.fullName, item.mobile, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search))) && (!program || item.program === program) && (!quality || item.dataQualityStatus === quality));
+  return state.students.filter(item => (!search || [item.fullName, item.mobile, item.admissionNumber, item.previousSchool, item.batch, item.program].some(value => String(value || "").toLowerCase().includes(search))) && (!program || studentProgramKey(item.program) === program) && (!quality || item.dataQualityStatus === quality));
 }
 
 function renderStudents() {
-  const programs = [...new Set(state.students.map(item => item.program).filter(Boolean))].sort();
   const programFilter = $("#student-program-filter"); const current = programFilter.value;
-  programFilter.innerHTML = `<option value="">All programs</option>${programs.map(program => `<option>${esc(program)}</option>`).join("")}`; programFilter.value = current;
+  programFilter.innerHTML = `<option value="">All programs</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${program}">${program}</option>`).join("")}`; programFilter.value = current;
+  const essential = state.students.filter(item => studentBatchKey(item.batch) === "Essential").length;
+  const tatva = state.students.filter(item => studentBatchKey(item.batch) === "Tatva").length;
+  const review = state.students.length - essential - tatva;
   $("#student-metrics").innerHTML = compactMetrics([
-    { label: "Active records", value: String(state.students.length) }, { label: "Import ready", value: String(state.students.filter(item => item.dataQualityStatus === "ready").length) },
-    { label: "Needs review", value: String(state.students.filter(item => item.dataQualityStatus === "review").length) }, { label: "Programs", value: String(programs.length) }
+    { label: "Essential", value: String(essential) }, { label: "Tatva", value: String(tatva) },
+    { label: "Programs", value: String(STUDENT_PROGRAM_ORDER.length) }, { label: "Records for review", value: String(review) }
   ]);
   renderStudentRows();
 }
 
+function studentTreeDomId(value) {
+  return `student-tree-${String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
+function renderStudentLeaf(student) {
+  const contact = student.mobile || "Contact not captured";
+  const school = student.previousSchool || "School not captured";
+  return `<button class="student-tree-student" type="button" data-student-id="${esc(student.id)}" aria-label="Open ${esc(student.fullName)}">
+    <span class="record-avatar">${initials(student.fullName)}</span>
+    <span class="student-tree-student-copy"><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)} · ${esc(contact)}</small><small>${esc(school)}</small></span>
+    ${status(student.dataQualityStatus)}
+    <span class="student-tree-open" aria-hidden="true">${icon("chevron-right")}</span>
+  </button>`;
+}
+
+function renderStudentProgram(batchName, programName, rows, forceOpen = false) {
+  const key = `program:${batchName}:${programName}`, contentId = studentTreeDomId(key);
+  const expanded = forceOpen || studentHierarchyState.open.has(key);
+  const sorted = [...rows].sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
+  return `<section class="student-program-group">
+    <button class="student-program-trigger" type="button" data-student-tree-toggle="${esc(key)}" aria-expanded="${expanded}" aria-controls="${contentId}">
+      <span class="student-program-marker" aria-hidden="true"></span>
+      <span class="student-tree-label"><strong>${esc(programName)}</strong><small>${sorted.length ? `${sorted.length} ${sorted.length === 1 ? "student" : "students"}` : "No students assigned"}</small></span>
+      <span class="student-tree-count">${sorted.length}</span>
+      <span class="student-tree-chevron" aria-hidden="true">${icon("chevron-down")}</span>
+    </button>
+    <div class="student-program-content" id="${contentId}" ${expanded ? "" : "hidden"}>
+      ${sorted.length ? `<div class="student-leaf-grid">${sorted.map(renderStudentLeaf).join("")}</div>` : `<p class="student-tree-empty">No students in this program.</p>`}
+    </div>
+  </section>`;
+}
+
+function renderStudentBatch(batchName, rows, { review = false, searchActive = false, selectedProgram = "" } = {}) {
+  const key = `batch:${batchName}`, contentId = studentTreeDomId(key);
+  const expanded = searchActive || studentHierarchyState.open.has(key);
+  const availablePrograms = review
+    ? [...new Set(rows.map(item => studentProgramKey(item.program)))].sort((a, b) => {
+      const aIndex = STUDENT_PROGRAM_ORDER.indexOf(a), bIndex = STUDENT_PROGRAM_ORDER.indexOf(b);
+      return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex) || a.localeCompare(b);
+    })
+    : STUDENT_PROGRAM_ORDER;
+  const programs = selectedProgram ? availablePrograms.filter(program => program === selectedProgram) : availablePrograms;
+  const subtitle = review ? "Batch assignment required" : `${programs.filter(program => rows.some(item => studentProgramKey(item.program) === program)).length} active programs`;
+  return `<section class="student-batch-group${review ? " student-batch-review" : ""}">
+    <button class="student-batch-trigger" type="button" data-student-tree-toggle="${esc(key)}" aria-expanded="${expanded}" aria-controls="${contentId}">
+      <span class="student-batch-icon" aria-hidden="true">${review ? icon("alert") : esc(batchName.charAt(0))}</span>
+      <span class="student-tree-label"><strong>${esc(batchName)}</strong><small>${esc(subtitle)}</small></span>
+      <span class="student-tree-count">${rows.length}</span>
+      <span class="student-tree-chevron" aria-hidden="true">${icon("chevron-down")}</span>
+    </button>
+    <div class="student-batch-content" id="${contentId}" ${expanded ? "" : "hidden"}>
+      ${programs.length ? programs.map(program => renderStudentProgram(batchName, program, rows.filter(item => studentProgramKey(item.program) === program), searchActive)).join("") : `<p class="student-tree-empty">No matching students in this group.</p>`}
+    </div>
+  </section>`;
+}
+
 function renderStudentRows() {
-  const rows = filteredStudents(); $("#student-result-count").textContent = `${rows.length} of ${state.students.length} students`;
-  $("#students-table-body").innerHTML = rows.length ? rows.map(student => `<tr><td>${studentPrimary(student.fullName, student.previousSchool || "School not captured")}</td><td><strong>${esc(student.admissionNumber)}</strong></td><td>${esc(student.program)}<br><small>${esc(student.batch || "—")}</small></td><td>${esc(student.mobile || "—")}</td><td>${formatDate(student.enrollmentDate)}</td><td>${status(student.dataQualityStatus)}</td><td><button class="icon-button table-action" type="button" aria-label="View ${esc(student.fullName)}" data-student-id="${esc(student.id)}">${icon("chevron-right")}</button></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching students", "Try clearing one of the directory filters.")}</td></tr>`;
-  $("#students-mobile-list").innerHTML = rows.map(student => `<article class="mobile-record-card"><div>${studentPrimary(student.fullName, student.admissionNumber)}${status(student.dataQualityStatus)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(student.program)}</strong></div><div><span>Mobile</span><strong>${esc(student.mobile || "—")}</strong></div></div><button class="button button-secondary" type="button" data-student-id="${esc(student.id)}">View record</button></article>`).join("");
+  const rows = filteredStudents(), searchActive = Boolean($("#student-search").value.trim()), selectedProgram = $("#student-program-filter").value;
+  const assignedCount = rows.filter(item => STUDENT_BATCH_ORDER.includes(studentBatchKey(item.batch))).length;
+  $("#student-result-count").textContent = rows.length === state.students.length
+    ? `${rows.length} students · ${assignedCount} assigned to Essential or Tatva`
+    : `${rows.length} of ${state.students.length} students`;
+  if (!rows.length) {
+    $("#student-hierarchy").innerHTML = emptyState("search", "No matching students", "Try clearing one of the directory filters.");
+    return;
+  }
+  const groups = STUDENT_BATCH_ORDER.map(batch => renderStudentBatch(
+    batch,
+    rows.filter(item => studentBatchKey(item.batch) === batch),
+    { searchActive, selectedProgram }
+  ));
+  const reviewRows = rows.filter(item => studentBatchKey(item.batch) === "Records for review");
+  if (reviewRows.length) groups.push(renderStudentBatch("Records for review", reviewRows, { review: true, searchActive, selectedProgram }));
+  $("#student-hierarchy").innerHTML = groups.join("");
 }
 
 function renderFinance() {
@@ -663,6 +752,14 @@ function bindEvents() {
   $(".password-toggle").addEventListener("click", event => { const field = $("#auth-password"), visible = field.type === "text"; field.type = visible ? "password" : "text"; event.currentTarget.setAttribute("aria-label", visible ? "Show password" : "Hide password"); });
   document.addEventListener("click", event => {
     const view = event.target.closest("[data-view], [data-view-target]")?.dataset; if (view) showView(view.view || view.viewTarget);
+    const treeButton = event.target.closest("[data-student-tree-toggle]"), treeToggle = treeButton?.dataset.studentTreeToggle;
+    if (treeButton && treeToggle) {
+      const expanded = treeButton.getAttribute("aria-expanded") !== "true";
+      if (expanded) studentHierarchyState.open.add(treeToggle); else studentHierarchyState.open.delete(treeToggle);
+      const content = document.getElementById(treeButton.getAttribute("aria-controls"));
+      treeButton.setAttribute("aria-expanded", String(expanded));
+      if (content) content.hidden = !expanded;
+    }
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }

@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=23">
+  <link rel="stylesheet" href="./styles.css?v=24">
   <link rel="stylesheet" href="./auth-shared.css?v=4">
 </head>
 <body>
@@ -191,8 +191,7 @@
           <article class="surface table-surface">
             <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="student-search" type="search" placeholder="Search name, mobile or admission number" aria-label="Search student directory"></label><select id="student-program-filter" aria-label="Filter by program"><option value="">All programs</option></select><select id="student-quality-filter" aria-label="Filter by data quality"><option value="">All quality states</option><option value="ready">Ready</option><option value="review">Review</option><option value="blocked">Blocked</option></select></div>
             <div class="table-meta"><span id="student-result-count">Loading…</span></div>
-            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Admission ID</th><th>Program</th><th>Contact</th><th>Enrollment</th><th>Data quality</th><th></th></tr></thead><tbody id="students-table-body"></tbody></table></div>
-            <div class="mobile-records" id="students-mobile-list"></div>
+            <div class="student-hierarchy" id="student-hierarchy" aria-label="Students grouped by batch and program"></div>
           </article>
         </section>
 
@@ -274,6 +273,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=26" defer></script>
+  <script src="./app.js?v=27" defer></script>
 </body>
 </html>
