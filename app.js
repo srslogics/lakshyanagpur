@@ -22,6 +22,7 @@ const icons = {
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/>', plus: '<path d="M12 5v14M5 12h14"/>',
   refresh: '<path d="M20 6v5h-5M4 18v-5h5"/><path d="M6.1 9a7 7 0 0 1 11.7-2.6L20 11M4 13l2.2 4.6A7 7 0 0 0 18 15"/>',
   download: '<path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/>', receipt: '<path d="M5 3v18l3-2 4 2 4-2 3 2V3l-3 2-4-2-4 2-3-2Z"/><path d="M9 9h6M9 13h6"/>',
+  "arrow-left": '<path d="M19 12H5m6-6-6 6 6 6"/>', printer: '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', trend: '<path d="m3 17 6-6 4 4 8-9M15 6h6v6"/>',
   alert: '<path d="M10.3 4.5 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
@@ -34,6 +35,8 @@ const cachedUser = (() => {
 })();
 const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 let financeStudentFilter = "";
+let ledgerCurrentStudentId = "";
+let ledgerReturnFocus = null;
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
 const studentHierarchyState = { open: new Set(["batch:Essential", "batch:Tatva"]) };
@@ -277,7 +280,7 @@ function renderDashboard() {
   $("#dashboard-metrics").innerHTML = [
     metricCard("Active students", String(activeStudents.length), "users", true),
     metricCard("Agreed fees", shortMoney(agreed), "wallet"),
-    metricCard("Registration", shortMoney(registration), "receipt"),
+    metricCard("Workbook control", shortMoney(registration), "receipt"),
     metricCard("Enquiries", String(state.leads.length), "spark")
   ].join("");
 
@@ -298,7 +301,7 @@ function renderDashboard() {
   const stagedTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const readyPayments = state.payments.filter(item => item.reconciliationStatus === "ready").length;
   const readyPercent = state.payments.length ? Math.round(readyPayments / state.payments.length * 100) : 0;
-  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} staged entries</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} ready</span><span>${state.payments.length - readyPayments} review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">View ledger ${icon("arrow-right")}</button></div>`;
+  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} payment entries</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} ready</span><span>${state.payments.length - readyPayments} review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open receivables ${icon("arrow-right")}</button></div>`;
 }
 
 function compactMetrics(items) { return items.map(item => `<div class="compact-metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`).join(""); }
@@ -417,25 +420,78 @@ function renderStudentRows() {
   $("#student-hierarchy").innerHTML = groups.join("");
 }
 
+function studentPayments(studentId) {
+  return state.payments.filter(item => item.studentId === studentId && item.type === "payment" && item.reconciliationStatus !== "do_not_import");
+}
+
+function studentAccount(agreement) {
+  const payments = studentPayments(agreement.studentId);
+  const paid = payments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const agreed = Number(agreement.agreedAmount || 0);
+  const workbookControl = Number(agreement.legacyRegistrationTotal || 0);
+  const balance = agreed - paid;
+  const difference = paid - workbookControl;
+  const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && item.reconciliationStatus !== "ready").length;
+  return {
+    ...agreement,
+    payments,
+    paid,
+    agreed,
+    workbookControl,
+    balance,
+    difference,
+    reviewCount,
+    balanceState: balance > 0 ? "due" : balance < 0 ? "credit" : "settled",
+    needsReconciliation: difference !== 0 || reviewCount > 0
+  };
+}
+
+function accountBalance(value) {
+  if (value < 0) return `${money(Math.abs(value))} Cr`;
+  if (value > 0) return `${money(value)} Dr`;
+  return money(0);
+}
+
+function reconciliationBadge(account) {
+  if (!account.needsReconciliation) return `<span class="status status-ready">Matched</span>`;
+  const difference = account.difference
+    ? `${money(Math.abs(account.difference))} ${account.difference < 0 ? "below" : "above"}`
+    : `${account.reviewCount} review`;
+  return `<span class="status status-review">${esc(difference)}</span>`;
+}
+
 function renderFinance() {
-  const agreed = state.agreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0), registration = state.agreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
-  const paymentTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0), review = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
-  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Registration", value: shortMoney(registration) }, { label: "Recorded payments", value: shortMoney(paymentTotal) }, { label: "Payment entries", value: String(state.payments.length) }]);
-  $("#fee-agreement-count").textContent = state.agreements.length;
+  const accounts = state.agreements.map(studentAccount);
+  const agreed = accounts.reduce((sum, item) => sum + item.agreed, 0);
+  const paymentTotal = accounts.reduce((sum, item) => sum + item.paid, 0);
+  const outstanding = accounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
+  const reconcileCount = accounts.filter(item => item.needsReconciliation).length;
+  const review = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
+  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Recorded payments", value: shortMoney(paymentTotal) }, { label: "Outstanding", value: shortMoney(outstanding) }, { label: "Reconcile", value: String(reconcileCount) }]);
+  $("#fee-agreement-count").textContent = accounts.length;
   $("#payment-total-count").textContent = state.payments.length;
   $("#payment-review-count").textContent = review ? `${review} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !review);
-  $("#finance-agreements-tab").setAttribute("aria-label", `Fee agreements, ${state.agreements.length}`);
-  $("#finance-payments-tab").setAttribute("aria-label", `Payments, ${state.payments.length} entries${review ? `, ${review} need review` : ""}`);
+  $("#finance-agreements-tab").setAttribute("aria-label", `Receivables, ${accounts.length} student accounts`);
+  $("#finance-payments-tab").setAttribute("aria-label", `Payment register, ${state.payments.length} entries${review ? `, ${review} need review` : ""}`);
   renderAgreementRows(); renderPaymentRows();
+  if (ledgerCurrentStudentId) renderStudentLedger(ledgerCurrentStudentId);
 }
 
 function renderAgreementRows() {
   const search = $("#agreement-search").value.trim().toLowerCase();
-  const rows = state.agreements.filter(item => !search || [item.studentName, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search)));
-  const paymentButton = item => `<button class="button button-secondary button-small view-payments-button" type="button" data-view-payments="${esc(item.studentId)}">${icon("receipt")}Payments</button>`;
-  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName)}</td><td>${esc(item.admissionNumber)}</td><td class="currency">${money(item.agreedAmount)}</td><td class="currency">${money(item.legacyRegistrationTotal)}</td><td><div class="cell-actions">${status(item.status)}${paymentButton(item)}${ownerEditButton("agreement", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("search", "No matching fee agreements")}</td></tr>`;
-  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, item.admissionNumber)}${status(item.status)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreedAmount)}</strong></div><div><span>Registration</span><strong>${money(item.legacyRegistrationTotal)}</strong></div></div><div class="mobile-card-actions">${paymentButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching fee agreements");
+  const filter = $("#agreement-balance-filter").value;
+  const rows = state.agreements.map(studentAccount).filter(item => {
+    const matchesSearch = !search || [item.studentName, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search));
+    const matchesFilter = !filter || (filter === "reconcile" ? item.needsReconciliation : item.balanceState === filter);
+    return matchesSearch && matchesFilter;
+  });
+  const visibleOutstanding = rows.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
+  $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
+  const openLedgerButton = item => `<button class="button button-primary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}">${icon("book")}Open ledger</button>`;
+  const balanceBadge = item => `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
+  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName)}</td><td>${esc(item.admissionNumber)}</td><td class="currency">${money(item.agreed)}</td><td class="currency">${money(item.paid)}</td><td><strong class="currency">${accountBalance(item.balance)}</strong>${balanceBadge(item)}</td><td>${reconciliationBadge(item)}</td><td><div class="cell-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.")}</td></tr>`;
+  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Outstanding</span><strong>${accountBalance(item.balance)}</strong></div><div><span>Reconciliation</span><strong>${item.needsReconciliation ? "Review" : "Matched"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.");
 }
 
 function renderPaymentRows() {
@@ -477,12 +533,82 @@ function activateFinanceTab(name, focus = false) {
 }
 
 function showStudentPayments(studentId) {
+  closeStudentLedger(false);
   financeStudentFilter = studentId;
   $("#payment-search").value = "";
   $("#payment-status-filter").value = "";
   activateFinanceTab("payments");
   renderPaymentRows();
   $("#finance-payments-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderStudentLedger(studentId) {
+  const agreement = state.agreements.find(item => item.studentId === studentId);
+  if (!agreement) { closeStudentLedger(false); return; }
+  const account = studentAccount(agreement);
+  const student = state.students.find(item => item.id === studentId);
+  const payments = [...account.payments].sort((a, b) => String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31")) || Number(a.line || 0) - Number(b.line || 0));
+  let runningBalance = account.agreed;
+  const transactions = [{
+    date: student?.enrollmentDate || null,
+    particulars: `${student?.program || "Course"} fee charged`,
+    reference: agreement.admissionNumber,
+    mode: "—",
+    debit: account.agreed,
+    credit: null,
+    balance: runningBalance,
+    note: "Fee agreement"
+  }, ...payments.map(item => {
+    runningBalance -= Number(item.amount || 0);
+    return {
+      date: item.date,
+      particulars: "Fee received",
+      reference: `Import line ${item.line || "—"}`,
+      mode: item.method || "Not captured",
+      debit: null,
+      credit: Number(item.amount || 0),
+      balance: runningBalance,
+      note: item.sourceNote || "",
+      reconciliationStatus: item.reconciliationStatus
+    };
+  })];
+  const knownDates = transactions.map(item => item.date).filter(Boolean).sort();
+  const balanceLabel = account.balance < 0 ? "Credit balance" : account.balance === 0 ? "Balance settled" : "Outstanding";
+  const accountStatus = account.balance < 0 ? "credit" : account.balance === 0 ? "settled" : "due";
+  $("#ledger-student-name").textContent = account.studentName;
+  $("#ledger-student-meta").textContent = [account.admissionNumber, student?.program, student?.batch].filter(Boolean).join(" · ");
+  $("#ledger-period").textContent = knownDates.length ? `${formatDate(knownDates[0])} – ${formatDate(knownDates[knownDates.length - 1])}` : "Current statement";
+  $("#ledger-owner-action").innerHTML = ownerEditButton("agreement", account.id, "Edit account");
+  $("#ledger-summary").innerHTML = [
+    { label: "Agreed fee", value: money(account.agreed), detail: "Account debit" },
+    { label: "Paid", value: money(account.paid), detail: `${account.payments.length} ${account.payments.length === 1 ? "payment" : "payments"}` },
+    { label: balanceLabel, value: accountBalance(account.balance), detail: accountStatus === "due" ? "Amount receivable" : accountStatus === "credit" ? "Student credit" : "No amount due", featured: true },
+    { label: "Account status", value: accountStatus === "due" ? "Payment due" : accountStatus === "credit" ? "Credit" : "Settled", detail: account.needsReconciliation ? "Control needs review" : "Control matched" }
+  ].map(item => `<article class="ledger-summary-card ${item.featured ? "ledger-summary-featured" : ""}"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong><small>${esc(item.detail)}</small></article>`).join("");
+  $("#ledger-table-body").innerHTML = transactions.map(item => `<tr><td>${item.date ? formatDate(item.date) : `<span class="unknown-date">Date unknown</span>`}</td><td><strong>${esc(item.particulars)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ""}</td><td>${esc(item.reference)}</td><td class="payment-mode">${esc(item.mode)}</td><td class="currency ledger-number">${item.debit == null ? "—" : money(item.debit)}</td><td class="currency ledger-number">${item.credit == null ? "—" : money(item.credit)}</td><td class="currency ledger-number ledger-running-balance">${accountBalance(item.balance)}</td></tr>`).join("");
+  $("#ledger-mobile-list").innerHTML = transactions.map(item => `<article class="mobile-record-card ledger-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.particulars)}</h3><p>${item.date ? formatDate(item.date) : "Date unknown"} · ${esc(item.reference)}</p></div><strong class="ledger-mobile-balance">${accountBalance(item.balance)}</strong></div>${item.note ? `<p class="ledger-mobile-note">${esc(item.note)}</p>` : ""}<div class="mobile-record-meta"><div><span>Debit</span><strong>${item.debit == null ? "—" : money(item.debit)}</strong></div><div><span>Credit</span><strong>${item.credit == null ? "—" : money(item.credit)}</strong></div><div><span>Mode</span><strong class="payment-mode">${esc(item.mode)}</strong></div><div><span>Balance</span><strong>${accountBalance(item.balance)}</strong></div></div></article>`).join("");
+  const controlDifference = account.difference;
+  $("#ledger-control-values").innerHTML = `<div><span>Workbook control</span><strong>${money(account.workbookControl)}</strong></div><div><span>Posted payments</span><strong>${money(account.paid)}</strong></div><div><span>Difference</span><strong class="${controlDifference ? "control-difference" : ""}">${controlDifference ? `${money(Math.abs(controlDifference))} ${controlDifference < 0 ? "below" : "above"}` : money(0)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`;
+  injectIcons($("#student-ledger-view"));
+}
+
+function openStudentLedger(studentId, trigger = null) {
+  ledgerCurrentStudentId = studentId;
+  ledgerReturnFocus = trigger;
+  renderStudentLedger(studentId);
+  $("#finance-workspace").classList.add("hidden");
+  $("#student-ledger-view").classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "auto" });
+  setTimeout(() => $("#ledger-back").focus(), 10);
+}
+
+function closeStudentLedger(restoreFocus = true) {
+  if (!ledgerCurrentStudentId && $("#student-ledger-view").classList.contains("hidden")) return;
+  ledgerCurrentStudentId = "";
+  $("#student-ledger-view").classList.add("hidden");
+  $("#finance-workspace").classList.remove("hidden");
+  if (restoreFocus && ledgerReturnFocus?.isConnected) ledgerReturnFocus.focus();
+  ledgerReturnFocus = null;
 }
 
 function renderAdmissions() {
@@ -833,6 +959,7 @@ async function submitOwnerEdit(event) {
 const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", timetable: "Faculty & timetable", communication: "Communication", reports: "Reports", settings: "Settings & audit" };
 function showView(view) {
   if (!$("#" + view)) return; state.view = view;
+  if (view === "finance") closeStudentLedger(false);
   $$(".app-view").forEach(node => node.classList.toggle("active", node.id === view));
   $$(".nav-item").forEach(node => { const active = node.dataset.view === view; node.classList.toggle("active", active); active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current"); });
   $("#page-title").textContent = viewTitles[view];
@@ -915,6 +1042,8 @@ function bindEvents() {
     if (ownerEdit) openOwnerEdit(ownerEdit.dataset.ownerEdit, ownerEdit.dataset.editId);
     const viewPayments = event.target.closest("[data-view-payments]")?.dataset.viewPayments;
     if (viewPayments) showStudentPayments(viewPayments);
+    const ledgerButton = event.target.closest("[data-open-ledger]");
+    if (ledgerButton) openStudentLedger(ledgerButton.dataset.openLedger, ledgerButton);
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
@@ -929,8 +1058,11 @@ function bindEvents() {
   [$("#user-menu-button"), $("#topbar-profile-button")].forEach(button => button.addEventListener("click", event => toggleAccountMenu(event.currentTarget)));
   $("#logout-button").addEventListener("click", () => logout());
   $("#student-search").addEventListener("input", renderStudentRows); $("#student-program-filter").addEventListener("change", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
-  $("#agreement-search").addEventListener("input", renderAgreementRows); $("#payment-search").addEventListener("input", renderPaymentRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
+  $("#agreement-search").addEventListener("input", renderAgreementRows); $("#agreement-balance-filter").addEventListener("change", renderAgreementRows); $("#payment-search").addEventListener("input", renderPaymentRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
   $("#clear-payment-student-filter").addEventListener("click", () => { financeStudentFilter = ""; renderPaymentRows(); });
+  $("#ledger-back").addEventListener("click", () => closeStudentLedger());
+  $("#ledger-payment-register").addEventListener("click", () => { const studentId = ledgerCurrentStudentId; if (studentId) showStudentPayments(studentId); });
+  $("#print-student-ledger").addEventListener("click", () => window.print());
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
   $("#new-session").addEventListener("click", openSessionForm); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-master").addEventListener("click", openMasterForm);
@@ -947,7 +1079,7 @@ function bindEvents() {
     const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
     activateFinanceTab(buttons[next].dataset.financeTab, true);
   });
-  document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); } });
+  document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeStudentLedger(); closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); } });
 }
 
 initialize();
