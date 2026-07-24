@@ -33,6 +33,7 @@ const cachedUser = (() => {
   catch { return null; }
 })();
 const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+let financeStudentFilter = "";
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
 const studentHierarchyState = { open: new Set(["batch:Essential", "batch:Tatva"]) };
@@ -259,8 +260,9 @@ function renderAll() {
   $("#nav-students-count").textContent = state.students.length;
   $("#nav-leads-count").textContent = state.leads.length;
   const reviewCount = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
-  $("#nav-finance-count").textContent = reviewCount;
-  $("#payment-review-count").textContent = reviewCount;
+  $("#nav-finance-count").textContent = state.payments.length;
+  $("#payment-review-count").textContent = reviewCount ? `${reviewCount} review` : "";
+  $("#payment-review-count").classList.toggle("hidden", !reviewCount);
   renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderTimetable(); renderAcademics(); renderAttendance(); renderCommunication(); renderReports(); renderSettings(); renderCommandResults(); injectIcons();
 }
 
@@ -418,22 +420,69 @@ function renderStudentRows() {
 function renderFinance() {
   const agreed = state.agreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0), registration = state.agreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
   const paymentTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0), review = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
-  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Registration", value: shortMoney(registration) }, { label: "Staged payments", value: shortMoney(paymentTotal) }, { label: "Review lines", value: String(review) }]);
+  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Registration", value: shortMoney(registration) }, { label: "Recorded payments", value: shortMoney(paymentTotal) }, { label: "Payment entries", value: String(state.payments.length) }]);
+  $("#fee-agreement-count").textContent = state.agreements.length;
+  $("#payment-total-count").textContent = state.payments.length;
+  $("#payment-review-count").textContent = review ? `${review} review` : "";
+  $("#payment-review-count").classList.toggle("hidden", !review);
+  $("#finance-agreements-tab").setAttribute("aria-label", `Fee agreements, ${state.agreements.length}`);
+  $("#finance-payments-tab").setAttribute("aria-label", `Payments, ${state.payments.length} entries${review ? `, ${review} need review` : ""}`);
   renderAgreementRows(); renderPaymentRows();
 }
 
 function renderAgreementRows() {
   const search = $("#agreement-search").value.trim().toLowerCase();
   const rows = state.agreements.filter(item => !search || [item.studentName, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search)));
-  $("#agreements-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName)}</td><td>${esc(item.admissionNumber)}</td><td class="currency">${money(item.agreedAmount)}</td><td class="currency">${money(item.legacyRegistrationTotal)}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("agreement", item.id)}</div></td></tr>`).join("");
-  $("#agreements-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, item.admissionNumber)}${status(item.status)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreedAmount)}</strong></div><div><span>Registration</span><strong>${money(item.legacyRegistrationTotal)}</strong></div></div>${ownerEditButton("agreement", item.id)}</article>`).join("");
+  const paymentButton = item => `<button class="button button-secondary button-small view-payments-button" type="button" data-view-payments="${esc(item.studentId)}">${icon("receipt")}Payments</button>`;
+  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName)}</td><td>${esc(item.admissionNumber)}</td><td class="currency">${money(item.agreedAmount)}</td><td class="currency">${money(item.legacyRegistrationTotal)}</td><td><div class="cell-actions">${status(item.status)}${paymentButton(item)}${ownerEditButton("agreement", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("search", "No matching fee agreements")}</td></tr>`;
+  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, item.admissionNumber)}${status(item.status)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreedAmount)}</strong></div><div><span>Registration</span><strong>${money(item.legacyRegistrationTotal)}</strong></div></div><div class="mobile-card-actions">${paymentButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching fee agreements");
 }
 
 function renderPaymentRows() {
   const filter = $("#payment-status-filter").value;
-  const rows = state.payments.filter(item => !filter || item.reconciliationStatus === filter);
-  $("#payments-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName, `Line ${item.line || "—"}`)}</td><td>${formatDate(item.date)}</td><td class="currency">${money(item.amount)}</td><td>${esc(item.method || "Not captured")}</td><td title="${esc(item.sourceNote || "")}">${esc((item.sourceNote || "—").slice(0, 42))}</td><td><div class="cell-actions">${status(item.reconciliationStatus)}${ownerEditButton("payment", item.id, "Review")}</div></td></tr>`).join("");
-  $("#payments-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, formatDate(item.date))}${status(item.reconciliationStatus)}</div><div class="mobile-record-meta"><div><span>Amount</span><strong>${money(item.amount)}</strong></div><div><span>Mode</span><strong>${esc(item.method || "Not captured")}</strong></div></div>${ownerEditButton("payment", item.id, "Review")}</article>`).join("");
+  const search = $("#payment-search").value.trim().toLowerCase();
+  const rows = state.payments.filter(item => {
+    const matchesStudent = !financeStudentFilter || item.studentId === financeStudentFilter;
+    const matchesStatus = !filter || item.reconciliationStatus === filter;
+    const matchesSearch = !search || [item.studentName, item.method, item.sourceNote, item.date, item.amount, item.type].some(value => String(value || "").toLowerCase().includes(search));
+    return matchesStudent && matchesStatus && matchesSearch;
+  });
+  const student = financeStudentFilter
+    ? state.payments.find(item => item.studentId === financeStudentFilter) || state.agreements.find(item => item.studentId === financeStudentFilter)
+    : null;
+  $("#payment-student-filter").classList.toggle("hidden", !student);
+  $("#payment-student-filter-name").textContent = student?.studentName || "";
+  const paymentRows = rows.filter(item => item.type === "payment");
+  const total = paymentRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${paymentRows.length} ${paymentRows.length === 1 ? "payment" : "payments"} · ${money(total)}`;
+  const typeLabel = item => item.type === "payment" ? "Payment" : "Incentive";
+  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${item.type === "payment" ? money(item.amount) : "—"}</td><td>${esc(item.method || "Not captured")}</td><td title="${esc(item.sourceNote || "")}">${esc((item.sourceNote || "—").slice(0, 42))}</td><td><div class="cell-actions">${status(item.reconciliationStatus)}${ownerEditButton("payment", item.id, "Review")}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payment entries", "Clear a filter to see the complete ledger.")}</td></tr>`;
+  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(item.reconciliationStatus)}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${item.type === "payment" ? money(item.amount) : "—"}</strong></div><div><span>Mode</span><strong>${esc(item.method || "Not captured")}</strong></div><div><span>Source</span><strong>${esc((item.sourceNote || "—").slice(0, 30))}</strong></div></div>${ownerEditButton("payment", item.id, "Review")}</article>`).join("") : emptyState("search", "No matching payment entries", "Clear a filter to see the complete ledger.");
+}
+
+function activateFinanceTab(name, focus = false) {
+  const buttons = $$("[data-finance-tab]");
+  buttons.forEach(button => {
+    const active = button.dataset.financeTab === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
+  });
+  $$(".finance-tab").forEach(panel => {
+    const active = panel.id === `finance-${name}-panel`;
+    panel.classList.toggle("active", active);
+    panel.hidden = !active;
+  });
+}
+
+function showStudentPayments(studentId) {
+  financeStudentFilter = studentId;
+  $("#payment-search").value = "";
+  $("#payment-status-filter").value = "";
+  activateFinanceTab("payments");
+  renderPaymentRows();
+  $("#finance-payments-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function renderAdmissions() {
@@ -864,6 +913,8 @@ function bindEvents() {
     }
     const ownerEdit = event.target.closest("[data-owner-edit]");
     if (ownerEdit) openOwnerEdit(ownerEdit.dataset.ownerEdit, ownerEdit.dataset.editId);
+    const viewPayments = event.target.closest("[data-view-payments]")?.dataset.viewPayments;
+    if (viewPayments) showStudentPayments(viewPayments);
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
@@ -878,14 +929,24 @@ function bindEvents() {
   [$("#user-menu-button"), $("#topbar-profile-button")].forEach(button => button.addEventListener("click", event => toggleAccountMenu(event.currentTarget)));
   $("#logout-button").addEventListener("click", () => logout());
   $("#student-search").addEventListener("input", renderStudentRows); $("#student-program-filter").addEventListener("change", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
-  $("#agreement-search").addEventListener("input", renderAgreementRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
+  $("#agreement-search").addEventListener("input", renderAgreementRows); $("#payment-search").addEventListener("input", renderPaymentRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
+  $("#clear-payment-student-filter").addEventListener("click", () => { financeStudentFilter = ""; renderPaymentRows(); });
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
   $("#new-session").addEventListener("click", openSessionForm); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-master").addEventListener("click", openMasterForm);
   $("#academic-import-file").addEventListener("change", importAcademicData);
   $("#refresh-attendance").addEventListener("click", async () => { try { state.attendanceSessions = await api("/api/attendance/sessions"); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
-  $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => { $$("[data-finance-tab]").forEach(item => item.classList.toggle("active", item === button)); $$(".finance-tab").forEach(panel => panel.classList.toggle("active", panel.id === `finance-${button.dataset.financeTab}-panel`)); }));
+  $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));
+  $(".segmented-control[role='tablist']").addEventListener("keydown", event => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = $$("[data-finance-tab]");
+    const current = buttons.indexOf(document.activeElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    activateFinanceTab(buttons[next].dataset.financeTab, true);
+  });
   document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); } });
 }
 

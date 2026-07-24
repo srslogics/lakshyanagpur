@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=25">
+  <link rel="stylesheet" href="./styles.css?v=26">
   <link rel="stylesheet" href="./auth-shared.css?v=4">
 </head>
 <body>
@@ -198,15 +198,17 @@
         <section class="app-view" id="finance" aria-labelledby="finance-heading">
           <div class="page-heading"><h2 id="finance-heading">Finance</h2></div>
           <div class="compact-metrics" id="finance-metrics"></div>
-          <nav class="segmented-control" aria-label="Finance views"><button class="active" type="button" data-finance-tab="agreements">Fee agreements</button><button type="button" data-finance-tab="payments">Payment review <span id="payment-review-count"></span></button></nav>
-          <article class="surface table-surface finance-tab active" id="finance-agreements-panel">
+          <nav class="segmented-control" role="tablist" aria-label="Finance views"><button class="active" id="finance-agreements-tab" type="button" role="tab" aria-label="Fee agreements" aria-selected="true" aria-controls="finance-agreements-panel" data-finance-tab="agreements">Fee agreements <span class="tab-count" id="fee-agreement-count" aria-hidden="true">0</span></button><button id="finance-payments-tab" type="button" role="tab" aria-label="Payments" aria-selected="false" aria-controls="finance-payments-panel" tabindex="-1" data-finance-tab="payments">Payments <span class="tab-count" id="payment-total-count" aria-hidden="true">0</span><span class="tab-review-count hidden" id="payment-review-count" aria-hidden="true"></span></button></nav>
+          <article class="surface table-surface finance-tab active" id="finance-agreements-panel" role="tabpanel" aria-labelledby="finance-agreements-tab">
             <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search fee agreements"></label></div>
             <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Admission ID</th><th>Agreed fee</th><th>Legacy registration</th><th>Status</th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
             <div class="mobile-records" id="agreements-mobile-list"></div>
           </article>
-          <article class="surface table-surface finance-tab" id="finance-payments-panel">
-            <div class="toolbar"><div class="inline-notice"><span data-icon="info"></span><span>These entries are staged from Excel and are not official receipts.</span></div><select id="payment-status-filter" aria-label="Filter reconciliation status"><option value="">All review states</option><option value="ready">Ready</option><option value="review">Review</option><option value="do_not_import">Do not import</option></select></div>
-            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Date</th><th>Amount</th><th>Mode</th><th>Source note</th><th>Review state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
+          <article class="surface table-surface finance-tab" id="finance-payments-panel" role="tabpanel" aria-labelledby="finance-payments-tab" hidden>
+            <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, mode or source note" aria-label="Search payment entries"></label><select id="payment-status-filter" aria-label="Filter reconciliation status"><option value="">All review states</option><option value="ready">Ready</option><option value="review">Review</option><option value="do_not_import">Do not import</option></select></div>
+            <div class="payment-student-filter hidden" id="payment-student-filter"><span>Payments for <strong id="payment-student-filter-name"></strong></span><button class="button button-secondary button-small" id="clear-payment-student-filter" type="button">Show all payments</button></div>
+            <div class="table-meta"><span id="payment-result-summary">Loading payments…</span></div>
+            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Type</th><th>Date</th><th>Amount</th><th>Mode</th><th>Source note</th><th>Review state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
             <div class="mobile-records" id="payments-mobile-list"></div>
           </article>
         </section>
@@ -273,6 +275,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=30" defer></script>
+  <script src="./app.js?v=32" defer></script>
 </body>
 </html>
