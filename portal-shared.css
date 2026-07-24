@@ -379,6 +379,7 @@ main {
 .status { padding: 6px 9px; border-radius: 999px; font-size: .7rem; font-style: normal; font-weight: 800; text-transform: capitalize; }
 .status-present, .status-late, .status-excused { color: var(--success); background: var(--success-soft); }
 .status-absent { color: var(--red); background: var(--red-soft); }
+.status-unclassified { color: var(--muted); background: var(--navy-50); }
 .fee-hero { padding: 28px; border-radius: 24px; color: #fff; background: linear-gradient(135deg,var(--navy-950),var(--navy-800)); box-shadow: var(--shadow-md); }
 .fee-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .fee-top span, .fee-total span { display: block; color: rgba(255,255,255,.68); font-size: .73rem; }

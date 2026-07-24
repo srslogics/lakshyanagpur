@@ -427,14 +427,17 @@ function renderAttendance() {
   const present = rows.filter((item) => presentStatuses.has(item.status)).length;
   const late = rows.filter((item) => item.status === "late").length;
   const absent = rows.filter((item) => item.status === "absent").length;
-  const rate = rows.length ? Math.round((present / rows.length) * 1000) / 10 : null;
+  const unclassified = rows.filter((item) => item.status === "unclassified").length;
+  const classified = rows.length - unclassified;
+  const rate = classified ? Math.round((present / classified) * 1000) / 10 : null;
   $("#attendance-hero").innerHTML = `
     <div class="attendance-ring" style="--attendance:${rate ?? 0}%"><div><strong>${rate == null ? "—" : `${rate}%`}</strong><small>Overall</small></div></div>
-    <div class="attendance-copy"><strong>${rows.length ? "Submitted class attendance" : "No attendance submitted"}</strong><p>${rows.length ? `${present} of ${rows.length} recorded classes count as attended.` : "This module will update after faculty submits your first attendance register."}</p></div>`;
+    <div class="attendance-copy"><strong>${rows.length ? "Recorded attendance" : "No attendance submitted"}</strong><p>${classified ? `${present} of ${classified} classified records count as attended.` : "This module will update after attendance is recorded."}</p></div>`;
   $("#attendance-metrics").innerHTML = [
     moduleMetric("Attended", String(present)),
     moduleMetric("Late", String(late)),
     moduleMetric("Absent", String(absent), absent > 0),
+    moduleMetric("Unclassified", String(unclassified), unclassified > 0),
   ].join("");
   const grouped = rows.reduce((groups, item) => {
     const subject = item.subject || "Other";
@@ -455,9 +458,9 @@ function renderAttendance() {
     : empty("check", "No subject records", "Subject attendance will appear after faculty submissions.");
   $("#attendance-list").innerHTML = rows.length
     ? rows.map((item) => `<article class="attendance-row">
-      <time>${dateText(item.startsAt)}</time>
-      <span><strong>${esc(item.subject)}</strong><small>${timeText(item.startsAt)}${item.reason ? ` · ${esc(item.reason)}` : ""}</small></span>
-      <em class="status status-${esc(item.status)}">${esc(titleCase(item.status))}</em>
+      <time>${esc(item.dateLabel || dateText(item.startsAt))}</time>
+      <span><strong>${esc(item.subject)}</strong><small>${item.startsAt ? timeText(item.startsAt) : `Source mark ${esc(item.rawStatus || "—")}`}${item.reason ? ` · ${esc(item.reason)}` : ""}</small></span>
+      <em class="status status-${esc(item.status)}">${esc(item.status === "unclassified" && item.rawStatus ? item.rawStatus : titleCase(item.status))}</em>
     </article>`).join("")
     : empty("check", "Attendance not recorded yet", "Records will appear after faculty submits attendance.");
 }

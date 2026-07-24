@@ -13,6 +13,7 @@ from ..models import (
     AttendanceRegister,
     Batch,
     ClassSession,
+    DailyAttendanceEntry,
     Enrollment,
     FeeAgreement,
     Notice,
@@ -126,13 +127,36 @@ def attendance_rows(db: Session, student: Student):
         .order_by(ClassSession.starts_at.desc())
         .all()
     )
-    return [{
+    class_rows = [{
         "sessionId": session.id,
         "subject": subject.name,
         "startsAt": session.starts_at,
+        "dateLabel": None,
         "status": entry.status,
+        "rawStatus": None,
         "reason": entry.reason,
+        "source": "class_register",
     } for entry, _, session, subject in rows]
+    daily = (
+        db.query(DailyAttendanceEntry)
+        .filter_by(student_id=student.id)
+        .order_by(
+            DailyAttendanceEntry.attendance_date.desc(),
+            DailyAttendanceEntry.source_column.desc(),
+        )
+        .all()
+    )
+    daily_rows = [{
+        "sessionId": entry.id,
+        "subject": "Daily attendance",
+        "startsAt": entry.attendance_date,
+        "dateLabel": entry.source_date_label,
+        "status": entry.normalized_status or "unclassified",
+        "rawStatus": entry.raw_status,
+        "reason": "",
+        "source": "imported_daily",
+    } for entry in daily]
+    return class_rows + daily_rows
 
 
 def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
@@ -237,6 +261,9 @@ def _portal_payload(
     notices = notice_rows(db, enrollment, notice_audience)
     fees = fee_summary(db, student)
     now = datetime.now(timezone.utc)
+    classified_attendance = [
+        row for row in attendance if row["status"] != "unclassified"
+    ]
     present = sum(
         1 for row in attendance
         if row["status"] in ("present", "late", "excused")
@@ -251,8 +278,8 @@ def _portal_payload(
                 1 for row in assignments if row["status"] != "completed"
             ),
             "attendanceRate": (
-                round(present / len(attendance) * 100, 1)
-                if attendance else None
+                round(present / len(classified_attendance) * 100, 1)
+                if classified_attendance else None
             ),
             "outstandingAmount": fees["outstandingAmount"],
         },

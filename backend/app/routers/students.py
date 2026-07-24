@@ -3,7 +3,15 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Enrollment, FeeAgreement, LegacyAdmissionRow, Student, User
+from ..models import (
+    Enrollment,
+    FeeAgreement,
+    LegacyAdmissionRow,
+    Student,
+    StudentAcademicProfile,
+    StudentSubjectSelection,
+    User,
+)
 from ..security import require_roles
 
 READ_ROLES = ("owner", "admissions_manager", "front_desk", "accounts", "academic_coordinator")
@@ -64,6 +72,13 @@ def student_detail(student_id: str, db: Session = Depends(get_db), user: User = 
     )
     fee = db.query(FeeAgreement).filter_by(student_id=student.id).first()
     legacy = db.query(LegacyAdmissionRow).filter_by(student_id=student.id).first()
+    academic = db.get(StudentAcademicProfile, student.id)
+    subjects = (
+        db.query(StudentSubjectSelection)
+        .filter_by(student_id=student.id)
+        .order_by(StudentSubjectSelection.subject_name)
+        .all()
+    )
     return {
         "id": student.id,
         "admissionNumber": student.admission_number,
@@ -75,5 +90,15 @@ def student_detail(student_id: str, db: Session = Depends(get_db), user: User = 
         "dataQualityStatus": student.data_quality_status,
         "enrollment": None if not enrollment else {"id": enrollment.id, "program": enrollment.program, "batch": enrollment.batch, "enrollmentDate": enrollment.enrollment_date, "status": enrollment.status},
         "feeAgreement": None if not fee else {"id": fee.id, "agreedAmount": fee.agreed_amount, "legacyRegistrationTotal": fee.legacy_registration_total, "currency": fee.currency, "status": fee.status},
+        "academicProfile": None if not academic else {
+            "sourceStudentCode": academic.source_student_code,
+            "batch": academic.batch_name,
+            "sourceStream": academic.source_stream,
+            "mentorName": academic.mentor_name,
+            "sourceSchoolName": academic.source_school_name,
+            "sourcePrimaryMobile": academic.source_primary_mobile,
+            "sourceSecondaryMobile": academic.source_secondary_mobile,
+            "subjects": [subject.subject_name for subject in subjects],
+        },
         "migration": None if not legacy else {"legacyId": legacy.id, "sourceRow": legacy.source_row, "readiness": legacy.import_readiness, "issues": legacy.issues},
     }

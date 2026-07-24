@@ -170,6 +170,95 @@ class LegacyAdmissionRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
 
 
+class AcademicImportBatch(Base):
+    __tablename__ = "academic_import_batches"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("aimp"))
+    source_name: Mapped[str] = mapped_column(String(255))
+    source_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="completed", index=True)
+    active_student_rows: Mapped[int] = mapped_column(Integer)
+    attendance_entries: Mapped[int] = mapped_column(Integer)
+    subject_selections: Mapped[int] = mapped_column(Integer)
+    staged_source_rows: Mapped[int] = mapped_column(Integer)
+    unresolved_items: Mapped[int] = mapped_column(Integer, default=0)
+    actor_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
+class AcademicSourceRecord(Base):
+    """Immutable row-level evidence from every workbook sheet."""
+
+    __tablename__ = "academic_source_records"
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    import_batch_id: Mapped[str] = mapped_column(
+        ForeignKey("academic_import_batches.id", ondelete="CASCADE"),
+        index=True,
+    )
+    source_sheet: Mapped[str] = mapped_column(String(255), index=True)
+    source_row: Mapped[int] = mapped_column(Integer)
+    record_type: Mapped[str] = mapped_column(String(40), index=True)
+    source_key: Mapped[str | None] = mapped_column(String(120), index=True)
+    raw_data: Mapped[dict] = mapped_column(JSON)
+    normalized_data: Mapped[dict] = mapped_column(JSON)
+    issues: Mapped[list] = mapped_column(JSON, default=list)
+    student_id: Mapped[str | None] = mapped_column(ForeignKey("students.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
+class StudentAcademicProfile(TimestampMixin, Base):
+    __tablename__ = "student_academic_profiles"
+    student_id: Mapped[str] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    source_student_code: Mapped[str] = mapped_column(String(24), unique=True, index=True)
+    batch_name: Mapped[str] = mapped_column(String(120), index=True)
+    source_stream: Mapped[str | None] = mapped_column(String(120), index=True)
+    mentor_name: Mapped[str | None] = mapped_column(String(255), index=True)
+    source_school_name: Mapped[str | None] = mapped_column(String(255))
+    source_primary_mobile: Mapped[str | None] = mapped_column(String(20))
+    source_secondary_mobile: Mapped[str | None] = mapped_column(String(20))
+    import_batch_id: Mapped[str] = mapped_column(ForeignKey("academic_import_batches.id"), index=True)
+
+
+class StudentSubjectSelection(Base):
+    __tablename__ = "student_subject_selections"
+    student_id: Mapped[str] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    subject_name: Mapped[str] = mapped_column(String(120), primary_key=True)
+    source_value: Mapped[str] = mapped_column(String(120))
+    import_batch_id: Mapped[str] = mapped_column(ForeignKey("academic_import_batches.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
+class DailyAttendanceEntry(Base):
+    __tablename__ = "daily_attendance_entries"
+    __table_args__ = (
+        UniqueConstraint(
+            "student_id",
+            "source_sheet",
+            "source_date_label",
+            name="uq_daily_attendance_source_day",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("dae"))
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    import_batch_id: Mapped[str] = mapped_column(ForeignKey("academic_import_batches.id"), index=True)
+    source_student_code: Mapped[str] = mapped_column(String(24), index=True)
+    batch_name: Mapped[str] = mapped_column(String(120), index=True)
+    source_sheet: Mapped[str] = mapped_column(String(255), index=True)
+    source_row: Mapped[int] = mapped_column(Integer)
+    source_column: Mapped[int] = mapped_column(Integer)
+    source_date_label: Mapped[str] = mapped_column(String(40), index=True)
+    attendance_date: Mapped[date | None] = mapped_column(Date, index=True)
+    raw_status: Mapped[str] = mapped_column(String(16), index=True)
+    normalized_status: Mapped[str | None] = mapped_column(String(24), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+
+
 class FeeAgreement(TimestampMixin, Base):
     __tablename__ = "fee_agreements"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("fee"))

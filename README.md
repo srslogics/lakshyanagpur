@@ -106,6 +106,30 @@ python -m app.importers.legacy_admissions data/imports/admission_2026_27.json
 
 The importer is idempotent by source-file hash. Active rows create central students, enrollments, finance handoffs, and fee agreements. Cancelled rows remain migration-audit records only. Parsed payment entries remain immutable `staged` transactions until Accounts verifies them; they are not receipts.
 
+## Academic and attendance workbook import
+
+`Demo Attendance.xlsx` is converted into a second private manifest after the
+admission import. The build step normalizes the source workbook first because
+the client file contains malformed spreadsheet XML. The generated manifest is
+ignored by Git with the other student personal data.
+
+```bash
+node scripts/build_academic_import_staging.mjs
+cd backend
+alembic upgrade head
+python -m app.importers.academic_workbook data/imports/demo_attendance_2026.json --dry-run
+python -m app.importers.academic_workbook data/imports/demo_attendance_2026.json
+```
+
+This import links the 64 current workbook rows to the existing admission
+students, assigns Tatva or Essential batch membership, and stores mentor,
+workbook stream, school, subject selections, and all 1,024 current attendance
+marks. It does not overwrite admission programs or core contact details.
+`P` and `A` become present and absent; `X` stays unclassified. July headers
+remain undated until their year is confirmed. Historical/demo rows, printable
+rosters, pivot output, and timetable versions are preserved in the academic
+source ledger for review rather than being promoted into operational data.
+
 The other interface areas remain product shells. Finance transactions, attendance locking, inventory movements, academics, communication adapters, and reporting still need their domain migrations and APIs before those modules should be treated as production-complete.
 
 You can deploy either by using the included `render.yaml` blueprint or by creating the web service manually in the Render dashboard.
