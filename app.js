@@ -283,7 +283,7 @@ function renderDashboard() {
   const max = Math.max(...sortedPrograms.map(([, count]) => count), 1);
   $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments");
 
-  const quality = ["review", "blocked"].map(kind => ({ kind, count: state.students.filter(item => item.dataQualityStatus === kind).length })).filter(item => item.count);
+  const quality = ["review", "blocked"].map(kind => ({ kind, count: activeStudents.filter(item => item.dataQualityStatus === kind).length })).filter(item => item.count);
   const paymentReview = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
   if (paymentReview) quality.push({ kind: "payment review", count: paymentReview });
   $("#attention-count").textContent = quality.reduce((sum, item) => sum + item.count, 0);
