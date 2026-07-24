@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, model_validator
@@ -20,11 +20,63 @@ class RoomCreate(BaseModel):
     capacity: int = Field(default=40, ge=1, le=500)
 
 
+class StudentUpdate(BaseModel):
+    admission_number: str = Field(alias="admissionNumber", min_length=3, max_length=32)
+    full_name: str = Field(alias="fullName", min_length=2, max_length=255)
+    mobile: str | None = Field(default=None, max_length=20)
+    secondary_mobile: str | None = Field(default=None, alias="secondaryMobile", max_length=20)
+    email: EmailStr | None = None
+    previous_school: str | None = Field(default=None, alias="previousSchool", max_length=255)
+    status: Literal["active", "draft", "inactive", "forfeited"]
+    data_quality_status: Literal["ready", "review", "blocked"] = Field(alias="dataQualityStatus")
+    program: str | None = Field(default=None, max_length=255)
+    batch: str | None = Field(default=None, max_length=255)
+    enrollment_date: date | None = Field(default=None, alias="enrollmentDate")
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class FeeAgreementUpdate(BaseModel):
+    agreed_amount: int = Field(alias="agreedAmount", ge=0)
+    legacy_registration_total: int = Field(alias="legacyRegistrationTotal", ge=0)
+    currency: str = Field(default="INR", min_length=3, max_length=3)
+    status: Literal["active", "draft", "inactive", "completed"] = "active"
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PaymentReviewUpdate(BaseModel):
+    reconciliation_status: Literal["ready", "review", "do_not_import"] = Field(alias="reconciliationStatus")
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class UserCreate(BaseModel):
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
     role: Literal["admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "storekeeper", "student", "parent", "parent_student"]
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class UserUpdate(BaseModel):
+    full_name: str = Field(alias="fullName", min_length=2, max_length=255)
+    email: EmailStr
+    role: Literal["owner", "admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "storekeeper", "student", "parent", "parent_student"]
+    is_active: bool = Field(alias="isActive")
+    password: str | None = Field(default=None, min_length=10, max_length=128)
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class BatchUpdate(BatchCreate):
+    is_active: bool = Field(alias="isActive")
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SubjectUpdate(SubjectCreate):
+    is_active: bool = Field(alias="isActive")
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class RoomUpdate(RoomCreate):
+    is_active: bool = Field(alias="isActive")
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -72,6 +124,10 @@ class ClassSessionCreate(BaseModel):
         return self
 
 
+class ClassSessionUpdate(ClassSessionCreate):
+    status: Literal["scheduled", "completed", "cancelled"] = "scheduled"
+
+
 class AssignmentCreate(BaseModel):
     batch_id: str = Field(alias="batchId")
     subject_id: str = Field(alias="subjectId")
@@ -81,6 +137,10 @@ class AssignmentCreate(BaseModel):
     external_url: HttpUrl = Field(alias="externalUrl")
     status: Literal["draft", "published"] = "published"
     model_config = ConfigDict(populate_by_name=True)
+
+
+class AssignmentUpdate(AssignmentCreate):
+    pass
 
 
 AttendanceStatus = Literal["present", "late", "absent", "excused"]
@@ -116,3 +176,7 @@ class NoticeCreate(BaseModel):
         if self.audience == "batch" and not self.batch_id:
             raise ValueError("batchId is required for a batch audience")
         return self
+
+
+class NoticeUpdate(NoticeCreate):
+    pass

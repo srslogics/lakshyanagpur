@@ -24,6 +24,7 @@ const icons = {
   download: '<path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/>', receipt: '<path d="M5 3v18l3-2 4 2 4-2 3 2V3l-3 2-4-2-4 2-3-2Z"/><path d="M9 9h6M9 13h6"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', trend: '<path d="m3 17 6-6 4 4 8-9M15 6h6v6"/>',
   alert: '<path d="M10.3 4.5 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', logout: '<path d="M10 17l5-5-5-5M15 12H3M15 3h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5"/>'
 };
 
@@ -301,6 +302,10 @@ function renderDashboard() {
 function compactMetrics(items) { return items.map(item => `<div class="compact-metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`).join(""); }
 function studentPrimary(name, detail = "") { return `<div class="table-primary"><span class="record-avatar">${initials(name)}</span><span><strong>${esc(name)}</strong><small>${esc(detail)}</small></span></div>`; }
 function emptyState(iconName, title, copy = "") { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3>${copy ? `<p>${esc(copy)}</p>` : ""}</div></div>`; }
+function isOwner() { return state.user?.role === "owner"; }
+function ownerEditButton(kind, id, label = "Edit") {
+  return isOwner() ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-owner-edit="${esc(kind)}" data-edit-id="${esc(id)}">${icon("edit")}${esc(label)}</button>` : "";
+}
 
 function studentBatchKey(batch) {
   const value = String(batch || "").trim().toLowerCase();
@@ -420,15 +425,15 @@ function renderFinance() {
 function renderAgreementRows() {
   const search = $("#agreement-search").value.trim().toLowerCase();
   const rows = state.agreements.filter(item => !search || [item.studentName, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search)));
-  $("#agreements-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName)}</td><td>${esc(item.admissionNumber)}</td><td class="currency">${money(item.agreedAmount)}</td><td class="currency">${money(item.legacyRegistrationTotal)}</td><td>${status(item.status)}</td></tr>`).join("");
-  $("#agreements-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, item.admissionNumber)}${status(item.status)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreedAmount)}</strong></div><div><span>Registration</span><strong>${money(item.legacyRegistrationTotal)}</strong></div></div></article>`).join("");
+  $("#agreements-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName)}</td><td>${esc(item.admissionNumber)}</td><td class="currency">${money(item.agreedAmount)}</td><td class="currency">${money(item.legacyRegistrationTotal)}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("agreement", item.id)}</div></td></tr>`).join("");
+  $("#agreements-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, item.admissionNumber)}${status(item.status)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreedAmount)}</strong></div><div><span>Registration</span><strong>${money(item.legacyRegistrationTotal)}</strong></div></div>${ownerEditButton("agreement", item.id)}</article>`).join("");
 }
 
 function renderPaymentRows() {
   const filter = $("#payment-status-filter").value;
   const rows = state.payments.filter(item => !filter || item.reconciliationStatus === filter);
-  $("#payments-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName, `Line ${item.line || "—"}`)}</td><td>${formatDate(item.date)}</td><td class="currency">${money(item.amount)}</td><td>${esc(item.method || "Not captured")}</td><td title="${esc(item.sourceNote || "")}">${esc((item.sourceNote || "—").slice(0, 42))}</td><td>${status(item.reconciliationStatus)}</td></tr>`).join("");
-  $("#payments-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, formatDate(item.date))}${status(item.reconciliationStatus)}</div><div class="mobile-record-meta"><div><span>Amount</span><strong>${money(item.amount)}</strong></div><div><span>Mode</span><strong>${esc(item.method || "Not captured")}</strong></div></div></article>`).join("");
+  $("#payments-table-body").innerHTML = rows.map(item => `<tr><td>${studentPrimary(item.studentName, `Line ${item.line || "—"}`)}</td><td>${formatDate(item.date)}</td><td class="currency">${money(item.amount)}</td><td>${esc(item.method || "Not captured")}</td><td title="${esc(item.sourceNote || "")}">${esc((item.sourceNote || "—").slice(0, 42))}</td><td><div class="cell-actions">${status(item.reconciliationStatus)}${ownerEditButton("payment", item.id, "Review")}</div></td></tr>`).join("");
+  $("#payments-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.studentName, formatDate(item.date))}${status(item.reconciliationStatus)}</div><div class="mobile-record-meta"><div><span>Amount</span><strong>${money(item.amount)}</strong></div><div><span>Mode</span><strong>${esc(item.method || "Not captured")}</strong></div></div>${ownerEditButton("payment", item.id, "Review")}</article>`).join("");
 }
 
 function renderAdmissions() {
@@ -444,23 +449,23 @@ function renderAdmissions() {
 function renderLeadRows() {
   const search = $("#lead-search").value.trim().toLowerCase(), stage = $("#lead-stage-filter").value;
   const rows = state.leads.filter(item => (!search || [item.student, item.mobile, item.program].some(value => String(value || "").toLowerCase().includes(search))) && (!stage || item.stage === stage));
-  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td><span class="icon-button table-action">${icon("chevron-right")}</span></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "No enquiries", state.leads.length ? "Clear a filter." : "Create an enquiry to begin.")}</td></tr>`;
-  $("#leads-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div></article>`).join("");
+  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td>${ownerEditButton("lead", item.id)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "No enquiries", state.leads.length ? "Clear a filter." : "Create an enquiry to begin.")}</td></tr>`;
+  $("#leads-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div>${ownerEditButton("lead", item.id)}</article>`).join("");
 }
 
 function renderTimetable() {
   const now = Date.now(), today = new Date().toDateString();
   $("#timetable-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.sessions.length) }, { label: "Today", value: String(state.sessions.filter(item => new Date(item.startsAt).toDateString() === today).length) }, { label: "Upcoming", value: String(state.sessions.filter(item => new Date(item.startsAt).getTime() >= now).length) }, { label: "Faculty", value: String(state.timetable.faculty?.length || 0) }]);
   const rows = [...state.sessions].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
-  $("#sessions-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td><strong>${formatDateTime(item.startsAt)}</strong><br><small>${formatDateTime(item.endsAt).split(", ").pop()}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td>${esc(item.subject)}</td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${status(item.status)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("clock", "No classes scheduled")}</td></tr>`;
-  $("#sessions-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${formatDateTime(item.startsAt)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Room</span><strong>${esc(item.room)}</strong></div><div><span>Ends</span><strong>${formatDateTime(item.endsAt)}</strong></div></div></article>`).join("") : emptyState("clock", "No classes scheduled");
+  $("#sessions-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td><strong>${formatDateTime(item.startsAt)}</strong><br><small>${formatDateTime(item.endsAt).split(", ").pop()}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td>${esc(item.subject)}</td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("session", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("clock", "No classes scheduled")}</td></tr>`;
+  $("#sessions-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${formatDateTime(item.startsAt)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Room</span><strong>${esc(item.room)}</strong></div><div><span>Ends</span><strong>${formatDateTime(item.endsAt)}</strong></div></div>${ownerEditButton("session", item.id)}</article>`).join("") : emptyState("clock", "No classes scheduled");
 }
 
 function renderAcademics() {
   const now = Date.now();
   $("#academics-metrics").innerHTML = compactMetrics([{ label: "Assignments", value: String(state.assignments.length) }, { label: "Published", value: String(state.assignments.filter(item => item.status === "published").length) }, { label: "Due", value: String(state.assignments.filter(item => new Date(item.dueAt).getTime() >= now).length) }, { label: "Recipients", value: String(state.assignments.reduce((sum, item) => sum + Number(item.recipientCount || 0), 0)) }]);
-  $("#assignments-table-body").innerHTML = state.assignments.length ? state.assignments.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small><a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></small></td><td>${esc(item.batch)}</td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td>${status(item.status)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
-  $("#assignments-mobile-list").innerHTML = state.assignments.length ? state.assignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><a class="button button-secondary" href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></article>`).join("") : emptyState("book", "No assignments");
+  $("#assignments-table-body").innerHTML = state.assignments.length ? state.assignments.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small><a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></small></td><td>${esc(item.batch)}</td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("assignment", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
+  $("#assignments-mobile-list").innerHTML = state.assignments.length ? state.assignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><div class="mobile-card-actions"><a class="button button-secondary" href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a>${ownerEditButton("assignment", item.id)}</div></article>`).join("") : emptyState("book", "No assignments");
 }
 
 function renderAttendance() {
@@ -472,7 +477,7 @@ function renderAttendance() {
 
 function renderCommunication() {
   $("#communication-metrics").innerHTML = compactMetrics([{ label: "Notices", value: String(state.notices.length) }, { label: "Published", value: String(state.notices.filter(item => item.status === "published").length) }, { label: "Batch", value: String(state.notices.filter(item => item.audience === "batch").length) }, { label: "Channels", value: String(new Set(state.notices.map(item => item.channel)).size) }]);
-  $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span>${status(item.status)}</div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch || item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
+  $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span><div class="cell-actions">${status(item.status)}${ownerEditButton("notice", item.id)}</div></div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch || item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
 }
 
 function renderReports() {
@@ -494,11 +499,11 @@ function auditRows(rows) { return rows.length ? rows.map(item => `<div class="au
 function renderSettings() {
   const masters = state.masters;
   $("#settings-metrics").innerHTML = compactMetrics([{ label: "Users", value: String(masters.users?.length || 0) }, { label: "Batches", value: String(masters.batches?.length || 0) }, { label: "Subjects", value: String(masters.subjects?.length || 0) }, { label: "Rooms", value: String(masters.rooms?.length || 0) }]);
-  $("#settings-users").innerHTML = masterRows(masters.users || [], item => [item.fullName, item.role.replaceAll("_", " "), item.isActive ? "active" : "inactive"]);
+  $("#settings-users").innerHTML = masterRows(masters.users || [], item => [item.fullName, item.role.replaceAll("_", " "), item.isActive ? "active" : "inactive"], "user");
   $("#student-access-count").textContent = `${masters.studentAccess?.length || 0} / 100`;
-  $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${item.email}`, item.isActive ? "active" : "inactive"]);
+  $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${item.email}`, item.isActive ? "active" : "inactive"], "access-user", "userId");
   $("#parent-access-count").textContent = `${masters.parentAccess?.length || 0}`;
-  $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${item.email}`, item.contactType === "secondary_contact" ? "secondary" : "primary"]);
+  $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${item.email}`, item.contactType === "secondary_contact" ? "secondary" : "primary"], "access-user", "userId");
   const academicImport = masters.academicImports?.[0];
   $("#academic-import-status").textContent = academicImport ? "Loaded" : "Not loaded";
   $("#academic-import-message").textContent = academicImport
@@ -508,9 +513,9 @@ function renderSettings() {
   $("#settings-academic-import").innerHTML = academicImport
     ? masterRows([academicImport], item => [`${item.activeStudents} students · ${item.attendanceEntries} attendance marks`, `${item.subjectSelections} subject selections · ${item.sourceRecords} source rows`, item.unresolvedItems ? "review" : "ready"])
     : `<div class="master-empty">No academic workbook imported</div>`;
-  $("#settings-batches").innerHTML = masterRows(masters.batches || [], item => [item.name, item.program, item.isActive ? "active" : "inactive"]);
-  $("#settings-subjects").innerHTML = masterRows(masters.subjects || [], item => [item.name, `${item.code} · ${item.program}`, item.isActive ? "active" : "inactive"]);
-  $("#settings-rooms").innerHTML = masterRows(masters.rooms || [], item => [item.name, `${item.capacity} seats`, item.isActive ? "active" : "inactive"]);
+  $("#settings-batches").innerHTML = masterRows(masters.batches || [], item => [item.name, item.program, item.isActive ? "active" : "inactive"], "batch");
+  $("#settings-subjects").innerHTML = masterRows(masters.subjects || [], item => [item.name, `${item.code} · ${item.program}`, item.isActive ? "active" : "inactive"], "subject");
+  $("#settings-rooms").innerHTML = masterRows(masters.rooms || [], item => [item.name, `${item.capacity} seats`, item.isActive ? "active" : "inactive"], "room");
   $("#settings-audit").innerHTML = auditRows(state.audit);
 }
 
@@ -548,7 +553,7 @@ async function importAcademicData(event) {
   }
 }
 
-function masterRows(rows, map) { return rows.length ? rows.map(item => { const [title, detail, stateValue] = map(item); return `<div class="master-row"><span><strong>${esc(title)}</strong><small>${esc(detail)}</small></span>${status(stateValue)}</div>`; }).join("") : `<div class="master-empty">No records</div>`; }
+function masterRows(rows, map, editKind = "", idKey = "id") { return rows.length ? rows.map(item => { const [title, detail, stateValue] = map(item); return `<div class="master-row"><span><strong>${esc(title)}</strong><small>${esc(detail)}</small></span><div class="cell-actions">${status(stateValue)}${editKind && item[idKey] ? ownerEditButton(editKind, item[idKey]) : ""}</div></div>`; }).join("") : `<div class="master-empty">No records</div>`; }
 
 async function openStudent(studentId) {
   const drawer = $("#detail-drawer"), body = $("#detail-drawer-body");
@@ -560,6 +565,7 @@ async function openStudent(studentId) {
     const issues = student.migration?.issues || [];
     const academic = student.academicProfile;
     body.innerHTML = `<div class="profile-hero"><span class="record-avatar">${initials(student.fullName)}</span><h3>${esc(student.fullName)}</h3><p>${esc(student.admissionNumber)} · ${esc(student.enrollment?.program || "Program not assigned")}</p></div>
+      ${isOwner() ? `<div class="owner-record-actions">${ownerEditButton("student", student.id, "Edit student")}</div>` : ""}
       <section class="detail-section"><h4>Student &amp; enrollment</h4><div class="detail-grid">${detailField("Primary mobile", student.mobile)}${detailField("Secondary mobile", student.secondaryMobile)}${detailField("Previous school", student.previousSchool)}${detailField("Enrollment date", formatDate(student.enrollment?.enrollmentDate))}${detailField("Batch", student.enrollment?.batch)}${detailField("Status", student.status)}</div></section>
       <section class="detail-section"><h4>Academic profile</h4><div class="detail-grid">${detailField("Source student ID", academic?.sourceStudentCode)}${detailField("Mentor", academic?.mentorName)}${detailField("Workbook stream", academic?.sourceStream)}${detailField("Workbook school", academic?.sourceSchoolName)}${detailField("Selected subjects", academic?.subjects?.join(", "))}${detailField("Workbook contact", [academic?.sourcePrimaryMobile, academic?.sourceSecondaryMobile].filter(Boolean).join(", "))}</div></section>
       <section class="detail-section"><h4>Fee agreement</h4><div class="detail-grid">${detailField("Agreed amount", money(student.feeAgreement?.agreedAmount))}${detailField("Registration", money(student.feeAgreement?.legacyRegistrationTotal))}${detailField("Agreement status", student.feeAgreement?.status)}${detailField("Currency", student.feeAgreement?.currency || "INR")}</div></section>
@@ -680,6 +686,101 @@ async function submitMaster(event) {
   catch (error) { showFormError("#master-form-error", error); button.disabled = false; }
 }
 
+const selected = (value, current) => String(value ?? "") === String(current ?? "") ? " selected" : "";
+const checked = value => value ? " checked" : "";
+const ownerStatusOptions = (values, current) => values.map(value => `<option value="${esc(value)}"${selected(value, current)}>${esc(value.replaceAll("_", " "))}</option>`).join("");
+
+async function openOwnerEdit(kind, id) {
+  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  let item;
+  if (kind === "student") item = await api(`/api/students/${encodeURIComponent(id)}`);
+  else if (kind === "lead") item = state.leads.find(row => row.id === id);
+  else if (kind === "agreement") item = state.agreements.find(row => row.id === id);
+  else if (kind === "payment") item = state.payments.find(row => row.id === id);
+  else if (kind === "session") item = state.sessions.find(row => row.id === id);
+  else if (kind === "assignment") item = state.assignments.find(row => row.id === id);
+  else if (kind === "notice") item = state.notices.find(row => row.id === id);
+  else if (kind === "user" || kind === "access-user") item = state.masters.users.find(row => row.id === id);
+  else item = state.masters[{ batch: "batches", subject: "subjects", room: "rooms" }[kind]]?.find(row => row.id === id);
+  if (!item) { toast("This record is no longer available.", "error"); return; }
+
+  let title = "Edit record", fields = "";
+  if (kind === "student") {
+    title = "Edit student";
+    fields = `<div class="form-pair"><label class="field"><span>Admission number</span><input name="admissionNumber" value="${esc(item.admissionNumber)}" required></label><label class="field"><span>Student name</span><input name="fullName" value="${esc(item.fullName)}" required></label></div>
+      <div class="form-pair"><label class="field"><span>Primary mobile</span><input name="mobile" value="${esc(item.mobile || "")}" inputmode="numeric"></label><label class="field"><span>Secondary mobile</span><input name="secondaryMobile" value="${esc(item.secondaryMobile || "")}" inputmode="numeric"></label></div>
+      <label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email || "")}"></label>
+      <label class="field"><span>Previous school</span><input name="previousSchool" value="${esc(item.previousSchool || "")}"></label>
+      <div class="form-pair"><label class="field"><span>Student status</span><select name="status">${ownerStatusOptions(["active","draft","inactive","forfeited"], item.status)}</select></label><label class="field"><span>Data quality</span><select name="dataQualityStatus">${ownerStatusOptions(["ready","review","blocked"], item.dataQualityStatus)}</select></label></div>
+      <div class="form-pair"><label class="field"><span>Program</span><input name="program" value="${esc(item.enrollment?.program || "")}"></label><label class="field"><span>Batch</span><input name="batch" value="${esc(item.enrollment?.batch || "")}"></label></div>
+      <label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${esc(item.enrollment?.enrollmentDate || "")}"></label>`;
+  } else if (kind === "lead") {
+    title = "Edit enquiry";
+    fields = `<div class="form-pair"><label class="field"><span>Student name</span><input name="student" value="${esc(item.student)}" required></label><label class="field"><span>Mobile</span><input name="mobile" value="${esc(item.mobile)}" required></label></div>
+      <div class="form-pair"><label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email || "")}"></label><label class="field"><span>Program</span><input name="program" value="${esc(item.program)}" required></label></div>
+      <div class="form-pair"><label class="field"><span>Parent / guardian</span><input name="parent" value="${esc(item.parent)}" required></label><label class="field"><span>Parent mobile</span><input name="parentMobile" value="${esc(item.parentMobile || "")}"></label></div>
+      <div class="form-pair"><label class="field"><span>Source</span><select name="source">${ownerStatusOptions(["walk-in","website","phone","whatsapp","referral","campaign","seminar","social media"], item.source)}</select></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(item.counsellor)}" required></label></div>
+      <div class="form-pair"><label class="field"><span>Stage</span><select name="stage">${state.stages.map(value => `<option${selected(value,item.stage)}>${esc(value)}</option>`).join("")}</select></label><label class="field"><span>Priority</span><select name="priority">${ownerStatusOptions(["low","medium","high","urgent"], item.priority)}</select></label></div>
+      <label class="field"><span>Next action</span><input name="nextAction" value="${esc(item.nextAction)}" required></label>
+      <label class="field"><span>Next follow-up</span><input name="nextFollowUpAt" type="datetime-local" value="${item.nextFollowUpAt ? localInputValue(new Date(item.nextFollowUpAt)) : ""}"></label>
+      <label class="field"><span>Summary</span><textarea name="summary">${esc(item.summary || "")}</textarea></label>`;
+  } else if (kind === "agreement") {
+    title = `Edit fee agreement · ${item.studentName}`;
+    fields = `<div class="form-pair"><label class="field"><span>Agreed fee</span><input name="agreedAmount" type="number" min="0" value="${item.agreedAmount}" required></label><label class="field"><span>Registration total</span><input name="legacyRegistrationTotal" type="number" min="0" value="${item.legacyRegistrationTotal}" required></label></div><div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="${esc(item.currency)}" maxlength="3" required></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["active","draft","inactive","completed"], item.status)}</select></label></div>`;
+  } else if (kind === "payment") {
+    title = `Review staged payment · ${item.studentName}`;
+    fields = `<div class="immutable-record-note">${icon("shield")}<span>${money(item.amount)} · ${formatDate(item.date)} · ${esc(item.method || "Unknown mode")}<small>Source amounts and dates remain immutable. Only the review classification can change.</small></span></div><label class="field"><span>Review classification</span><select name="reconciliationStatus">${ownerStatusOptions(["ready","review","do_not_import"], item.reconciliationStatus)}</select></label>`;
+  } else if (kind === "session") {
+    title = "Edit class";
+    fields = `<label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label><div class="form-pair"><label class="field"><span>Faculty</span><select name="facultyId">${state.timetable.faculty.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.facultyId)}>${esc(row.fullName)}</option>`).join("")}</select></label><label class="field"><span>Room</span><select name="roomId">${state.timetable.rooms.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.roomId)}>${esc(row.name)}</option>`).join("")}</select></label></div><div class="form-pair"><label class="field"><span>Starts</span><input name="startsAt" type="datetime-local" value="${localInputValue(new Date(item.startsAt))}" required></label><label class="field"><span>Ends</span><input name="endsAt" type="datetime-local" value="${localInputValue(new Date(item.endsAt))}" required></label></div><div class="form-pair"><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["scheduled","completed","cancelled"], item.status)}</select></label><label class="check-field"><input name="allowOverride" type="checkbox"><span>Allow schedule override</span></label></div><label class="field"><span>Notes</span><textarea name="notes">${esc(item.notes || "")}</textarea></label><label class="field"><span>Override reason</span><textarea name="overrideReason">${esc(item.overrideReason || "")}</textarea></label>`;
+  } else if (kind === "assignment") {
+    title = "Edit assignment";
+    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><div class="form-pair"><label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label></div><label class="field"><span>Due</span><input name="dueAt" type="datetime-local" value="${localInputValue(new Date(item.dueAt))}" required></label><label class="field"><span>Material link</span><input name="externalUrl" type="url" value="${esc(item.externalUrl)}" required></label><label class="field"><span>Instructions</span><textarea name="instructions">${esc(item.instructions || "")}</textarea></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
+  } else if (kind === "notice") {
+    title = "Edit notice";
+    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><label class="field"><span>Message</span><textarea name="body" required>${esc(item.body)}</textarea></label><div class="form-pair"><label class="field"><span>Audience</span><select name="audience">${ownerStatusOptions(["all","parents","students","faculty","batch"], item.audience)}</select></label><label class="field"><span>Channel</span><select name="channel">${ownerStatusOptions(["in_app","email","sms","whatsapp"], item.channel)}</select></label></div><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)}</option>`).join("")}</select></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
+  } else if (kind === "user" || kind === "access-user") {
+    title = "Edit user access";
+    fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" required></label><label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email)}" required></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span><input name="password" type="password" minlength="10" autocomplete="new-password"><small>Leave blank to keep the existing password.</small></label>`;
+  } else if (kind === "batch") {
+    title = "Edit batch"; fields = `<label class="field"><span>Name</span><input name="name" value="${esc(item.name)}" required></label><label class="field"><span>Program</span><input name="program" value="${esc(item.program)}" required></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Batch active</span></label>`;
+  } else if (kind === "subject") {
+    title = "Edit subject"; fields = `<label class="field"><span>Name</span><input name="name" value="${esc(item.name)}" required></label><div class="form-pair"><label class="field"><span>Code</span><input name="code" value="${esc(item.code)}" required></label><label class="field"><span>Program</span><input name="program" value="${esc(item.program)}" required></label></div><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Subject active</span></label>`;
+  } else if (kind === "room") {
+    title = "Edit room"; fields = `<div class="form-pair"><label class="field"><span>Name</span><input name="name" value="${esc(item.name)}" required></label><label class="field"><span>Capacity</span><input name="capacity" type="number" min="1" max="500" value="${item.capacity}" required></label></div><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Room active</span></label>`;
+  }
+  openDrawer(title, `<form class="auth-form owner-edit-form" id="owner-edit-form" data-kind="${esc(kind)}" data-record-id="${esc(id)}">${fields}${formError("owner-edit-error")}<button class="button button-primary button-large" type="submit">${icon("edit")}Save changes</button></form>`);
+  $("#owner-edit-form").addEventListener("submit", submitOwnerEdit);
+}
+
+async function submitOwnerEdit(event) {
+  event.preventDefault();
+  const form = event.currentTarget, kind = form.dataset.kind, id = form.dataset.recordId, data = Object.fromEntries(new FormData(form).entries());
+  const button = $('button[type="submit"]', form); button.disabled = true;
+  let endpoint = "", payload = { ...data };
+  if (kind === "student") { endpoint = `/api/students/${id}`; payload.email ||= null; payload.mobile ||= null; payload.secondaryMobile ||= null; payload.previousSchool ||= null; payload.program ||= null; payload.batch ||= null; payload.enrollmentDate ||= null; }
+  else if (kind === "lead") { endpoint = `/api/admissions/leads/${id}`; payload.email ||= null; payload.parentMobile ||= null; payload.nextFollowUpAt = payload.nextFollowUpAt ? new Date(payload.nextFollowUpAt).toISOString() : null; }
+  else if (kind === "agreement") { endpoint = `/api/finance/agreements/${id}`; payload.agreedAmount = Number(payload.agreedAmount); payload.legacyRegistrationTotal = Number(payload.legacyRegistrationTotal); }
+  else if (kind === "payment") endpoint = `/api/finance/staged-payments/${id}/review`;
+  else if (kind === "session") { endpoint = `/api/timetable/sessions/${id}`; payload.startsAt = new Date(payload.startsAt).toISOString(); payload.endsAt = new Date(payload.endsAt).toISOString(); payload.allowOverride = form.elements.allowOverride.checked; }
+  else if (kind === "assignment") { endpoint = `/api/academics/assignments/${id}`; payload.dueAt = new Date(payload.dueAt).toISOString(); }
+  else if (kind === "notice") { endpoint = `/api/communication/notices/${id}`; payload.batchId ||= null; }
+  else if (kind === "user" || kind === "access-user") { endpoint = `/api/settings/users/${id}`; payload.isActive = form.elements.isActive.checked; payload.password ||= null; }
+  else { endpoint = `/api/settings/${{ batch: "batches", subject: "subjects", room: "rooms" }[kind]}/${id}`; payload.isActive = form.elements.isActive.checked; if (kind === "room") payload.capacity = Number(payload.capacity); }
+  try {
+    await api(endpoint, { method: "PATCH", body: JSON.stringify(payload) });
+    if (kind === "student") state.students = await fetchAll("/api/students");
+    else if (kind === "lead") state.leads = await fetchAll("/api/admissions/leads");
+    else if (kind === "agreement") state.agreements = await fetchAll("/api/finance/agreements");
+    else if (kind === "payment") state.payments = await fetchAll("/api/finance/staged-payments");
+    else if (kind === "session") { state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; state.attendanceSessions = await api("/api/attendance/sessions"); }
+    else if (kind === "assignment") state.assignments = await api("/api/academics/assignments");
+    else if (kind === "notice") state.notices = await api("/api/communication/notices");
+    else { state.masters = await api("/api/settings/bootstrap"); state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; }
+    closeDetail(); renderAll(); toast("Changes saved.");
+  } catch (error) { showFormError("#owner-edit-error", error); button.disabled = false; }
+}
+
 const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", timetable: "Faculty & timetable", communication: "Communication", reports: "Reports", settings: "Settings & audit" };
 function showView(view) {
   if (!$("#" + view)) return; state.view = view;
@@ -761,6 +862,8 @@ function bindEvents() {
       treeButton.setAttribute("aria-expanded", String(expanded));
       if (content) content.hidden = !expanded;
     }
+    const ownerEdit = event.target.closest("[data-owner-edit]");
+    if (ownerEdit) openOwnerEdit(ownerEdit.dataset.ownerEdit, ownerEdit.dataset.editId);
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }

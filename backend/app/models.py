@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event, inspect
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -290,8 +290,15 @@ class PaymentTransaction(Base):
 
 
 @event.listens_for(PaymentTransaction, "before_update")
+def payment_transaction_updates_are_restricted(mapper, connection, target):
+    changed = {attribute.key for attribute in inspect(target).attrs if attribute.history.has_changes()}
+    if changed <= {"reconciliation_status"}:
+        return
+    raise ValueError("Payment transactions are immutable; create a reversal or adjustment instead")
+
+
 @event.listens_for(PaymentTransaction, "before_delete")
-def payment_transactions_are_immutable(mapper, connection, target):
+def payment_transactions_cannot_be_deleted(mapper, connection, target):
     raise ValueError("Payment transactions are immutable; create a reversal or adjustment instead")
 
 

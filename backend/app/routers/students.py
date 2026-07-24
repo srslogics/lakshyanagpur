@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -13,9 +14,29 @@ from ..models import (
     User,
 )
 from ..security import require_roles
+from ..operations_schemas import StudentUpdate
+from ..services import audit
 
 READ_ROLES = ("owner", "admissions_manager", "front_desk", "accounts", "academic_coordinator")
 router = APIRouter(prefix="/api/students", tags=["students"])
+
+
+def _list_item(student: Student, enrollment: Enrollment | None):
+    return {
+        "id": student.id,
+        "admissionNumber": student.admission_number,
+        "fullName": student.full_name,
+        "mobile": student.mobile,
+        "secondaryMobile": student.secondary_mobile,
+        "email": student.email,
+        "previousSchool": student.previous_school,
+        "program": enrollment.program if enrollment else None,
+        "batch": enrollment.batch if enrollment else None,
+        "enrollmentDate": enrollment.enrollment_date if enrollment else None,
+        "status": student.status,
+        "dataQualityStatus": student.data_quality_status,
+        "legacyImportId": student.legacy_import_id,
+    }
 
 
 @router.get("")
@@ -39,20 +60,7 @@ def list_students(
     total = query.count()
     rows = query.order_by(Enrollment.enrollment_date, Student.full_name).offset((page - 1) * page_size).limit(page_size).all()
     return {
-        "items": [{
-            "id": student.id,
-            "admissionNumber": student.admission_number,
-            "fullName": student.full_name,
-            "mobile": student.mobile,
-            "secondaryMobile": student.secondary_mobile,
-            "previousSchool": student.previous_school,
-            "program": enrollment.program if enrollment else None,
-            "batch": enrollment.batch if enrollment else None,
-            "enrollmentDate": enrollment.enrollment_date if enrollment else None,
-            "status": student.status,
-            "dataQualityStatus": student.data_quality_status,
-            "legacyImportId": student.legacy_import_id,
-        } for student, enrollment in rows],
+        "items": [_list_item(student, enrollment) for student, enrollment in rows],
         "total": total,
         "page": page,
         "pageSize": page_size,
@@ -85,6 +93,7 @@ def student_detail(student_id: str, db: Session = Depends(get_db), user: User = 
         "fullName": student.full_name,
         "mobile": student.mobile,
         "secondaryMobile": student.secondary_mobile,
+        "email": student.email,
         "previousSchool": student.previous_school,
         "status": student.status,
         "dataQualityStatus": student.data_quality_status,
@@ -102,3 +111,65 @@ def student_detail(student_id: str, db: Session = Depends(get_db), user: User = 
         },
         "migration": None if not legacy else {"legacyId": legacy.id, "sourceRow": legacy.source_row, "readiness": legacy.import_readiness, "issues": legacy.issues},
     }
+
+
+@router.patch("/{student_id}")
+def update_student(
+    student_id: str,
+    payload: StudentUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("owner")),
+):
+    student = db.get(Student, student_id)
+    if not student:
+        raise HTTPException(404, "Student not found")
+    enrollment = (
+        db.query(Enrollment)
+        .filter_by(student_id=student.id)
+        .order_by(Enrollment.is_active.desc(), Enrollment.created_at.desc())
+        .first()
+    )
+    before = {
+        "admissionNumber": student.admission_number,
+        "fullName": student.full_name,
+        "mobile": student.mobile,
+        "secondaryMobile": student.secondary_mobile,
+        "email": student.email,
+        "previousSchool": student.previous_school,
+        "status": student.status,
+        "dataQualityStatus": student.data_quality_status,
+        "program": enrollment.program if enrollment else None,
+        "batch": enrollment.batch if enrollment else None,
+        "enrollmentDate": enrollment.enrollment_date.isoformat() if enrollment and enrollment.enrollment_date else None,
+    }
+    student.admission_number = payload.admission_number.strip()
+    student.full_name = payload.full_name.strip()
+    student.mobile = (payload.mobile or "").strip() or None
+    student.secondary_mobile = (payload.secondary_mobile or "").strip() or None
+    student.email = str(payload.email).lower() if payload.email else None
+    student.previous_school = (payload.previous_school or "").strip() or None
+    student.status = payload.status
+    student.data_quality_status = payload.data_quality_status
+    if payload.program:
+        if not enrollment:
+            enrollment = Enrollment(student_id=student.id, program=payload.program.strip(), source_type="owner_edit")
+            db.add(enrollment)
+        enrollment.program = payload.program.strip()
+        enrollment.batch = (payload.batch or "").strip() or None
+        enrollment.enrollment_date = payload.enrollment_date
+        enrollment.status = "active" if payload.status == "active" else payload.status
+        enrollment.is_active = payload.status == "active"
+    elif enrollment:
+        enrollment.batch = (payload.batch or "").strip() or None
+        enrollment.enrollment_date = payload.enrollment_date
+        enrollment.status = "active" if payload.status == "active" else payload.status
+        enrollment.is_active = payload.status == "active"
+    after = payload.model_dump(by_alias=True, mode="json")
+    audit(db, actor, "students.update", "student", student.id, before=before, after=after)
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(409, "Admission number or enrollment conflicts with an existing record") from error
+    db.refresh(student)
+    return _list_item(student, enrollment)

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..importers.academic_workbook import AcademicImportConflict, import_manifest as import_academic_manifest
 from ..models import AcademicImportBatch, AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User
-from ..operations_schemas import BatchCreate, ParentAccessCreate, RoomCreate, StudentAccessCreate, SubjectCreate, UserCreate
+from ..operations_schemas import BatchCreate, BatchUpdate, ParentAccessCreate, RoomCreate, RoomUpdate, StudentAccessCreate, SubjectCreate, SubjectUpdate, UserCreate, UserUpdate
 from ..security import hash_password, require_roles
 from ..services import audit
 
@@ -49,7 +49,7 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
             "unresolvedItems": item.unresolved_items,
             "createdAt": item.created_at,
         } for item in academic_imports],
-        "studentAccess": [{"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
+        "studentAccess": [{"userId": account.user_id, "studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
         "parentAccess": [{
             "userId": account.user_id,
             "studentId": student.id,
@@ -86,6 +86,31 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User 
     db.add(row); db.flush()
     audit(db, actor, "settings.user.create", "user", row.id, after={"email": row.email, "role": row.role})
     db.commit()
+    return {"id": row.id, "fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active}
+
+
+@router.patch("/users/{user_id}")
+def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    row = db.get(User, user_id)
+    if not row:
+        raise HTTPException(404, "User not found")
+    if row.role == "owner" and (payload.role != "owner" or not payload.is_active):
+        active_owners = db.query(User).filter(User.role == "owner", User.is_active.is_(True)).count()
+        if active_owners <= 1:
+            raise HTTPException(409, "The last active owner cannot be deactivated or reassigned")
+    before = {"fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active}
+    row.full_name = payload.full_name.strip()
+    row.email = str(payload.email).lower()
+    row.role = payload.role
+    row.is_active = payload.is_active
+    if payload.password:
+        row.password_hash = hash_password(payload.password)
+    audit(db, actor, "settings.user.update", "user", row.id, before=before, after={"fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active, "passwordChanged": bool(payload.password)})
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(409, "A user with this email already exists") from error
     return {"id": row.id, "fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active}
 
 
@@ -184,6 +209,48 @@ def create_subject(payload: SubjectCreate, db: Session = Depends(get_db), actor:
 def create_room(payload: RoomCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
     row = Room(name=payload.name.strip(), capacity=payload.capacity)
     _commit_master(db, actor, row, "room", {"name": row.name, "capacity": row.capacity})
+    return _room(row)
+
+
+def _update_master(db: Session, actor: User, row, kind: str, before: dict, after: dict):
+    audit(db, actor, f"settings.{kind}.update", kind, row.id, before=before, after=after)
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(409, f"This {kind} conflicts with an existing record") from error
+
+
+@router.patch("/batches/{batch_id}")
+def update_batch(batch_id: str, payload: BatchUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    row = db.get(Batch, batch_id)
+    if not row:
+        raise HTTPException(404, "Batch not found")
+    before = _batch(row)
+    row.name, row.program, row.is_active = payload.name.strip(), payload.program.strip(), payload.is_active
+    _update_master(db, actor, row, "batch", before, _batch(row))
+    return _batch(row)
+
+
+@router.patch("/subjects/{subject_id}")
+def update_subject(subject_id: str, payload: SubjectUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    row = db.get(Subject, subject_id)
+    if not row:
+        raise HTTPException(404, "Subject not found")
+    before = _subject(row)
+    row.name, row.code, row.program, row.is_active = payload.name.strip(), payload.code.strip().upper(), payload.program.strip(), payload.is_active
+    _update_master(db, actor, row, "subject", before, _subject(row))
+    return _subject(row)
+
+
+@router.patch("/rooms/{room_id}")
+def update_room(room_id: str, payload: RoomUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    row = db.get(Room, room_id)
+    if not row:
+        raise HTTPException(404, "Room not found")
+    before = _room(row)
+    row.name, row.capacity, row.is_active = payload.name.strip(), payload.capacity, payload.is_active
+    _update_master(db, actor, row, "room", before, _room(row))
     return _room(row)
 
 

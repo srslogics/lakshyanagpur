@@ -77,6 +77,10 @@ class LeadCreate(BaseModel):
         return normalized
 
 
+class LeadUpdate(LeadCreate):
+    pass
+
+
 class LeadRead(BaseModel):
     id: str
     student: str

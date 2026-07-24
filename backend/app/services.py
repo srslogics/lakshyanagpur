@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
 from .models import AuditLog, Enrollment, FinanceHandoff, Guardian, Lead, LeadActivity, Student, StudentGuardian, User, new_id
@@ -6,7 +7,16 @@ from .schemas import ConversionRequest
 
 
 def audit(db: Session, actor: User, action: str, entity_type: str, entity_id: str, before=None, after=None):
-    db.add(AuditLog(actor_id=actor.id, action=action, entity_type=entity_type, entity_id=entity_id, before=before, after=after))
+    db.add(
+        AuditLog(
+            actor_id=actor.id,
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            before=jsonable_encoder(before) if before is not None else None,
+            after=jsonable_encoder(after) if after is not None else None,
+        )
+    )
 
 
 def admission_number(db: Session) -> str:

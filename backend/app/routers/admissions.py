@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Lead, LeadActivity, User
-from ..schemas import ConversionRequest, ConversionResult, LEAD_STAGES, LeadActivityUpdate, LeadCreate, LeadRead, LeadStageUpdate, Page
+from ..schemas import ConversionRequest, ConversionResult, LEAD_STAGES, LeadActivityUpdate, LeadCreate, LeadRead, LeadStageUpdate, LeadUpdate, Page
 from ..security import require_roles
 from ..services import audit, convert_lead
 
@@ -44,6 +44,23 @@ def update_stage(lead_id: str, payload: LeadStageUpdate, db: Session = Depends(g
     if not lead: raise HTTPException(404, "Lead not found")
     if payload.stage == "Converted": raise HTTPException(409, "Use the conversion endpoint so downstream records are created")
     before = lead.stage; lead.stage = payload.stage; audit(db, user, "admissions.stage.change", "lead", lead.id, {"stage": before}, {"stage": lead.stage}); db.commit(); db.refresh(lead)
+    return lead
+
+
+@router.patch("/leads/{lead_id}", response_model=LeadRead)
+def update_lead(lead_id: str, payload: LeadUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    lead = db.get(Lead, lead_id)
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    if payload.stage == "Converted" and not lead.converted_student_id:
+        raise HTTPException(409, "Use the conversion workflow to mark an enquiry as converted")
+    before = {field: getattr(lead, field) for field in ("student", "mobile", "email", "parent", "parent_mobile", "program", "source", "counsellor", "stage", "priority", "next_action", "next_follow_up_at", "summary")}
+    values = payload.model_dump(by_alias=False)
+    for field, value in values.items():
+        setattr(lead, field, value.strip() if isinstance(value, str) else value)
+    audit(db, actor, "admissions.lead.update", "lead", lead.id, before=before, after=payload.model_dump(by_alias=True, mode="json"))
+    db.commit()
+    db.refresh(lead)
     return lead
 
 

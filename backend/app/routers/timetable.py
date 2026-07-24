@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Batch, ClassSession, Room, Subject, User
-from ..operations_schemas import ClassSessionCreate
+from ..operations_schemas import ClassSessionCreate, ClassSessionUpdate
 from ..security import require_roles
 from ..services import audit
 
@@ -48,5 +48,39 @@ def create_session(payload: ClassSessionCreate, db: Session = Depends(get_db), a
     row = ClassSession(batch_id=batch.id, subject_id=subject.id, faculty_id=faculty.id, room_id=room.id, starts_at=payload.starts_at, ends_at=payload.ends_at, notes=payload.notes.strip(), override_reason=(payload.override_reason or "").strip() or None, created_by=actor.id)
     db.add(row); db.flush()
     audit(db, actor, "timetable.session.create", "class_session", row.id, after={"batch_id": batch.id, "subject_id": subject.id, "faculty_id": faculty.id, "room_id": room.id, "starts_at": payload.starts_at.isoformat(), "ends_at": payload.ends_at.isoformat(), "overridden": bool(conflicts)})
+    db.commit()
+    return _serialize(row, batch, subject, faculty, room)
+
+
+@router.patch("/sessions/{session_id}")
+def update_session(session_id: str, payload: ClassSessionUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    row = db.get(ClassSession, session_id)
+    if not row:
+        raise HTTPException(404, "Class session not found")
+    batch, subject, faculty, room = db.get(Batch, payload.batch_id), db.get(Subject, payload.subject_id), db.get(User, payload.faculty_id), db.get(Room, payload.room_id)
+    if not all((batch, subject, faculty, room)):
+        raise HTTPException(404, "One or more timetable resources were not found")
+    if not batch.is_active or not subject.is_active or not room.is_active or not faculty.is_active or faculty.role not in ("faculty", "academic_coordinator"):
+        raise HTTPException(409, "Timetable resources must be active and the assigned user must be faculty")
+    conflicts = _query(db).filter(
+        ClassSession.id != row.id,
+        ClassSession.status == "scheduled",
+        ClassSession.starts_at < payload.ends_at,
+        ClassSession.ends_at > payload.starts_at,
+        or_(ClassSession.faculty_id == payload.faculty_id, ClassSession.room_id == payload.room_id, ClassSession.batch_id == payload.batch_id),
+    ).all()
+    if conflicts and not payload.allow_override:
+        raise HTTPException(409, detail={"code": "SCHEDULE_CONFLICT", "message": "The faculty, room, or batch is already scheduled in this time window", "conflicts": jsonable_encoder([_serialize(*item) for item in conflicts])})
+    before = _serialize(row, db.get(Batch, row.batch_id), db.get(Subject, row.subject_id), db.get(User, row.faculty_id), db.get(Room, row.room_id))
+    row.batch_id = batch.id
+    row.subject_id = subject.id
+    row.faculty_id = faculty.id
+    row.room_id = room.id
+    row.starts_at = payload.starts_at
+    row.ends_at = payload.ends_at
+    row.notes = payload.notes.strip()
+    row.status = payload.status
+    row.override_reason = (payload.override_reason or "").strip() or None
+    audit(db, actor, "timetable.session.update", "class_session", row.id, before=jsonable_encoder(before), after=payload.model_dump(by_alias=True, mode="json"))
     db.commit()
     return _serialize(row, batch, subject, faculty, room)

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Batch, Notice, User
-from ..operations_schemas import NoticeCreate
+from ..operations_schemas import NoticeCreate, NoticeUpdate
 from ..security import require_roles
 from ..services import audit
 
@@ -30,5 +30,26 @@ def create_notice(payload: NoticeCreate, db: Session = Depends(get_db), actor: U
     row = Notice(title=payload.title.strip(), body=payload.body.strip(), audience=payload.audience, channel=payload.channel, batch_id=payload.batch_id, status=payload.status, published_at=datetime.now(timezone.utc) if payload.status == "published" else None, created_by=actor.id)
     db.add(row); db.flush()
     audit(db, actor, "communication.notice.create", "notice", row.id, after={"audience": row.audience, "channel": row.channel, "status": row.status, "batch_id": row.batch_id})
+    db.commit()
+    return _serialize(row, batch)
+
+
+@router.patch("/notices/{notice_id}")
+def update_notice(notice_id: str, payload: NoticeUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    row = db.get(Notice, notice_id)
+    if not row:
+        raise HTTPException(404, "Notice not found")
+    batch = db.get(Batch, payload.batch_id) if payload.batch_id else None
+    if payload.batch_id and not batch:
+        raise HTTPException(404, "Batch not found")
+    before = _serialize(row, db.get(Batch, row.batch_id) if row.batch_id else None)
+    row.title = payload.title.strip()
+    row.body = payload.body.strip()
+    row.audience = payload.audience
+    row.channel = payload.channel
+    row.batch_id = payload.batch_id
+    row.status = payload.status
+    row.published_at = datetime.now(timezone.utc) if payload.status == "published" and not row.published_at else (None if payload.status == "draft" else row.published_at)
+    audit(db, actor, "communication.notice.update", "notice", row.id, before=before, after=payload.model_dump(by_alias=True))
     db.commit()
     return _serialize(row, batch)

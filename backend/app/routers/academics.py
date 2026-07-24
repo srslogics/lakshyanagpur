@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Assignment, Batch, ClassSession, Enrollment, Subject, User
-from ..operations_schemas import AssignmentCreate
+from ..operations_schemas import AssignmentCreate, AssignmentUpdate
 from ..security import require_roles
 from ..services import audit
 
@@ -107,6 +107,33 @@ def publish_assignment(
             Enrollment.batch == batch.name,
             Enrollment.program == batch.program,
         )
+        .scalar()
+        or 0
+    )
+    return _serialize(row, batch, subject, recipients)
+
+
+@router.patch("/assignments/{assignment_id}")
+def update_assignment(assignment_id: str, payload: AssignmentUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+    row = db.get(Assignment, assignment_id)
+    if not row:
+        raise HTTPException(404, "Assignment not found")
+    batch, subject = db.get(Batch, payload.batch_id), db.get(Subject, payload.subject_id)
+    if not batch or not subject:
+        raise HTTPException(404, "Batch or subject not found")
+    before = _serialize(row, db.get(Batch, row.batch_id), db.get(Subject, row.subject_id), 0)
+    row.batch_id = batch.id
+    row.subject_id = subject.id
+    row.title = payload.title.strip()
+    row.instructions = payload.instructions.strip()
+    row.due_at = payload.due_at
+    row.external_url = str(payload.external_url)
+    row.status = payload.status
+    audit(db, actor, "academics.assignment.update", "assignment", row.id, before=before, after=payload.model_dump(by_alias=True, mode="json"))
+    db.commit()
+    recipients = (
+        db.query(func.count(func.distinct(Enrollment.student_id)))
+        .filter(Enrollment.is_active.is_(True), Enrollment.batch == batch.name, Enrollment.program == batch.program)
         .scalar()
         or 0
     )
