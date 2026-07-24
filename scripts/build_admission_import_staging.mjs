@@ -1,6 +1,12 @@
 import fs from "node:fs/promises";
 import crypto from "node:crypto";
 import { FileBlob, SpreadsheetFile } from "@oai/artifact-tool";
+import {
+  amountFrom,
+  paymentDate,
+  paymentMode,
+  paymentParts,
+} from "./admission_payment_parser.mjs";
 
 const sourcePath = "/Users/shubhamsingh/Desktop/Lakshaya-Docs/Admission Sheet .xlsx";
 const outputDir = "/Users/shubhamsingh/Documents/New project/lakshinstitution/institution-erp/output/imports";
@@ -26,31 +32,6 @@ const parseDate = value => {
   return new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[1])));
 };
 const phones = value => [...new Set((asText(value).match(/\d{10,15}/g) || []).map(x => x.slice(-10)))];
-const paymentParts = remark => asText(remark).split(/\s*\+\s*|\n+/).map(x => x.trim()).filter(Boolean);
-const amountFrom = part => {
-  const match = part.match(/(\d+(?:\.\d+)?)\s*k\b/i);
-  if (match) return Math.round(Number(match[1]) * 1000);
-  const plain = part.match(/(\d+(?:\.\d+)?)\s*(?=upi|cash|online|bank|card|cheque|check|gpay|phonepe|neft|imps|rtgs)/i);
-  if (!plain) return null;
-  const value = Number(plain[1]);
-  return Math.round(value <= 100 ? value * 1000 : value);
-};
-const paymentDate = part => {
-  const matches = [...part.matchAll(/\b(\d{1,2})[-\/.](\d{1,2})(?:[-\/.](\d{2,4}))?\b/g)];
-  if (!matches.length) return null;
-  const match = matches[matches.length - 1];
-  let year = match[3] ? Number(match[3]) : 2026; if (year < 100) year += 2000;
-  return new Date(Date.UTC(year, Number(match[2]) - 1, Number(match[1])));
-};
-const paymentMode = part => {
-  if (/cash/i.test(part)) return "Cash";
-  if (/upi|gpay|phonepe/i.test(part)) return "UPI";
-  if (/neft|imps|rtgs|bank/i.test(part)) return "Bank";
-  if (/cheque|check/i.test(part)) return "Cheque";
-  if (/card/i.test(part)) return "Card";
-  if (/online/i.test(part)) return "Online";
-  return "Unknown";
-};
 const normalizeCourse = value => ({"JEE":"JEE", "NEET":"NEET", "MHT-CET":"MHT-CET", "BOARDS":"Boards 11th & 12th Tuition"}[asText(value).toUpperCase()] || asText(value));
 const canonicalName = value => asText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
 const clientManualPaymentDateStudents = new Set([

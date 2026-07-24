@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -104,6 +105,63 @@ def test_confirmed_missing_payment_dates_remain_unknown_for_manual_entry(databas
         row["legacy_id"] for row in manifest["records"]
         if row["normalized"]["student_name"] in expected_students
     }
+
+
+def test_payment_shorthand_is_expanded_into_2026_installments():
+    manifest = load_manifest()
+    kamal = next(
+        row for row in manifest["records"]
+        if row["normalized"]["student_name"].strip() == "Kamal Parsatwar"
+    )
+    assert [
+        (
+            payment["amount"],
+            payment["method"],
+            payment["transaction_date"],
+            payment["source_note"],
+        )
+        for payment in kamal["payments"]
+    ] == [
+        (5_000, "cash", "2026-01-21", "5K Cash 21-1"),
+        (5_000, "cash", "2026-03-28", "5K Cash 28-3"),
+        (20_000, "upi", "2026-06-06", "20K UPI 6-6"),
+    ]
+
+
+def test_every_dated_payment_fragment_has_a_normalized_2026_date():
+    manifest = load_manifest()
+    active_payments = [
+        payment
+        for row in manifest["records"]
+        if row["record_status"] == "active"
+        for payment in row["payments"]
+        if payment["transaction_type"] == "payment"
+    ]
+    dated_source_payments = [
+        payment
+        for payment in active_payments
+        if re.search(r"\b\d{1,2}[-/.]\d{1,2}(?:[-/.]\d{2,4})?\b", payment["source_note"])
+    ]
+    assert len(active_payments) == 115
+    assert len(dated_source_payments) == 107
+    assert all(
+        payment["transaction_date"]
+        and payment["transaction_date"].startswith("2026-")
+        for payment in dated_source_payments
+    )
+
+
+def test_source_without_payment_mode_remains_reviewable_not_assumed():
+    manifest = load_manifest()
+    kritika = next(
+        row for row in manifest["records"]
+        if row["normalized"]["student_name"].strip() == "Kritika Nagrare"
+    )
+    payment = next(item for item in kritika["payments"] if item["source_note"] == "10 K 04-7")
+    assert payment["amount"] == 10_000
+    assert payment["transaction_date"] == "2026-07-04"
+    assert payment["method"] == "unknown"
+    assert payment["reconciliation_status"] == "review"
 
 
 def test_imported_records_are_available_through_protected_apis(client, owner_headers, database):
