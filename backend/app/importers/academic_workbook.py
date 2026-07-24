@@ -88,35 +88,23 @@ def _validate(manifest: dict) -> None:
                 )
 
 
-def _student_for_record(db: Session, record: dict) -> Student:
-    student = (
-        db.query(Student)
-        .filter_by(legacy_import_id=record["admission_legacy_id"])
-        .one_or_none()
-    )
-    if not student:
-        raise AcademicImportConflict(
-            f"Admission student {record['admission_legacy_id']} is missing; import admissions first"
-        )
-    if _canonical_name(student.full_name) != _canonical_name(record["student_name"]):
-        raise AcademicImportConflict(
-            f"Student identity mismatch for {record['source_student_code']}: "
-            f"{student.full_name!r} vs {record['student_name']!r}"
-        )
-    return student
-
-
-def _upsert_profile(db: Session, batch: AcademicImportBatch, student: Student, record: dict) -> None:
-    existing_code = (
-        db.query(StudentAcademicProfile)
-        .filter_by(source_student_code=record["source_student_code"])
-        .one_or_none()
-    )
+def _upsert_profile(
+    db: Session,
+    batch: AcademicImportBatch,
+    student: Student,
+    record: dict,
+    profiles_by_student: dict[str, StudentAcademicProfile],
+    profiles_by_code: dict[str, StudentAcademicProfile],
+    enrollments_by_student: dict[str, Enrollment],
+    batch_keys: set[tuple[str, str]],
+    attendance_by_key: dict[tuple[str, str, str], DailyAttendanceEntry],
+) -> None:
+    existing_code = profiles_by_code.get(record["source_student_code"])
     if existing_code and existing_code.student_id != student.id:
         raise AcademicImportConflict(
             f"Source code {record['source_student_code']} is already linked to another student"
         )
-    profile = db.get(StudentAcademicProfile, student.id)
+    profile = profiles_by_student.get(student.id)
     if not profile:
         profile = StudentAcademicProfile(
             student_id=student.id,
@@ -125,6 +113,8 @@ def _upsert_profile(db: Session, batch: AcademicImportBatch, student: Student, r
             import_batch_id=batch.id,
         )
         db.add(profile)
+        profiles_by_student[student.id] = profile
+        profiles_by_code[record["source_student_code"]] = profile
     profile.source_student_code = record["source_student_code"]
     profile.batch_name = record["batch"]
     profile.source_stream = record.get("source_stream")
@@ -134,24 +124,17 @@ def _upsert_profile(db: Session, batch: AcademicImportBatch, student: Student, r
     profile.source_secondary_mobile = record.get("source_secondary_mobile")
     profile.import_batch_id = batch.id
 
-    enrollment = (
-        db.query(Enrollment)
-        .filter_by(student_id=student.id, is_active=True)
-        .order_by(Enrollment.created_at.desc())
-        .first()
-    )
+    enrollment = enrollments_by_student.get(student.id)
     if not enrollment:
         raise AcademicImportConflict(
             f"Active enrollment is missing for {record['source_student_code']}"
         )
     enrollment.batch = record["batch"]
-    db.flush()
-    if not db.query(Batch).filter_by(name=record["batch"], program=enrollment.program).first():
+    batch_key = (record["batch"], enrollment.program)
+    if batch_key not in batch_keys:
         db.add(Batch(name=record["batch"], program=enrollment.program, is_active=True))
+        batch_keys.add(batch_key)
 
-    db.query(StudentSubjectSelection).filter_by(student_id=student.id).delete(
-        synchronize_session=False
-    )
     for subject in record.get("subjects", []):
         db.add(
             StudentSubjectSelection(
@@ -163,15 +146,12 @@ def _upsert_profile(db: Session, batch: AcademicImportBatch, student: Student, r
         )
 
     for entry in record.get("attendance", []):
-        attendance = (
-            db.query(DailyAttendanceEntry)
-            .filter_by(
-                student_id=student.id,
-                source_sheet=record["source_sheet"],
-                source_date_label=entry["source_date_label"],
-            )
-            .one_or_none()
+        key = (
+            student.id,
+            record["source_sheet"],
+            entry["source_date_label"],
         )
+        attendance = attendance_by_key.get(key)
         if not attendance:
             attendance = DailyAttendanceEntry(
                 student_id=student.id,
@@ -187,6 +167,7 @@ def _upsert_profile(db: Session, batch: AcademicImportBatch, student: Student, r
                 normalized_status=entry.get("normalized_status"),
             )
             db.add(attendance)
+            attendance_by_key[key] = attendance
         else:
             attendance.import_batch_id = batch.id
             attendance.source_student_code = record["source_student_code"]
@@ -225,14 +206,87 @@ def import_manifest(db: Session, manifest: dict, actor_id: str | None = None) ->
     db.flush()
 
     try:
+        records = manifest["students"]
+        legacy_ids = [record["admission_legacy_id"] for record in records]
+        admission_students = (
+            db.query(Student)
+            .filter(Student.legacy_import_id.in_(legacy_ids))
+            .all()
+        )
+        students_by_legacy = {
+            student.legacy_import_id: student for student in admission_students
+        }
         students: dict[str, Student] = {}
-        for record in manifest["students"]:
-            student = _student_for_record(db, record)
+        for record in records:
+            student = students_by_legacy.get(record["admission_legacy_id"])
+            if not student:
+                raise AcademicImportConflict(
+                    f"Admission student {record['admission_legacy_id']} is missing; import admissions first"
+                )
+            if _canonical_name(student.full_name) != _canonical_name(record["student_name"]):
+                raise AcademicImportConflict(
+                    f"Student identity mismatch for {record['source_student_code']}: "
+                    f"{student.full_name!r} vs {record['student_name']!r}"
+                )
             students[record["source_student_code"]] = student
-            _upsert_profile(db, batch, student, record)
+        student_ids = [student.id for student in students.values()]
+        profiles = db.query(StudentAcademicProfile).all()
+        profiles_by_student = {profile.student_id: profile for profile in profiles}
+        profiles_by_code = {profile.source_student_code: profile for profile in profiles}
+        enrollment_rows = (
+            db.query(Enrollment)
+            .filter(
+                Enrollment.student_id.in_(student_ids),
+                Enrollment.is_active.is_(True),
+            )
+            .order_by(Enrollment.created_at.desc())
+            .all()
+        )
+        enrollments_by_student: dict[str, Enrollment] = {}
+        for enrollment in enrollment_rows:
+            enrollments_by_student.setdefault(enrollment.student_id, enrollment)
+        batch_keys = {
+            (name, program)
+            for name, program in db.query(Batch.name, Batch.program).all()
+        }
+        source_sheets = {record["source_sheet"] for record in records}
+        existing_attendance = (
+            db.query(DailyAttendanceEntry)
+            .filter(
+                DailyAttendanceEntry.student_id.in_(student_ids),
+                DailyAttendanceEntry.source_sheet.in_(source_sheets),
+            )
+            .all()
+        )
+        attendance_by_key = {
+            (entry.student_id, entry.source_sheet, entry.source_date_label): entry
+            for entry in existing_attendance
+        }
+        db.query(StudentSubjectSelection).filter(
+            StudentSubjectSelection.student_id.in_(student_ids)
+        ).delete(synchronize_session=False)
+        for record in records:
+            _upsert_profile(
+                db,
+                batch,
+                students[record["source_student_code"]],
+                record,
+                profiles_by_student,
+                profiles_by_code,
+                enrollments_by_student,
+                batch_keys,
+                attendance_by_key,
+            )
 
+        source_ids = [row["id"] for row in manifest["source_records"]]
+        existing_source_records = {
+            row.id: row
+            for row in db.query(AcademicSourceRecord)
+            .filter(AcademicSourceRecord.id.in_(source_ids))
+            .all()
+        }
         for row in manifest["source_records"]:
-            existing = db.get(AcademicSourceRecord, row["id"])
+            existing = existing_source_records.get(row["id"])
             if existing:
                 if existing.raw_data != row["raw"] or existing.normalized_data != row["normalized"]:
                     raise AcademicImportConflict(

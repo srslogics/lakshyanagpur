@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from sqlalchemy import event
 
 from app.importers.academic_workbook import import_manifest as import_academic_manifest
 from app.importers.legacy_admissions import import_manifest as import_admission_manifest
@@ -169,3 +170,20 @@ def test_owner_can_import_reviewed_academic_manifest_through_settings(
     imported = settings.json()["academicImports"][0]
     assert imported["activeStudents"] == 64
     assert imported["attendanceEntries"] == 1024
+
+
+def test_academic_import_uses_bounded_database_round_trips(database):
+    import_admission_manifest(database, load(ADMISSIONS))
+    selects = []
+
+    def record_statement(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith("SELECT"):
+            selects.append(statement)
+
+    event.listen(database.bind, "before_cursor_execute", record_statement)
+    try:
+        import_academic_manifest(database, load(ACADEMICS))
+    finally:
+        event.remove(database.bind, "before_cursor_execute", record_statement)
+
+    assert len(selects) < 30

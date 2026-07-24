@@ -411,6 +411,10 @@ function renderSettings() {
   $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${item.email}`, item.contactType === "secondary_contact" ? "secondary" : "primary"]);
   const academicImport = masters.academicImports?.[0];
   $("#academic-import-status").textContent = academicImport ? "Loaded" : "Not loaded";
+  $("#academic-import-message").textContent = academicImport
+    ? "Import completed. Source rows remain auditable."
+    : "Owner-only import. Select the reviewed academic JSON file.";
+  $("#academic-import-message").classList.remove("error");
   $("#settings-academic-import").innerHTML = academicImport
     ? masterRows([academicImport], item => [`${item.activeStudents} students · ${item.attendanceEntries} attendance marks`, `${item.subjectSelections} subject selections · ${item.sourceRecords} source rows`, item.unresolvedItems ? "review" : "ready"])
     : `<div class="master-empty">No academic workbook imported</div>`;
@@ -425,6 +429,9 @@ async function importAcademicData(event) {
   const file = input.files?.[0];
   if (!file) return;
   input.disabled = true;
+  $("#academic-import-status").textContent = "Importing…";
+  $("#academic-import-message").textContent = "Validating and saving the workbook data…";
+  $("#academic-import-message").classList.remove("error");
   try {
     const payload = JSON.parse(await file.text());
     const result = await api("/api/settings/imports/academic", {
@@ -440,7 +447,11 @@ async function importAcademicData(event) {
     renderAll();
     toast(`${result.active_students} academic records imported.`);
   } catch (error) {
-    toast(error instanceof SyntaxError ? "Select the reviewed academic JSON file." : error.message, "error");
+    const message = error instanceof SyntaxError ? "Select the reviewed academic JSON file." : error.message;
+    $("#academic-import-status").textContent = "Failed";
+    $("#academic-import-message").textContent = message;
+    $("#academic-import-message").classList.add("error");
+    toast(message, "error");
   } finally {
     input.value = "";
     input.disabled = false;
