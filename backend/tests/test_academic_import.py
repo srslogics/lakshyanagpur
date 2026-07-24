@@ -149,3 +149,23 @@ def test_student_portal_shows_imported_attendance_and_excludes_x_from_rate(
     assert len(payload["attendance"]) == 16
     assert sum(row["status"] == "unclassified" for row in payload["attendance"]) == 4
     assert all(row["dateLabel"] for row in payload["attendance"])
+
+
+def test_owner_can_import_reviewed_academic_manifest_through_settings(
+    client,
+    owner_headers,
+    database,
+):
+    import_admission_manifest(database, load(ADMISSIONS))
+    response = client.post(
+        "/api/settings/imports/academic",
+        headers=owner_headers,
+        json=load(ACADEMICS),
+    )
+    assert response.status_code == 200
+    assert response.json()["active_students"] == 64
+    settings = client.get("/api/settings/bootstrap", headers=owner_headers)
+    assert settings.status_code == 200
+    imported = settings.json()["academicImports"][0]
+    assert imported["activeStudents"] == 64
+    assert imported["attendanceEntries"] == 1024

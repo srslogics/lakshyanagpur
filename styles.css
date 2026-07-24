@@ -309,6 +309,8 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .master-row strong, .audit-row strong { font-size: .77rem; text-transform: capitalize; }
 .master-row small, .audit-row small { margin-top: 4px; color: var(--ink-500); font-size: .66rem; }
 .master-empty { padding: 26px 0; color: var(--ink-500); font-size: .75rem; text-align: center; }
+.import-file-button { width: 100%; justify-content: center; margin-top: 14px; }
+.settings-helper { margin: 10px 0 0; color: var(--ink-500); font-size: .74rem; line-height: 1.5; }
 .audit-row { display: grid; grid-template-columns: 38px 1fr auto; }
 .audit-row .icon-tile { width: 34px; height: 34px; }
 .audit-row em { color: var(--ink-500); font-size: .65rem; font-style: normal; text-transform: capitalize; }

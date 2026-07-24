@@ -409,10 +409,42 @@ function renderSettings() {
   $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${item.email}`, item.isActive ? "active" : "inactive"]);
   $("#parent-access-count").textContent = `${masters.parentAccess?.length || 0}`;
   $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${item.email}`, item.contactType === "secondary_contact" ? "secondary" : "primary"]);
+  const academicImport = masters.academicImports?.[0];
+  $("#academic-import-status").textContent = academicImport ? "Loaded" : "Not loaded";
+  $("#settings-academic-import").innerHTML = academicImport
+    ? masterRows([academicImport], item => [`${item.activeStudents} students · ${item.attendanceEntries} attendance marks`, `${item.subjectSelections} subject selections · ${item.sourceRecords} source rows`, item.unresolvedItems ? "review" : "ready"])
+    : `<div class="master-empty">No academic workbook imported</div>`;
   $("#settings-batches").innerHTML = masterRows(masters.batches || [], item => [item.name, item.program, item.isActive ? "active" : "inactive"]);
   $("#settings-subjects").innerHTML = masterRows(masters.subjects || [], item => [item.name, `${item.code} · ${item.program}`, item.isActive ? "active" : "inactive"]);
   $("#settings-rooms").innerHTML = masterRows(masters.rooms || [], item => [item.name, `${item.capacity} seats`, item.isActive ? "active" : "inactive"]);
   $("#settings-audit").innerHTML = auditRows(state.audit);
+}
+
+async function importAcademicData(event) {
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  if (!file) return;
+  input.disabled = true;
+  try {
+    const payload = JSON.parse(await file.text());
+    const result = await api("/api/settings/imports/academic", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const [masters, students] = await Promise.all([
+      api("/api/settings/bootstrap"),
+      fetchAll("/api/students"),
+    ]);
+    state.masters = masters;
+    state.students = students;
+    renderAll();
+    toast(`${result.active_students} academic records imported.`);
+  } catch (error) {
+    toast(error instanceof SyntaxError ? "Select the reviewed academic JSON file." : error.message, "error");
+  } finally {
+    input.value = "";
+    input.disabled = false;
+  }
 }
 
 function masterRows(rows, map) { return rows.length ? rows.map(item => { const [title, detail, stateValue] = map(item); return `<div class="master-row"><span><strong>${esc(title)}</strong><small>${esc(detail)}</small></span>${status(stateValue)}</div>`; }).join("") : `<div class="master-empty">No records</div>`; }
@@ -638,6 +670,7 @@ function bindEvents() {
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
   $("#new-session").addEventListener("click", openSessionForm); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-master").addEventListener("click", openMasterForm);
+  $("#academic-import-file").addEventListener("change", importAcademicData);
   $("#refresh-attendance").addEventListener("click", async () => { try { state.attendanceSessions = await api("/api/attendance/sessions"); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => { $$("[data-finance-tab]").forEach(item => item.classList.toggle("active", item === button)); $$(".finance-tab").forEach(panel => panel.classList.toggle("active", panel.id === `finance-${button.dataset.financeTab}-panel`)); }));

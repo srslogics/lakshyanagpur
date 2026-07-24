@@ -3,7 +3,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User
+from ..importers.academic_workbook import AcademicImportConflict, import_manifest as import_academic_manifest
+from ..models import AcademicImportBatch, AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User
 from ..operations_schemas import BatchCreate, ParentAccessCreate, RoomCreate, StudentAccessCreate, SubjectCreate, UserCreate
 from ..security import hash_password, require_roles
 from ..services import audit
@@ -26,11 +27,28 @@ def _room(row: Room):
 @router.get("/bootstrap")
 def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles("owner"))):
     users = db.query(User).order_by(User.full_name).all()
+    academic_imports = (
+        db.query(AcademicImportBatch)
+        .order_by(AcademicImportBatch.created_at.desc())
+        .limit(10)
+        .all()
+    )
     return {
         "users": [{"id": item.id, "fullName": item.full_name, "email": item.email, "role": item.role, "isActive": item.is_active} for item in users],
         "batches": [_batch(item) for item in db.query(Batch).order_by(Batch.program, Batch.name).all()],
         "subjects": [_subject(item) for item in db.query(Subject).order_by(Subject.program, Subject.name).all()],
         "rooms": [_room(item) for item in db.query(Room).order_by(Room.name).all()],
+        "academicImports": [{
+            "id": item.id,
+            "sourceName": item.source_name,
+            "status": item.status,
+            "activeStudents": item.active_student_rows,
+            "attendanceEntries": item.attendance_entries,
+            "subjectSelections": item.subject_selections,
+            "sourceRecords": item.staged_source_rows,
+            "unresolvedItems": item.unresolved_items,
+            "createdAt": item.created_at,
+        } for item in academic_imports],
         "studentAccess": [{"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
         "parentAccess": [{
             "userId": account.user_id,
@@ -45,6 +63,18 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
             Student, Student.id == ParentAccount.student_id
         ).join(User, User.id == ParentAccount.user_id).order_by(Student.full_name, User.full_name).all()],
     }
+
+
+@router.post("/imports/academic")
+def import_academic_workbook(
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("owner")),
+):
+    try:
+        return import_academic_manifest(db, payload, actor_id=actor.id)
+    except AcademicImportConflict as error:
+        raise HTTPException(409, str(error)) from error
 
 
 @router.post("/users", status_code=201)
