@@ -268,16 +268,17 @@ function metricCard(label, value, iconName, featured = false) {
 }
 
 function renderDashboard() {
+  const activeStudents = state.students.filter(student => student.status === "active");
   const agreed = state.agreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0);
   const registration = state.agreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
   $("#dashboard-metrics").innerHTML = [
-    metricCard("Active students", String(state.students.length), "users", true),
+    metricCard("Active students", String(activeStudents.length), "users", true),
     metricCard("Agreed fees", shortMoney(agreed), "wallet"),
     metricCard("Registration", shortMoney(registration), "receipt"),
     metricCard("Enquiries", String(state.leads.length), "spark")
   ].join("");
 
-  const programs = state.students.reduce((map, item) => map.set(item.program || "Unassigned", (map.get(item.program || "Unassigned") || 0) + 1), new Map());
+  const programs = activeStudents.reduce((map, item) => map.set(item.program || "Unassigned", (map.get(item.program || "Unassigned") || 0) + 1), new Map());
   const sortedPrograms = [...programs.entries()].sort((a, b) => b[1] - a[1]);
   const max = Math.max(...sortedPrograms.map(([, count]) => count), 1);
   $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments");
@@ -288,7 +289,7 @@ function renderDashboard() {
   $("#attention-count").textContent = quality.reduce((sum, item) => sum + item.count, 0);
   $("#attention-list").innerHTML = quality.length ? quality.map(item => `<button class="attention-item" type="button" data-view-target="${item.kind === "payment review" ? "finance" : "students"}"><span>${icon("alert")}</span><strong>${esc(item.kind.replace(/\b\w/g, c => c.toUpperCase()))}</strong><em>${item.count}</em></button>`).join("") : `<div class="attention-item"><span>${icon("shield")}</span><strong>No review items</strong></div>`;
 
-  const recent = [...state.students].sort((a, b) => String(b.enrollmentDate).localeCompare(String(a.enrollmentDate))).slice(0, 5);
+  const recent = [...activeStudents].sort((a, b) => String(b.enrollmentDate).localeCompare(String(a.enrollmentDate))).slice(0, 5);
   $("#recent-students").innerHTML = recent.length ? recent.map(student => `<button class="record-item" type="button" data-student-id="${esc(student.id)}"><span class="record-avatar">${initials(student.fullName)}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span><span class="record-program">${esc(student.program)}</span><span class="record-date">${formatDate(student.enrollmentDate)}</span>${status(student.dataQualityStatus)}</button>`).join("") : emptyState("users", "No admissions");
 
   const stagedTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0);
