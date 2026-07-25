@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=28">
+  <link rel="stylesheet" href="./styles.css?v=31">
   <link rel="stylesheet" href="./auth-shared.css?v=4">
 </head>
 <body>
@@ -203,7 +203,7 @@
             <article class="surface table-surface finance-tab active" id="finance-agreements-panel" role="tabpanel" aria-labelledby="finance-agreements-tab">
               <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search student receivables"></label><select id="agreement-balance-filter" aria-label="Filter account balance"><option value="">All accounts</option><option value="due">Outstanding</option><option value="settled">Settled</option><option value="credit">Credit balance</option><option value="reconcile">Needs reconciliation</option></select></div>
               <div class="table-meta"><span id="agreement-result-summary">Loading accounts…</span></div>
-              <div class="data-table-wrap"><table class="data-table receivables-table"><thead><tr><th>Student</th><th>Admission ID</th><th>Agreed fee</th><th>Paid</th><th>Outstanding</th><th>Reconciliation</th><th></th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
+              <div class="data-table-wrap"><table class="data-table receivables-table"><colgroup><col class="receivables-col-student"><col class="receivables-col-admission"><col class="receivables-col-agreed"><col class="receivables-col-paid"><col class="receivables-col-outstanding"><col class="receivables-col-reconciliation"><col class="receivables-col-actions"></colgroup><thead><tr><th scope="col">Student</th><th scope="col">Admission ID</th><th class="numeric-heading" scope="col">Agreed fee</th><th class="numeric-heading" scope="col">Paid</th><th class="numeric-heading" scope="col">Outstanding</th><th scope="col">Reconciliation</th><th scope="col" aria-label="Actions"></th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
               <div class="mobile-records" id="agreements-mobile-list"></div>
             </article>
             <article class="surface table-surface finance-tab" id="finance-payments-panel" role="tabpanel" aria-labelledby="finance-payments-tab" hidden>
@@ -297,6 +297,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=34" defer></script>
+  <script src="./app.js?v=35" defer></script>
 </body>
 </html>

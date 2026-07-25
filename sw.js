@@ -1,9 +1,9 @@
-const CACHE_NAME = "lakshya-erp-app-v46";
+const CACHE_NAME = "lakshya-erp-app-v49";
 const ASSETS = [
   "./",
-  "./styles.css?v=28",
+  "./styles.css?v=31",
   "./auth-shared.css?v=4",
-  "./app.js?v=34",
+  "./app.js?v=35",
   "./manifest.webmanifest",
   "./lakshya-logo-576.png",
   "./pwa-icon-192.png"

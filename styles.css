@@ -346,12 +346,35 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .payment-student-filter { min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); color: var(--ink-700); background: var(--forest-50); font-size: .76rem; }
 .payment-student-filter strong { color: var(--ink-950); }
 .view-payments-button svg { width: 14px; height: 14px; }
-.receivables-table td { vertical-align: middle; }
+.receivables-table { min-width: 1040px; table-layout: fixed; }
+.receivables-col-student { width: 23%; }
+.receivables-col-admission { width: 14%; }
+.receivables-col-agreed { width: 10%; }
+.receivables-col-paid { width: 9%; }
+.receivables-col-outstanding { width: 12%; }
+.receivables-col-reconciliation { width: 14%; }
+.receivables-col-actions { width: 18%; }
+.receivables-table th { height: 52px; padding-inline: 22px; }
+.receivables-table td { height: 82px; padding: 16px 22px; vertical-align: middle; }
+.receivables-table th.numeric-heading, .receivables-table .receivable-number,
+.receivables-table .receivable-outstanding { text-align: right; }
+.receivable-student .table-primary { min-width: 0; }
+.receivable-student .table-primary > span:last-child { min-width: 0; }
+.receivable-student .table-primary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.receivable-admission { color: var(--ink-600); white-space: nowrap; }
+.receivable-outstanding > strong { display: block; }
+.receivable-outstanding .ledger-balance-state { margin: 6px 0 0 auto; }
+.receivable-reconciliation .status { max-width: 100%; }
+.receivable-actions { padding-inline: 14px !important; border-left: 1px solid var(--line); }
+.receivable-actions .cell-actions { justify-content: flex-end; flex-wrap: nowrap; }
+.receivable-edit-button { flex: 0 0 42px; width: 42px; height: 42px; border: 1px solid var(--line-strong); color: var(--ink-800); background: var(--surface); }
+.receivable-edit-button:hover { border-color: var(--forest-700); color: var(--forest-700); background: var(--forest-50); }
+.receivable-edit-button svg { width: 16px; height: 16px; }
 .ledger-balance-state { display: block; width: fit-content; margin-top: 5px; padding: 3px 7px; border-radius: 999px; font-size: .61rem; font-weight: 800; text-transform: uppercase; }
 .ledger-balance-due { color: var(--danger); background: var(--danger-bg); }
 .ledger-balance-settled { color: var(--success); background: var(--success-bg); }
 .ledger-balance-credit { color: var(--info); background: var(--info-bg); }
-.open-ledger-button { white-space: nowrap; }
+.open-ledger-button { min-width: 108px; white-space: nowrap; }
 .open-ledger-button svg, .ledger-heading .button svg, .ledger-control-card .button svg { width: 15px; height: 15px; }
 
 /* Student fee ledger */
