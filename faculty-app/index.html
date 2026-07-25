@@ -19,7 +19,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=3">
+  <link rel="stylesheet" href="./styles.css?v=5">
   <link rel="stylesheet" href="../auth-shared.css?v=4">
 </head>
 <body>
@@ -60,6 +60,7 @@
         <button class="active" type="button" data-view="dashboard" aria-current="page"><span data-icon="home"></span><em>Today</em></button>
         <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em><i id="sidebar-attendance-badge" class="hidden">0</i></button>
         <button type="button" data-view="assignments"><span data-icon="book"></span><em>Assignments</em></button>
+        <button type="button" data-view="examinations"><span data-icon="exam"></span><em>Examinations</em><i id="sidebar-examination-badge" class="hidden">0</i></button>
         <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
         <span class="sidebar-section-label">Faculty services</span>
         <button type="button" data-view="batches"><span data-icon="users"></span><em>Batches</em></button>
@@ -142,6 +143,21 @@
         <div class="assignment-grid" id="assignment-list"></div>
       </section>
 
+      <section class="app-view" id="examinations" aria-labelledby="examinations-heading">
+        <div class="view-heading">
+          <div><p class="eyebrow">ASSESSMENT</p><h1 id="examinations-heading">Examinations</h1><p>Schedule examinations, record marks, and publish complete results.</p></div>
+          <button class="primary-compact" type="button" data-open-examination><span data-icon="plus"></span>New examination</button>
+        </div>
+        <div class="module-metrics" id="examination-metrics"></div>
+        <div class="filter-pills" aria-label="Examination filter">
+          <button class="active" data-examination-filter="action" type="button" aria-pressed="true">Needs action</button>
+          <button data-examination-filter="upcoming" type="button" aria-pressed="false">Upcoming</button>
+          <button data-examination-filter="published" type="button" aria-pressed="false">Published</button>
+          <button data-examination-filter="all" type="button" aria-pressed="false">All</button>
+        </div>
+        <div class="faculty-exam-list" id="examination-list"></div>
+      </section>
+
       <section class="app-view" id="schedule" aria-labelledby="schedule-heading">
         <div class="view-heading"><div><p class="eyebrow">TIMETABLE</p><h1 id="schedule-heading">Schedule</h1><p>Your assigned classes, rooms and batches.</p></div></div>
         <div class="module-metrics" id="schedule-metrics"></div>
@@ -221,7 +237,40 @@
     </section>
   </div>
 
+  <div class="modal-backdrop hidden" id="examination-modal" role="dialog" aria-modal="true" aria-labelledby="examination-modal-title">
+    <section class="modal-card">
+      <header><div><p class="eyebrow">ASSESSMENT</p><h2 id="examination-modal-title">New examination</h2></div><button class="icon-button" type="button" data-close-modal="examination-modal" aria-label="Close examination form"><span data-icon="close"></span></button></header>
+      <form id="examination-form">
+        <label><span>Batch and subject</span><select id="examination-pair" name="pair" required></select></label>
+        <label><span>Examination name</span><input name="name" type="text" maxlength="255" placeholder="e.g. Unit Test 01" required></label>
+        <div class="form-grid">
+          <label><span>Date and time</span><input id="examination-date" name="scheduledAt" type="datetime-local" required></label>
+          <label><span>Duration</span><input name="durationMinutes" type="number" min="15" max="480" step="5" value="60" required></label>
+        </div>
+        <div class="form-grid">
+          <label><span>Maximum marks</span><input name="maxMarks" type="number" min="0.01" max="10000" step="0.01" value="100" required></label>
+          <label><span>Pass marks</span><input name="passMarks" type="number" min="0" max="10000" step="0.01" value="40" required></label>
+        </div>
+        <label><span>Instructions</span><textarea name="instructions" rows="3" maxlength="5000" placeholder="Reporting time or permitted materials"></textarea></label>
+        <div class="modal-error hidden" id="examination-error" role="alert"></div>
+        <footer><button class="secondary-button" type="button" data-close-modal="examination-modal">Cancel</button><button class="primary-button" id="examination-submit" type="submit">Create examination</button></footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop hidden" id="examination-results-modal" role="dialog" aria-modal="true" aria-labelledby="examination-results-title">
+    <section class="modal-card examination-results-card">
+      <header><div><p class="eyebrow" id="examination-results-kicker">MARKS ENTRY</p><h2 id="examination-results-title">Examination</h2><p id="examination-results-meta"></p></div><button class="icon-button" type="button" data-close-modal="examination-results-modal" aria-label="Close examination"><span data-icon="close"></span></button></header>
+      <div class="examination-result-summary" id="examination-result-summary"></div>
+      <form id="examination-results-form">
+        <div class="exam-roster-list" id="examination-roster-list"></div>
+        <div class="modal-error hidden" id="examination-results-error" role="alert"></div>
+        <footer><button class="secondary-button" id="save-examination-results" type="button">Save draft</button><button class="primary-button" id="publish-examination-results" type="submit">Publish results</button></footer>
+      </form>
+    </section>
+  </div>
+
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=2" defer></script>
+  <script src="./app.js?v=3" defer></script>
 </body>
 </html>

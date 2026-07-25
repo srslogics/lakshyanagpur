@@ -6,6 +6,7 @@ const icons = {
   home: '<path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9Z"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18"/>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  exam: '<path d="M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2Z"/><path d="M9 7h6M9 11h6m-6 4h3"/><path d="m14 16 1.5 1.5L19 14"/>',
   check: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="m8 14 2.5 2.5L16 11"/>',
   more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   spark: '<path d="m12 3 1.4 4.1 4.1 1.4-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3Z"/>',
@@ -21,12 +22,13 @@ const icons = {
   "eye-off": '<path d="m3 3 18 18M10.6 5.2A11.4 11.4 0 0 1 12 5c6.5 0 10 7 10 7a16 16 0 0 1-2.1 3.2M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.1-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
 };
 
-const views = new Set(["home", "schedule", "assignments", "attendance", "fees", "notices", "profile", "more"]);
-const overflowViews = new Set(["fees", "notices", "profile", "more"]);
+const views = new Set(["home", "schedule", "assignments", "examinations", "attendance", "fees", "notices", "profile", "more"]);
+const overflowViews = new Set(["examinations", "fees", "notices", "profile", "more"]);
 const titles = {
   home: "Home",
   schedule: "Schedule",
   assignments: "Assignments",
+  examinations: "Examinations",
   attendance: "Attendance",
   fees: "Fees",
   notices: "Notices",
@@ -40,6 +42,7 @@ const state = {
   data: null,
   view: hashView(),
   assignmentFilter: "open",
+  examinationFilter: "upcoming",
   scheduleDate: "all",
   savingAssignment: null,
 };
@@ -288,6 +291,7 @@ function renderAll() {
   renderHome();
   renderSchedule();
   renderAssignments();
+  renderExaminations();
   renderAttendance();
   renderFees();
   renderNotices();
@@ -297,12 +301,12 @@ function renderAll() {
 }
 
 function renderHome() {
-  const { summary, schedule, assignments, notices } = state.data;
+  const { summary, schedule, assignments, examinations, notices } = state.data;
   const openAssignments = assignments.filter((item) => assignmentState(item) !== "completed");
   $("#summary-strip").innerHTML = [
     summaryCard("Upcoming classes", String(summary.upcomingClasses), false, "schedule"),
     summaryCard("Open assignments", String(openAssignments.length), openAssignments.length > 0, "assignments"),
-    summaryCard("Attendance", summary.attendanceRate == null ? "Not recorded" : `${summary.attendanceRate}%`, false, "attendance"),
+    summaryCard("Upcoming exams", String(summary.upcomingExams ?? examinations.filter((item) => item.status === "scheduled").length), false, "examinations"),
     summaryCard("Outstanding fees", money(summary.outstandingAmount), summary.outstandingAmount > 0, "fees"),
   ].join("");
   const next = schedule.find((item) => validDate(item.startsAt) && new Date(item.startsAt) >= new Date());
@@ -421,6 +425,50 @@ async function updateAssignmentStatus(assignmentId, status) {
   }
 }
 
+function renderExaminations() {
+  const all = [...(state.data.examinations || [])].sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+  const now = Date.now();
+  const upcoming = all.filter((item) => item.status === "scheduled" && new Date(item.scheduledAt).getTime() >= now);
+  const awaiting = all.filter((item) => item.status === "marks_entry" || (item.status === "scheduled" && new Date(item.scheduledAt).getTime() < now));
+  const results = all.filter((item) => item.status === "published");
+  $("#examination-metrics").innerHTML = [
+    moduleMetric("Upcoming", String(upcoming.length)),
+    moduleMetric("Awaiting results", String(awaiting.length)),
+    moduleMetric("Published", String(results.length)),
+  ].join("");
+  $("#sidebar-examination-badge").textContent = upcoming.length;
+  $("#sidebar-examination-badge").classList.toggle("hidden", !upcoming.length);
+  let rows = all;
+  if (state.examinationFilter === "upcoming") rows = [...upcoming, ...awaiting];
+  if (state.examinationFilter === "results") rows = results;
+  $("#examination-list").innerHTML = rows.length
+    ? rows.map((item) => {
+      const published = item.status === "published";
+      const graded = published && item.resultStatus === "graded";
+      const resultLabel = graded
+        ? `${item.marksObtained} / ${item.maxMarks}`
+        : published
+          ? titleCase(item.resultStatus)
+          : item.status === "marks_entry" || new Date(item.scheduledAt).getTime() < now
+            ? "Evaluation underway"
+            : "Scheduled";
+      const resultClass = graded ? (item.qualified ? "qualified" : "review") : item.resultStatus === "absent" ? "review" : "neutral";
+      return `<article class="examination-card ${published ? "has-result" : ""}">
+        <header><span class="subject-mark">${esc((item.subjectCode || item.subject || "EX").slice(0, 3).toUpperCase())}</span><span class="exam-state ${resultClass}">${esc(resultLabel)}</span></header>
+        <h3>${esc(item.name)}</h3>
+        <p>${esc(item.instructions || "No additional instructions.")}</p>
+        <div class="exam-detail-grid">
+          <div><span>Date</span><strong>${dateText(item.scheduledAt)}</strong></div>
+          <div><span>Time</span><strong>${timeText(item.scheduledAt)}</strong></div>
+          <div><span>Duration</span><strong>${esc(item.durationMinutes)} min</strong></div>
+          <div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div>
+        </div>
+        ${graded ? `<footer><span>${esc(item.subject)}</span><strong>${esc(item.percentage)}% · ${item.qualified ? "Qualified" : "Below pass mark"}</strong></footer>` : published && item.remarks ? `<footer><span>Remark</span><strong>${esc(item.remarks)}</strong></footer>` : ""}
+      </article>`;
+    }).join("")
+    : empty("exam", state.examinationFilter === "results" ? "No published results" : "No examinations scheduled", state.examinationFilter === "results" ? "Released results will appear here." : "Your examination schedule will appear here after it is published.");
+}
+
 function renderAttendance() {
   const rows = state.data.attendance;
   const presentStatuses = new Set(["present", "late", "excused"]);
@@ -525,7 +573,9 @@ function renderProfile() {
 }
 
 function renderMore() {
-  const { profile, fees, notices } = state.data;
+  const { profile, fees, examinations, notices } = state.data;
+  const upcomingExams = (examinations || []).filter((item) => item.status === "scheduled" && new Date(item.scheduledAt).getTime() >= Date.now()).length;
+  $("#more-examination-copy").textContent = upcomingExams ? `${upcomingExams} upcoming examination${upcomingExams === 1 ? "" : "s"}` : `${(examinations || []).filter((item) => item.status === "published").length} published results`;
   $("#more-fee-copy").textContent = Number(fees.agreedAmount) > 0 ? `${money(fees.outstandingAmount)} outstanding` : "Fee agreement not configured";
   $("#more-notice-copy").textContent = notices.length ? `${notices.length} published notice${notices.length === 1 ? "" : "s"}` : "No published notices";
   $("#more-profile-copy").textContent = [profile.admissionNumber, profile.batch].filter(Boolean).join(" · ") || "Student and login details";
@@ -577,6 +627,17 @@ function bindEvents() {
       });
       renderAssignments();
       injectIcons($("#assignments"));
+    }
+    const examinationFilter = event.target.closest("[data-examination-filter]");
+    if (examinationFilter) {
+      state.examinationFilter = examinationFilter.dataset.examinationFilter;
+      $$("[data-examination-filter]").forEach((node) => {
+        const active = node.dataset.examinationFilter === state.examinationFilter;
+        node.classList.toggle("active", active);
+        node.setAttribute("aria-pressed", String(active));
+      });
+      renderExaminations();
+      injectIcons($("#examinations"));
     }
     const assignmentButton = event.target.closest("[data-assignment-id][data-assignment-status]");
     if (assignmentButton) {

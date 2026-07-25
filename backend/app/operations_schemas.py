@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, model_validator
@@ -141,6 +142,58 @@ class AssignmentCreate(BaseModel):
 
 class AssignmentUpdate(AssignmentCreate):
     pass
+
+
+class ExaminationCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=255)
+    batch_id: str = Field(alias="batchId")
+    subject_id: str = Field(alias="subjectId")
+    faculty_id: str = Field(alias="facultyId")
+    scheduled_at: datetime = Field(alias="scheduledAt")
+    duration_minutes: int = Field(alias="durationMinutes", ge=15, le=480)
+    max_marks: Decimal = Field(alias="maxMarks", gt=0, le=10000, decimal_places=2)
+    pass_marks: Decimal = Field(alias="passMarks", ge=0, le=10000, decimal_places=2)
+    instructions: str = Field(default="", max_length=5000)
+    status: Literal["draft", "scheduled"] = "scheduled"
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def valid_marks(self):
+        if self.pass_marks > self.max_marks:
+            raise ValueError("passMarks cannot exceed maxMarks")
+        return self
+
+
+class ExaminationUpdate(ExaminationCreate):
+    status: Literal["draft", "scheduled", "marks_entry", "cancelled"] = "scheduled"
+
+
+class ExaminationMark(BaseModel):
+    student_id: str = Field(alias="studentId")
+    result_status: Literal["pending", "graded", "absent", "withheld"] = Field(
+        alias="resultStatus",
+    )
+    marks_obtained: Decimal | None = Field(
+        default=None,
+        alias="marksObtained",
+        ge=0,
+        le=10000,
+        decimal_places=2,
+    )
+    remarks: str = Field(default="", max_length=500)
+    model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def status_matches_marks(self):
+        if self.result_status == "graded" and self.marks_obtained is None:
+            raise ValueError("marksObtained is required for a graded result")
+        if self.result_status != "graded" and self.marks_obtained is not None:
+            raise ValueError("marksObtained is allowed only for a graded result")
+        return self
+
+
+class ExaminationMarksSave(BaseModel):
+    entries: list[ExaminationMark] = Field(min_length=1)
 
 
 AttendanceStatus = Literal["present", "late", "absent", "excused"]

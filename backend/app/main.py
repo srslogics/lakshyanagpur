@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from .config import settings
 from .database import SessionLocal
-from .routers import academics, admissions, attendance, auth, communication, faculty, finance, portal, reports, settings as settings_router, students, timetable
+from .routers import academics, admissions, attendance, auth, communication, examinations, faculty, finance, portal, reports, settings as settings_router, students, timetable
 from .seed import seed_development_data
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.include_router(students.router)
 app.include_router(finance.router)
 app.include_router(timetable.router)
 app.include_router(academics.router)
+app.include_router(examinations.router)
 app.include_router(attendance.router)
 app.include_router(communication.router)
 app.include_router(faculty.router)

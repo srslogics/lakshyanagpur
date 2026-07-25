@@ -181,6 +181,23 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .assignment-card a,.assignment-actions button{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 13px;border:0;border-radius:11px;color:var(--navy-800);background:var(--navy-50);font-size:.72rem;font-weight:800;text-decoration:none}
 .assignment-card a svg{width:16px;height:16px}
 .assignment-actions button{color:#fff;background:var(--navy-900)}
+.faculty-exam-list{display:grid;gap:12px}
+.faculty-exam-card{display:grid;grid-template-columns:76px minmax(0,1fr) auto;align-items:center;gap:18px;padding:18px 20px;border:1px solid var(--line);border-radius:19px;background:var(--surface);box-shadow:var(--shadow-sm)}
+.faculty-exam-date{min-height:72px;display:grid;place-items:center;align-content:center;border-radius:14px;color:var(--navy-800);background:var(--navy-50);text-align:center}
+.faculty-exam-date strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.2rem;line-height:1}
+.faculty-exam-date small{margin-top:5px;font-size:.66rem;font-weight:800;text-transform:uppercase}
+.faculty-exam-copy{min-width:0}
+.faculty-exam-copy h3{margin:8px 0 0;font-size:.95rem}
+.faculty-exam-copy p{margin:4px 0 0;color:var(--muted);font-size:.74rem}
+.faculty-exam-progress{display:grid;grid-template-columns:minmax(120px,220px) auto;align-items:center;gap:10px;margin-top:11px}
+.faculty-exam-progress>span{height:5px;overflow:hidden;border-radius:999px;background:var(--surface-soft)}
+.faculty-exam-progress i{height:100%;display:block;border-radius:inherit;background:var(--navy-700)}
+.faculty-exam-progress small{overflow:hidden;color:var(--muted);font-size:.65rem;text-overflow:ellipsis;white-space:nowrap}
+.status-pill.action{color:var(--red);background:var(--red-soft)}
+.status-pill.upcoming{color:var(--navy-800);background:var(--navy-50)}
+.status-pill.cancelled,.status-pill.absent{color:var(--red);background:var(--red-soft)}
+.status-pill.graded{color:var(--success);background:var(--success-soft)}
+.status-pill.withheld{color:var(--warning);background:var(--warning-soft)}
 .timeline-card{display:grid;grid-template-columns:110px minmax(0,1fr) auto;align-items:center;gap:20px;padding:20px;border-left:4px solid var(--yellow);border-radius:4px 18px 18px 4px;background:var(--surface);box-shadow:var(--shadow-sm)}
 .timeline-time{font-variant-numeric:tabular-nums;color:var(--navy-800);font-size:.78rem;font-weight:800}
 .timeline-card h3{margin:0;font-size:1rem}
@@ -256,6 +273,28 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .modal-card form>footer{display:flex;justify-content:flex-end;gap:10px;padding-top:6px}
 .secondary-button{min-height:48px;padding:0 18px;border:1px solid var(--line);border-radius:13px;color:var(--ink);background:var(--surface);font-weight:800}
 .attendance-modal-card{width:min(840px,100%)}
+.examination-results-card{width:min(920px,100%)}
+.examination-result-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:14px 24px;border-bottom:1px solid var(--line);background:var(--surface-soft)}
+.examination-result-summary>div{min-width:0;padding:5px 14px;border-right:1px solid var(--line)}
+.examination-result-summary>div:first-child{padding-left:0}
+.examination-result-summary>div:nth-child(4){border-right:0}
+.examination-result-summary span,.examination-result-summary strong{display:block}
+.examination-result-summary span{color:var(--muted);font-size:.65rem;font-weight:700}
+.examination-result-summary strong{margin-top:4px;overflow:hidden;font-size:.78rem;text-overflow:ellipsis;white-space:nowrap}
+.examination-result-summary>p{grid-column:1/-1;margin:10px 0 -2px;color:var(--success);font-size:.7rem;font-weight:800}
+.exam-roster-list{display:grid}
+.exam-entry-row{display:grid;grid-template-columns:minmax(170px,1fr) 116px 92px minmax(150px,1fr);align-items:end;gap:11px;padding:12px 0;border-bottom:1px solid var(--line)}
+.exam-student{align-self:center;min-width:0;display:grid}
+.exam-student strong,.exam-student small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exam-student strong{font-size:.78rem}
+.exam-student small{margin-top:3px;color:var(--muted);font-size:.66rem}
+.exam-entry-row label{gap:5px}
+.exam-entry-row label>span{color:var(--muted);font-size:.62rem}
+.exam-entry-row input,.exam-entry-row select{min-height:42px;padding:8px 10px;font-size:.74rem}
+.exam-entry-row input:disabled{color:var(--muted);background:var(--surface-soft)}
+.exam-result-row{min-height:66px;display:grid;grid-template-columns:minmax(180px,1fr) 100px 92px minmax(120px,.8fr);align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.exam-result-row>strong{font-size:.76rem;font-variant-numeric:tabular-nums}
+.exam-result-row>small{overflow:hidden;color:var(--muted);font-size:.66rem;text-overflow:ellipsis;white-space:nowrap}
 .attendance-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 24px;border-bottom:1px solid var(--line);color:var(--muted);font-size:.76rem;font-weight:800}
 .attendance-toolbar button{min-height:40px;padding:0 10px;border:0;color:var(--navy-800);background:transparent;font-weight:800}
 .attendance-modal-card>form{padding-top:14px}
@@ -308,6 +347,8 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .view-heading h1{font-size:2.1rem}
   .view-heading p:last-child{font-size:.82rem}
   .assignment-grid{grid-template-columns:1fr}
+  .faculty-exam-card{grid-template-columns:70px minmax(0,1fr);gap:13px;padding:14px}
+  .faculty-exam-card>.session-action{grid-column:1/-1;width:100%}
   .with-back{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:13px}
   .back-button{display:grid}
   .bottom-nav{position:fixed;z-index:30;right:0;bottom:0;left:0;height:calc(68px + var(--safe-bottom));display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px var(--safe-bottom);border-top:1px solid rgba(230,225,214,.9);background:rgba(255,255,255,.96);backdrop-filter:blur(18px)}
@@ -340,6 +381,17 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .modal-card{max-height:92dvh;border-radius:24px 24px 0 0}
   .modal-card>header{padding:20px 18px 15px}
   .modal-card>form{padding:18px}
+  .examination-result-summary{grid-template-columns:1fr 1fr;padding:12px 18px}
+  .examination-result-summary>div{padding:8px 10px;border-bottom:1px solid var(--line)}
+  .examination-result-summary>div:nth-child(2){border-right:0}
+  .examination-result-summary>div:nth-child(-n+2){border-top:0}
+  .examination-result-summary>div:nth-child(n+3){border-bottom:0}
+  .exam-entry-row{grid-template-columns:1fr 1fr;gap:9px;padding:14px 0}
+  .exam-entry-row>.exam-student{grid-column:1/-1}
+  .exam-entry-row>label:last-child{grid-column:1/-1}
+  .exam-result-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
+  .exam-result-row>span:nth-child(3){justify-self:end}
+  .exam-result-row>small{grid-column:1/-1}
   .attendance-toolbar{padding:10px 18px}
   .roster-row{grid-template-columns:minmax(0,1fr) repeat(2,72px)}
   .status-option:nth-of-type(3),.status-option:nth-of-type(4){grid-row:2}
@@ -367,6 +419,9 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .login-card input,.password-field,.modal-card input,.modal-card select,.modal-card textarea{color:var(--ink);background:var(--surface-soft)}
   .notice-panel{background:#302d1d}
   .notice-card,.notice-preview{background:rgba(23,26,52,.62)}
+  .faculty-exam-date{color:var(--yellow);background:rgba(228,199,42,.1)}
+  .faculty-exam-progress i{background:var(--yellow)}
+  .status-pill.upcoming{color:var(--yellow);background:rgba(228,199,42,.1)}
 }
 
 @media(prefers-reduced-motion:reduce){

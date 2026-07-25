@@ -15,6 +15,8 @@ from ..models import (
     ClassSession,
     DailyAttendanceEntry,
     Enrollment,
+    Examination,
+    ExaminationResult,
     FeeAgreement,
     Notice,
     ParentAccount,
@@ -159,6 +161,77 @@ def attendance_rows(db: Session, student: Student):
     return class_rows + daily_rows
 
 
+def examination_rows(
+    db: Session,
+    student: Student,
+    enrollment: Enrollment | None,
+):
+    if not enrollment or not enrollment.batch:
+        return []
+    rows = (
+        db.query(Examination, Batch, Subject, User, ExaminationResult)
+        .join(Batch, Batch.id == Examination.batch_id)
+        .join(Subject, Subject.id == Examination.subject_id)
+        .join(User, User.id == Examination.faculty_id)
+        .outerjoin(
+            ExaminationResult,
+            and_(
+                ExaminationResult.exam_id == Examination.id,
+                ExaminationResult.student_id == student.id,
+            ),
+        )
+        .filter(
+            Batch.name == enrollment.batch,
+            Batch.program == enrollment.program,
+            Examination.status.in_(("scheduled", "marks_entry", "published")),
+        )
+        .order_by(Examination.scheduled_at.desc())
+        .all()
+    )
+    payload = []
+    for exam, batch, subject, faculty, result in rows:
+        published = exam.status == "published"
+        marks = (
+            float(result.marks_obtained)
+            if published and result and result.marks_obtained is not None
+            else None
+        )
+        percentage = (
+            round(marks / float(exam.max_marks) * 100, 1)
+            if marks is not None and exam.max_marks
+            else None
+        )
+        payload.append({
+            "id": exam.id,
+            "name": exam.name,
+            "batch": batch.name,
+            "subject": subject.name,
+            "subjectCode": subject.code,
+            "faculty": faculty.full_name,
+            "scheduledAt": exam.scheduled_at,
+            "durationMinutes": exam.duration_minutes,
+            "maxMarks": float(exam.max_marks),
+            "passMarks": float(exam.pass_marks),
+            "instructions": exam.instructions,
+            "status": exam.status,
+            "publishedAt": exam.published_at,
+            "resultStatus": (
+                result.result_status
+                if published and result
+                else "pending"
+            ),
+            "marksObtained": marks,
+            "percentage": percentage,
+            "qualified": (
+                marks >= float(exam.pass_marks)
+                if marks is not None
+                else None
+            ),
+            "remarks": result.remarks if published and result else "",
+        })
+    return payload
+
+
 def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
     direct_audiences = ("all", audience)
     query = (
@@ -258,6 +331,7 @@ def _portal_payload(
     schedule = schedule_rows(db, enrollment)
     assignments = assignment_rows(db, student, enrollment)
     attendance = attendance_rows(db, student)
+    examinations = examination_rows(db, student, enrollment)
     notices = notice_rows(db, enrollment, notice_audience)
     fees = fee_summary(db, student)
     now = datetime.now(timezone.utc)
@@ -277,6 +351,11 @@ def _portal_payload(
             "openAssignments": sum(
                 1 for row in assignments if row["status"] != "completed"
             ),
+            "upcomingExams": sum(
+                1 for row in examinations
+                if row["status"] == "scheduled"
+                and _aware(row["scheduledAt"]) >= now
+            ),
             "attendanceRate": (
                 round(present / len(classified_attendance) * 100, 1)
                 if classified_attendance else None
@@ -285,6 +364,7 @@ def _portal_payload(
         },
         "schedule": schedule,
         "assignments": assignments,
+        "examinations": examinations,
         "attendance": attendance,
         "notices": notices,
         "fees": fees,

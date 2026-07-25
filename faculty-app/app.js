@@ -5,6 +5,7 @@ const icons = {
   home:'<path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9Z"/>',
   calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18"/>',
   book:'<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  exam:'<path d="M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2Z"/><path d="M9 7h6M9 11h6m-6 4h3"/><path d="m14 16 1.5 1.5L19 14"/>',
   check:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="m8 14 2.5 2.5L16 11"/>',
   more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
   spark:'<path d="m12 3 1.4 4.1 4.1 1.4-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3Z"/>',
@@ -30,16 +31,18 @@ const state = {
   view: "dashboard",
   attendanceFilter: "action",
   assignmentFilter: "active",
+  examinationFilter: "action",
   scheduleDate: "all",
   activeSession: null,
+  activeExam: null,
   roster: [],
   rosterLocked: false,
   rosterUpcoming: false,
   publishingAssignment: null,
   lastFocus: null
 };
-const PORTAL_VIEWS = new Set(["dashboard", "attendance", "assignments", "schedule", "batches", "notices", "profile", "more"]);
-const OVERFLOW_VIEWS = new Set(["batches", "notices", "profile", "more"]);
+const PORTAL_VIEWS = new Set(["dashboard", "attendance", "assignments", "examinations", "schedule", "batches", "notices", "profile", "more"]);
+const OVERFLOW_VIEWS = new Set(["examinations", "batches", "notices", "profile", "more"]);
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -192,7 +195,11 @@ async function login(event) {
 }
 
 async function loadPortal() {
-  state.data = await api("/api/faculty/bootstrap");
+  const [portal, examinations] = await Promise.all([
+    api("/api/faculty/bootstrap"),
+    api("/api/examinations")
+  ]);
+  state.data = {...portal, examinations};
   $("#startup-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
   $("#faculty-shell").classList.remove("hidden");
@@ -202,7 +209,11 @@ async function loadPortal() {
 }
 
 async function refreshPortal(message = "") {
-  state.data = await api("/api/faculty/bootstrap");
+  const [portal, examinations] = await Promise.all([
+    api("/api/faculty/bootstrap"),
+    api("/api/examinations")
+  ]);
+  state.data = {...portal, examinations};
   renderAll();
   showView(state.view, false);
   if (message) toast(message);
@@ -237,7 +248,7 @@ function showView(view, updateHash = true) {
     node.classList.toggle("active", active);
     active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current");
   });
-  const titles = {dashboard:"Today", attendance:"Attendance", assignments:"Assignments", schedule:"Schedule", batches:"Batches", notices:"Notices", profile:"Profile", more:"More"};
+  const titles = {dashboard:"Today", attendance:"Attendance", assignments:"Assignments", examinations:"Examinations", schedule:"Schedule", batches:"Batches", notices:"Notices", profile:"Profile", more:"More"};
   $("#header-title").textContent = titles[view];
   if (updateHash && location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
   $("#faculty-main").focus({preventScroll:true});
@@ -268,6 +279,7 @@ function renderAll() {
   renderDashboard();
   renderAttendance();
   renderAssignments();
+  renderExaminations();
   renderSchedule();
   renderBatches();
   renderNotices();
@@ -439,6 +451,45 @@ async function publishAssignment(assignmentId) {
   }
 }
 
+function examinationState(item) {
+  if (item.status === "published" || item.status === "cancelled") return item.status;
+  if (item.status === "marks_entry" || new Date(item.scheduledAt).getTime() <= Date.now()) return "action";
+  return "upcoming";
+}
+
+function renderExaminations() {
+  const all = state.data.examinations || [];
+  const action = all.filter(item => examinationState(item) === "action");
+  const upcoming = all.filter(item => examinationState(item) === "upcoming");
+  const published = all.filter(item => item.status === "published");
+  $("#examination-metrics").innerHTML = [
+    metric("Needs action", String(action.length), action.length > 0),
+    metric("Upcoming", String(upcoming.length)),
+    metric("Published", String(published.length))
+  ].join("");
+  $("#sidebar-examination-badge").textContent = action.length;
+  $("#sidebar-examination-badge").classList.toggle("hidden", !action.length);
+  const rows = all.filter(item => state.examinationFilter === "all"
+    || (state.examinationFilter === "published" ? item.status === "published" : examinationState(item) === state.examinationFilter));
+  $("#examination-list").innerHTML = rows.length ? rows.map(item => {
+    const itemState = examinationState(item);
+    const progress = item.participantCount ? Math.round(Number(item.marksEntered || 0) / Number(item.participantCount) * 100) : 0;
+    const resultCopy = item.status === "published"
+      ? `${item.averageMarks == null ? "—" : item.averageMarks} average · ${item.highestMarks == null ? "—" : item.highestMarks} highest`
+      : `${item.marksEntered}/${item.participantCount} results entered`;
+    return `<article class="faculty-exam-card">
+      <div class="faculty-exam-date"><strong>${dateText(item.scheduledAt).split(" ")[0]}</strong><small>${dateText(item.scheduledAt).split(" ")[1]}</small></div>
+      <div class="faculty-exam-copy">
+        <span class="status-pill ${esc(itemState)}">${esc(itemState === "action" ? "Marks due" : titleCase(itemState))}</span>
+        <h3>${esc(item.name)}</h3>
+        <p>${esc(item.batch)} · ${esc(item.subject)} · ${timeText(item.scheduledAt)} · ${item.durationMinutes} min</p>
+        <div class="faculty-exam-progress"><span><i style="width:${progress}%"></i></span><small>${esc(resultCopy)}</small></div>
+      </div>
+      <button class="session-action ${itemState === "action" ? "" : "secondary"}" type="button" data-open-examination-results="${esc(item.id)}">${item.status === "published" ? "View results" : item.marksEntered ? "Continue marks" : "Enter marks"}</button>
+    </article>`;
+  }).join("") : empty("exam", state.examinationFilter === "action" ? "No marks pending" : "No examinations in this view");
+}
+
 function renderSchedule() {
   const rows = state.data.sessions.filter(item => item.status === "scheduled");
   const dates = [...new Set(rows.map(item => dateKey(item.startsAt)))];
@@ -601,6 +652,164 @@ async function createAssignment(event) {
   }
 }
 
+function openExaminationModal(trigger) {
+  const pairs = state.data.teachingPairs;
+  if (!pairs.length) {
+    toast("A timetable assignment is required before scheduling an examination.");
+    return;
+  }
+  $("#examination-pair").innerHTML = pairs.map(item => `
+    <option value="${esc(item.batchId)}|${esc(item.subjectId)}">${esc(item.batch)} · ${esc(item.subject)}</option>
+  `).join("");
+  $("#examination-form").reset();
+  $("#examination-date").value = localInputValue(new Date(Date.now() + 2 * 86400000));
+  $("#examination-error").classList.add("hidden");
+  openModal("examination-modal", trigger);
+}
+
+async function createExamination(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const data = new FormData(form);
+  const [batchId, subjectId] = String(data.get("pair")).split("|");
+  const maxMarks = Number(data.get("maxMarks"));
+  const passMarks = Number(data.get("passMarks"));
+  if (passMarks > maxMarks) {
+    $("#examination-error").textContent = "Pass marks cannot exceed maximum marks.";
+    $("#examination-error").classList.remove("hidden");
+    return;
+  }
+  const button = $("#examination-submit");
+  button.disabled = true;
+  button.textContent = "Creating…";
+  $("#examination-error").classList.add("hidden");
+  try {
+    await api("/api/examinations", {
+      method:"POST",
+      body:JSON.stringify({
+        batchId,
+        subjectId,
+        facultyId:state.data.profile.id,
+        name:String(data.get("name")).trim(),
+        scheduledAt:new Date(String(data.get("scheduledAt"))).toISOString(),
+        durationMinutes:Number(data.get("durationMinutes")),
+        maxMarks,
+        passMarks,
+        instructions:String(data.get("instructions") || "").trim(),
+        status:"scheduled"
+      })
+    });
+    form.reset();
+    closeModal("examination-modal");
+    await refreshPortal("Examination scheduled.");
+  } catch (error) {
+    $("#examination-error").textContent = error.message;
+    $("#examination-error").classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Create examination";
+  }
+}
+
+async function openExaminationResults(examId, trigger) {
+  const item = state.data.examinations.find(exam => exam.id === examId);
+  if (!item) return;
+  state.activeExam = null;
+  $("#examination-results-title").textContent = item.name;
+  $("#examination-results-meta").textContent = `${item.batch} · ${item.subject} · ${dateLong(item.scheduledAt)} at ${timeText(item.scheduledAt)}`;
+  $("#examination-result-summary").innerHTML = "";
+  $("#examination-roster-list").innerHTML = empty("users", "Loading examination roster");
+  $("#examination-results-error").classList.add("hidden");
+  openModal("examination-results-modal", trigger);
+  try {
+    state.activeExam = await api(`/api/examinations/${encodeURIComponent(examId)}`);
+    renderExaminationResults();
+  } catch (error) {
+    $("#examination-roster-list").innerHTML = empty("exam", "Unable to load examination", error.message);
+  }
+}
+
+function renderExaminationResults() {
+  const exam = state.activeExam;
+  if (!exam) return;
+  const readOnly = exam.status === "published";
+  const graded = exam.students.filter(item => item.resultStatus === "graded");
+  const passed = graded.filter(item => Number(item.marksObtained) >= Number(exam.passMarks)).length;
+  const average = graded.length ? graded.reduce((sum, item) => sum + Number(item.marksObtained || 0), 0) / graded.length : null;
+  $("#examination-results-kicker").textContent = readOnly ? "PUBLISHED RESULTS" : "MARKS ENTRY";
+  $("#examination-result-summary").innerHTML = `
+    <div><span>Students</span><strong>${exam.participantCount}</strong></div>
+    <div><span>Maximum</span><strong>${exam.maxMarks}</strong></div>
+    <div><span>Entered</span><strong>${exam.marksEntered}/${exam.participantCount}</strong></div>
+    <div><span>${readOnly ? "Pass rate" : "Pass marks"}</span><strong>${readOnly && graded.length ? `${Math.round(passed / graded.length * 100)}%` : exam.passMarks}</strong></div>
+    ${readOnly && average != null ? `<p>Average ${average.toFixed(1)} · Highest ${exam.highestMarks ?? "—"}</p>` : ""}`;
+  $("#save-examination-results").classList.toggle("hidden", readOnly);
+  $("#publish-examination-results").classList.toggle("hidden", readOnly);
+  $("#examination-roster-list").innerHTML = exam.students.length ? exam.students.map(item => {
+    if (readOnly) {
+      const value = item.resultStatus === "graded" ? `${item.marksObtained} / ${exam.maxMarks}` : titleCase(item.resultStatus);
+      return `<div class="exam-result-row"><span class="exam-student"><strong>${esc(item.fullName)}</strong><small>${esc(item.admissionNumber)}</small></span><strong>${esc(value)}</strong><span class="status-pill ${esc(item.resultStatus)}">${esc(titleCase(item.resultStatus))}</span><small>${esc(item.remarks || "")}</small></div>`;
+    }
+    return `<div class="exam-entry-row" data-exam-student="${esc(item.studentId)}">
+      <span class="exam-student"><strong>${esc(item.fullName)}</strong><small>${esc(item.admissionNumber)}</small></span>
+      <label><span>Result</span><select data-result-status><option value="pending"${item.resultStatus === "pending" ? " selected" : ""}>Pending</option><option value="graded"${item.resultStatus === "graded" ? " selected" : ""}>Graded</option><option value="absent"${item.resultStatus === "absent" ? " selected" : ""}>Absent</option><option value="withheld"${item.resultStatus === "withheld" ? " selected" : ""}>Withheld</option></select></label>
+      <label><span>Marks</span><input data-result-marks type="number" min="0" max="${esc(exam.maxMarks)}" step="0.01" value="${esc(item.marksObtained ?? "")}" ${item.resultStatus === "graded" ? "" : "disabled"}></label>
+      <label><span>Remarks</span><input data-result-remarks type="text" maxlength="500" value="${esc(item.remarks || "")}" placeholder="Optional"></label>
+    </div>`;
+  }).join("") : empty("users", "No active students in this batch");
+}
+
+function examinationResultsPayload() {
+  const exam = state.activeExam;
+  return $$("[data-exam-student]", $("#examination-results-form")).map(row => {
+    const resultStatus = $("[data-result-status]", row).value;
+    const marksField = $("[data-result-marks]", row);
+    const marksObtained = resultStatus === "graded" && marksField.value !== "" ? Number(marksField.value) : null;
+    if (resultStatus === "graded" && marksObtained === null) throw new Error("Enter marks for every graded student.");
+    if (marksObtained !== null && (marksObtained < 0 || marksObtained > Number(exam.maxMarks))) throw new Error(`Marks must be between 0 and ${exam.maxMarks}.`);
+    return {
+      studentId:row.dataset.examStudent,
+      resultStatus,
+      marksObtained,
+      remarks:String($("[data-result-remarks]", row).value || "").trim()
+    };
+  });
+}
+
+async function saveExaminationResults(publish = false) {
+  if (!state.activeExam) return;
+  const buttons = [$("#save-examination-results"), $("#publish-examination-results")];
+  const idle = buttons.map(button => button.textContent);
+  buttons.forEach(button => { button.disabled = true; });
+  (publish ? $("#publish-examination-results") : $("#save-examination-results")).textContent = publish ? "Publishing…" : "Saving…";
+  $("#examination-results-error").classList.add("hidden");
+  try {
+    const entries = examinationResultsPayload();
+    await api(`/api/examinations/${encodeURIComponent(state.activeExam.id)}/marks`, {
+      method:"PUT",
+      body:JSON.stringify({entries})
+    });
+    if (publish) {
+      await api(`/api/examinations/${encodeURIComponent(state.activeExam.id)}/publish`, {method:"POST"});
+      closeModal("examination-results-modal");
+      await refreshPortal("Results published to students.");
+    } else {
+      state.activeExam = await api(`/api/examinations/${encodeURIComponent(state.activeExam.id)}`);
+      renderExaminationResults();
+      toast("Marks draft saved.");
+    }
+  } catch (error) {
+    $("#examination-results-error").textContent = error.message;
+    $("#examination-results-error").classList.remove("hidden");
+  } finally {
+    buttons.forEach((button, index) => {
+      button.disabled = false;
+      button.textContent = idle[index];
+    });
+  }
+}
+
 async function openAttendance(sessionId, trigger) {
   const session = state.data.sessions.find(item => item.id === sessionId);
   if (!session) return;
@@ -690,6 +899,20 @@ function bindEvents() {
   $("#sidebar-signout").addEventListener("click", logout);
   $("#profile-button").addEventListener("click", () => showView("profile"));
   $("#assignment-form").addEventListener("submit", createAssignment);
+  $("#examination-form").addEventListener("submit", createExamination);
+  $("#examination-results-form").addEventListener("submit", event => {
+    event.preventDefault();
+    saveExaminationResults(true);
+  });
+  $("#save-examination-results").addEventListener("click", () => saveExaminationResults(false));
+  $("#examination-results-form").addEventListener("change", event => {
+    if (!event.target.matches("[data-result-status]")) return;
+    const row = event.target.closest("[data-exam-student]");
+    const marks = $("[data-result-marks]", row);
+    const graded = event.target.value === "graded";
+    marks.disabled = !graded;
+    if (!graded) marks.value = "";
+  });
   $("#attendance-form").addEventListener("submit", event => {
     event.preventDefault();
     saveAttendance(true);
@@ -708,6 +931,12 @@ function bindEvents() {
 
     const assignmentTrigger = event.target.closest("[data-open-assignment]");
     if (assignmentTrigger) openAssignmentModal(assignmentTrigger);
+
+    const examinationTrigger = event.target.closest("[data-open-examination]");
+    if (examinationTrigger) openExaminationModal(examinationTrigger);
+
+    const examinationResultsTrigger = event.target.closest("[data-open-examination-results]");
+    if (examinationResultsTrigger) openExaminationResults(examinationResultsTrigger.dataset.openExaminationResults, examinationResultsTrigger);
 
     const publishTrigger = event.target.closest("[data-publish-assignment]");
     if (publishTrigger) publishAssignment(publishTrigger.dataset.publishAssignment);
@@ -735,6 +964,17 @@ function bindEvents() {
         node.setAttribute("aria-pressed", String(active));
       });
       renderAssignments();
+    }
+
+    const examinationFilter = event.target.closest("[data-examination-filter]")?.dataset.examinationFilter;
+    if (examinationFilter) {
+      state.examinationFilter = examinationFilter;
+      $$("[data-examination-filter]").forEach(node => {
+        const active = node.dataset.examinationFilter === examinationFilter;
+        node.classList.toggle("active", active);
+        node.setAttribute("aria-pressed", String(active));
+      });
+      renderExaminations();
     }
 
     const scheduleDate = event.target.closest("[data-schedule-date]")?.dataset.scheduleDate;

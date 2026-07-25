@@ -170,6 +170,109 @@
   opacity: .62;
 }
 
+.examination-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.examination-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.examination-card.has-result {
+  border-color: color-mix(in srgb, var(--navy-700) 24%, var(--line));
+}
+
+.examination-card header,
+.examination-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.examination-card h3 {
+  margin: 20px 0 7px;
+  font: 800 1rem/1.25 "Manrope", sans-serif;
+  letter-spacing: -.02em;
+}
+
+.examination-card > p {
+  min-height: 42px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .75rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.exam-state {
+  max-width: 180px;
+  overflow: hidden;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-state.neutral { color: var(--navy-800); background: var(--navy-50); }
+.exam-state.qualified { color: var(--success); background: var(--success-soft); }
+.exam-state.review { color: var(--red); background: var(--red-soft); }
+
+.exam-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.exam-detail-grid > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.exam-detail-grid span,
+.exam-detail-grid strong {
+  display: block;
+}
+
+.exam-detail-grid span {
+  color: var(--muted);
+  font-size: .64rem;
+  font-weight: 700;
+}
+
+.exam-detail-grid strong {
+  margin-top: 5px;
+  overflow: hidden;
+  font-size: .73rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.examination-card footer {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: .71rem;
+}
+
+.examination-card footer span { color: var(--muted); }
+.examination-card footer strong { color: var(--navy-800); text-align: right; }
+
 .student-shell .attendance-hero {
   grid-template-columns: 132px minmax(0, 1fr);
   place-items: initial;
@@ -417,6 +520,7 @@
     scrollbar-width: none;
   }
   .module-metric { scroll-snap-align: start; }
+  .examination-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {
@@ -458,4 +562,9 @@
   .assignment-card footer a { background: var(--navy-50); }
   .service-card,
   .module-metric { background: var(--surface); }
+  .exam-state.neutral {
+    color: var(--yellow);
+    background: rgba(228, 199, 42, .12);
+  }
+  .examination-card footer strong { color: var(--success); }
 }

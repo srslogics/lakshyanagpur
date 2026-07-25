@@ -1,1 +1,60 @@
 .parent-shell .child-hero { background: radial-gradient(circle at 88% 10%,rgba(228,199,42,.2),transparent 29%),linear-gradient(135deg,var(--navy-950),#282e73); }
+
+.record-note {
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.parent-examination-list {
+  display: grid;
+}
+
+.parent-examination-row {
+  min-height: 74px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(130px, auto);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.parent-examination-row:last-child { border-bottom: 0; }
+.parent-examination-row > span { min-width: 0; }
+.parent-examination-row > span:nth-child(2) strong,
+.parent-examination-row > span:nth-child(2) small,
+.parent-examination-row > span:last-child strong,
+.parent-examination-row > span:last-child small {
+  display: block;
+}
+
+.parent-examination-row strong {
+  overflow: hidden;
+  font-size: .8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parent-examination-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .69rem;
+}
+
+.parent-examination-row > span:last-child { text-align: right; }
+.parent-examination-row > span:last-child strong { color: var(--navy-800); }
+
+@media (max-width: 560px) {
+  .parent-examination-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+  .parent-examination-row > span:last-child {
+    grid-column: 2;
+    text-align: left;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .parent-examination-row > span:last-child strong { color: var(--yellow); }
+}

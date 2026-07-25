@@ -20,7 +20,7 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
   <link rel="stylesheet" href="../portal-shared.css?v=4">
-  <link rel="stylesheet" href="./styles.css?v=8">
+  <link rel="stylesheet" href="./styles.css?v=11">
   <link rel="stylesheet" href="../auth-shared.css?v=5">
 </head>
 <body>
@@ -59,6 +59,7 @@
         <button class="active" type="button" data-view="home" aria-current="page"><span data-icon="home"></span><em>Home</em></button>
         <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
         <button type="button" data-view="assignments"><span data-icon="book"></span><em>Assignments</em><i id="sidebar-assignment-badge" class="nav-badge hidden">0</i></button>
+        <button type="button" data-view="examinations"><span data-icon="exam"></span><em>Examinations</em><i id="sidebar-examination-badge" class="nav-badge hidden">0</i></button>
         <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em></button>
         <span class="sidebar-section-label">Student services</span>
         <button type="button" data-view="fees"><span data-icon="wallet"></span><em>Fees</em></button>
@@ -111,6 +112,17 @@
         <div class="assignment-grid" id="assignment-list"></div>
       </section>
 
+      <section class="portal-view" id="examinations" aria-labelledby="examinations-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">ASSESSMENT</p><h1 id="examinations-heading">Examinations</h1><p>Exam schedules and results published by the academic team.</p></div></div>
+        <div class="module-metrics" id="examination-metrics"></div>
+        <div class="filter-pills" aria-label="Examination filter">
+          <button class="active" data-examination-filter="upcoming" type="button" aria-pressed="true">Upcoming</button>
+          <button data-examination-filter="results" type="button" aria-pressed="false">Results</button>
+          <button data-examination-filter="all" type="button" aria-pressed="false">All</button>
+        </div>
+        <div class="examination-grid" id="examination-list"></div>
+      </section>
+
       <section class="portal-view" id="attendance" aria-labelledby="attendance-heading">
         <div class="view-heading"><p class="eyebrow">PRESENCE</p><h1 id="attendance-heading">Attendance</h1><p>Submitted attendance records from your scheduled classes.</p></div>
         <article class="attendance-hero" id="attendance-hero"></article>
@@ -140,6 +152,7 @@
       <section class="portal-view" id="more" aria-labelledby="more-heading">
         <div class="view-heading"><p class="eyebrow">STUDENT SERVICES</p><h1 id="more-heading">More</h1><p>Fees, notices, profile, and account access.</p></div>
         <div class="service-grid">
+          <button class="service-card" type="button" data-go="examinations"><span class="service-icon" data-icon="exam"></span><span><strong>Examinations</strong><small id="more-examination-copy">Schedules and results</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="fees"><span class="service-icon" data-icon="wallet"></span><span><strong>Fees</strong><small id="more-fee-copy">View your fee record</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="notices"><span class="service-icon" data-icon="notice"></span><span><strong>Notices</strong><small id="more-notice-copy">Institute announcements</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="profile"><span class="service-icon" data-icon="user"></span><span><strong>Profile</strong><small id="more-profile-copy">Student and login details</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
@@ -158,6 +171,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=8" defer></script>
+  <script src="./app.js?v=9" defer></script>
 </body>
 </html>

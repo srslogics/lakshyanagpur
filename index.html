@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=31">
+  <link rel="stylesheet" href="./styles.css?v=34">
   <link rel="stylesheet" href="./auth-shared.css?v=4">
 </head>
 <body>
@@ -112,6 +112,7 @@
         <button class="nav-item" type="button" data-view="finance"><span data-icon="wallet"></span><span>Fees &amp; finance</span><em id="nav-finance-count">3</em></button>
         <button class="nav-item" type="button" data-view="attendance"><span data-icon="calendar-check"></span><span>Attendance</span></button>
         <button class="nav-item" type="button" data-view="academics"><span data-icon="book"></span><span>Academics</span></button>
+        <button class="nav-item" type="button" data-view="examinations"><span data-icon="exam"></span><span>Examinations</span><em id="nav-examinations-count">0</em></button>
         <button class="nav-item" type="button" data-view="timetable"><span data-icon="clock"></span><span>Faculty &amp; timetable</span></button>
 
         <p class="nav-label nav-label-spaced">Control</p>
@@ -247,6 +248,17 @@
           <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Assignment</th><th>Batch</th><th>Subject</th><th>Due</th><th>Students</th><th>Status</th></tr></thead><tbody id="assignments-table-body"></tbody></table></div><div class="mobile-records" id="assignments-mobile-list"></div></article>
         </section>
 
+        <section class="app-view" id="examinations" aria-labelledby="examinations-heading">
+          <div class="page-heading"><h2 id="examinations-heading">Examinations</h2><button class="button button-primary" id="new-examination" type="button"><span data-icon="plus"></span>New examination</button></div>
+          <div class="compact-metrics" id="examination-metrics"></div>
+          <article class="surface table-surface">
+            <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="examination-search" type="search" placeholder="Search examination, batch or subject" aria-label="Search examinations"></label><select id="examination-status-filter" aria-label="Filter examinations by status"><option value="">All states</option><option value="draft">Draft</option><option value="scheduled">Scheduled</option><option value="marks_entry">Marks entry</option><option value="published">Published</option><option value="cancelled">Cancelled</option></select></div>
+            <div class="table-meta"><span id="examination-result-summary">Loading examinations…</span></div>
+            <div class="data-table-wrap"><table class="data-table examination-table"><thead><tr><th scope="col">Examination</th><th scope="col">Batch</th><th scope="col">Schedule</th><th class="numeric-heading" scope="col">Marks</th><th scope="col">Results</th><th scope="col">Status</th><th scope="col" aria-label="Actions"></th></tr></thead><tbody id="examination-table-body"></tbody></table></div>
+            <div class="mobile-records" id="examination-mobile-list"></div>
+          </article>
+        </section>
+
         <section class="app-view" id="timetable" aria-labelledby="timetable-heading">
           <div class="page-heading"><h2 id="timetable-heading">Faculty &amp; timetable</h2><button class="button button-primary" id="new-session" type="button"><span data-icon="plus"></span>Schedule class</button></div>
           <div class="compact-metrics" id="timetable-metrics"></div>
@@ -297,6 +309,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=35" defer></script>
+  <script src="./app.js?v=37" defer></script>
 </body>
 </html>

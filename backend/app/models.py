@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, event, inspect
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, event, inspect
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -383,6 +383,47 @@ class AssignmentRecipient(Base):
     student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
     status: Mapped[str] = mapped_column(String(24), default="completed", index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+
+
+class Examination(TimestampMixin, Base):
+    __tablename__ = "examinations"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("exm"))
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    batch_id: Mapped[str] = mapped_column(ForeignKey("batches.id"), index=True)
+    subject_id: Mapped[str] = mapped_column(ForeignKey("subjects.id"), index=True)
+    faculty_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    max_marks: Mapped[float] = mapped_column(Numeric(8, 2))
+    pass_marks: Mapped[float] = mapped_column(Numeric(8, 2))
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(24), default="draft", index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class ExaminationResult(Base):
+    """Sparse result storage; no row means marks have not been entered."""
+
+    __tablename__ = "examination_results"
+    exam_id: Mapped[str] = mapped_column(
+        ForeignKey("examinations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    student_id: Mapped[str] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    marks_obtained: Mapped[float | None] = mapped_column(Numeric(8, 2))
+    result_status: Mapped[str] = mapped_column(String(24), default="graded", index=True)
+    remarks: Mapped[str] = mapped_column(String(500), default="")
+    entered_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now,
+        onupdate=now,
+        nullable=False,
+    )
 
 
 class Notice(TimestampMixin, Base):
