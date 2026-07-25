@@ -8,6 +8,7 @@ from app.models import (
     Batch,
     ClassSession,
     Enrollment,
+    FacultyTeachingAssignment,
     Notice,
     Room,
     Student,
@@ -71,7 +72,22 @@ def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_hea
         ends_at=now + timedelta(days=1, hours=1),
         created_by=owner.id,
     )
-    database.add_all([own_session, other_session])
+    database.add_all([
+        own_session,
+        other_session,
+        FacultyTeachingAssignment(
+            faculty_id=faculty.id,
+            batch_id=batch.id,
+            subject_id=physics.id,
+            created_by=owner.id,
+        ),
+        FacultyTeachingAssignment(
+            faculty_id=other_faculty.id,
+            batch_id=other_batch.id,
+            subject_id=chemistry.id,
+            created_by=owner.id,
+        ),
+    ])
     database.flush()
     database.add(AttendanceRegister(
         class_session_id=own_session.id,
@@ -163,13 +179,10 @@ def test_faculty_can_publish_only_their_own_draft_assignment(client, database):
             batch=batch.name,
             status="active",
         ),
-        ClassSession(
+        FacultyTeachingAssignment(
+            faculty_id=faculty.id,
             batch_id=batch.id,
             subject_id=subject.id,
-            faculty_id=faculty.id,
-            room_id=room.id,
-            starts_at=datetime.now(timezone.utc) + timedelta(days=1),
-            ends_at=datetime.now(timezone.utc) + timedelta(days=1, hours=1),
             created_by=owner.id,
         ),
     ])

@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import (
     Batch,
-    ClassSession,
     Enrollment,
     Examination,
     ExaminationResult,
+    FacultyTeachingAssignment,
     Student,
     Subject,
     User,
@@ -153,15 +153,16 @@ def _validate_references(db: Session, payload, actor: User):
     if actor.role == "faculty":
         if faculty.id != actor.id:
             raise HTTPException(403, "Faculty can schedule only their own examinations")
-        assigned = db.query(ClassSession).filter_by(
+        assigned = db.query(FacultyTeachingAssignment).filter_by(
             batch_id=batch.id,
             subject_id=subject.id,
             faculty_id=actor.id,
+            is_active=True,
         ).first()
         if not assigned:
             raise HTTPException(
                 403,
-                "Faculty can schedule examinations only for timetable assignments",
+                "Faculty can schedule examinations only for assigned batches and subjects",
             )
     if not _active_roster(db, batch):
         raise HTTPException(409, "This batch has no active enrolled students")

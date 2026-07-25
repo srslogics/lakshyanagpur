@@ -3,7 +3,14 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Assignment, Batch, ClassSession, Enrollment, Subject, User
+from ..models import (
+    Assignment,
+    Batch,
+    Enrollment,
+    FacultyTeachingAssignment,
+    Subject,
+    User,
+)
 from ..operations_schemas import AssignmentCreate, AssignmentUpdate
 from ..security import require_roles
 from ..services import audit
@@ -51,8 +58,20 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
     batch, subject = db.get(Batch, payload.batch_id), db.get(Subject, payload.subject_id)
     if not batch or not subject:
         raise HTTPException(404, "Batch or subject not found")
-    if actor.role == "faculty" and not db.query(ClassSession).filter_by(batch_id=batch.id, subject_id=subject.id, faculty_id=actor.id).first():
-        raise HTTPException(403, "Faculty can publish only to batches and subjects assigned in the timetable")
+    if actor.role == "faculty" and not (
+        db.query(FacultyTeachingAssignment)
+        .filter_by(
+            batch_id=batch.id,
+            subject_id=subject.id,
+            faculty_id=actor.id,
+            is_active=True,
+        )
+        .first()
+    ):
+        raise HTTPException(
+            403,
+            "Faculty can publish only to assigned batches and subjects",
+        )
     recipient_count = (
         db.query(func.count(func.distinct(Enrollment.student_id)))
         .filter(

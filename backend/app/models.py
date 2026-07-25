@@ -328,6 +328,28 @@ class Room(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
 
+class FacultyTeachingAssignment(TimestampMixin, Base):
+    __tablename__ = "faculty_teaching_assignments"
+    __table_args__ = (
+        UniqueConstraint(
+            "faculty_id",
+            "batch_id",
+            "subject_id",
+            name="uq_faculty_teaching_assignment",
+        ),
+    )
+    id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        default=lambda: new_id("fta"),
+    )
+    faculty_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    batch_id: Mapped[str] = mapped_column(ForeignKey("batches.id"), index=True)
+    subject_id: Mapped[str] = mapped_column(ForeignKey("subjects.id"), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
 class ClassSession(TimestampMixin, Base):
     __tablename__ = "class_sessions"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("ses"))

@@ -34,7 +34,7 @@ const cachedUser = (() => {
   try { return JSON.parse(sessionStorage.getItem("lakshya_user") || "null"); }
   catch { return null; }
 })();
-const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
@@ -147,7 +147,7 @@ function clearSession() {
   state.token = null;
   state.user = null;
   state.view = "dashboard";
-  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
+  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
   sessionStorage.removeItem("lakshya_user");
 }
@@ -254,7 +254,7 @@ async function loadInitialWorkspace() {
 
 async function loadSecondaryWorkspace() {
   const [timetable, assignments, examinations, attendanceSessions, notices, report, masters, auditRows] = await Promise.all([
-    optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/examinations"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }), optional(() => api("/api/settings/audit"), [])
+    optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/examinations"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }), optional(() => api("/api/settings/audit"), [])
   ]);
   Object.assign(state, { sessions: timetable.sessions || [], timetable, assignments, examinations, attendanceSessions, notices, report, masters, audit: auditRows });
   renderAll();
@@ -632,11 +632,21 @@ function renderLeadRows() {
 }
 
 function renderTimetable() {
-  const now = Date.now(), today = new Date().toDateString();
-  $("#timetable-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.sessions.length) }, { label: "Today", value: String(state.sessions.filter(item => new Date(item.startsAt).toDateString() === today).length) }, { label: "Upcoming", value: String(state.sessions.filter(item => new Date(item.startsAt).getTime() >= now).length) }, { label: "Faculty", value: String(state.timetable.faculty?.length || 0) }]);
+  const now = Date.now();
+  const teachingAssignments = state.timetable.teachingAssignments || [];
+  const activeAssignments = teachingAssignments.filter(item => item.isActive);
+  $("#timetable-metrics").innerHTML = compactMetrics([{ label: "Teaching assignments", value: String(activeAssignments.length) }, { label: "Faculty assigned", value: String(new Set(activeAssignments.map(item => item.facultyId)).size) }, { label: "Batches covered", value: String(new Set(activeAssignments.map(item => item.batchId)).size) }, { label: "Upcoming classes", value: String(state.sessions.filter(item => new Date(item.startsAt).getTime() >= now && item.status === "scheduled").length) }]);
+  $("#teaching-assignment-count").textContent = `${activeAssignments.length} active`;
+  $("#class-session-count").textContent = `${state.sessions.length} ${state.sessions.length === 1 ? "class" : "classes"}`;
+  $("#teaching-assignments-table-body").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<tr><td>${studentPrimary(item.faculty, item.sessionCount ? `${item.sessionCount} scheduled ${item.sessionCount === 1 ? "class" : "classes"}` : "No classes scheduled")}</td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.subjectCode)}</small></td><td>${item.sessionCount}</td><td>${status(item.isActive ? "active" : "inactive")}</td><td>${teachingAssignmentEditButton(item)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.")}</td></tr>`;
+  $("#teaching-assignments-mobile-list").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.faculty)}</h3><p>${esc(item.subject)} · ${esc(item.subjectCode)}</p></div>${status(item.isActive ? "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Classes</span><strong>${item.sessionCount}</strong></div></div>${teachingAssignmentEditButton(item)}</article>`).join("") : emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.");
   const rows = [...state.sessions].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
   $("#sessions-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td><strong>${formatDateTime(item.startsAt)}</strong><br><small>${formatDateTime(item.endsAt).split(", ").pop()}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td>${esc(item.subject)}</td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("session", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("clock", "No classes scheduled")}</td></tr>`;
   $("#sessions-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${formatDateTime(item.startsAt)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Room</span><strong>${esc(item.room)}</strong></div><div><span>Ends</span><strong>${formatDateTime(item.endsAt)}</strong></div></div>${ownerEditButton("session", item.id)}</article>`).join("") : emptyState("clock", "No classes scheduled");
+}
+
+function teachingAssignmentEditButton(item) {
+  return isOwner() ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-teaching-assignment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : "";
 }
 
 function renderAcademics() {
@@ -821,6 +831,44 @@ async function submitSession(event) {
   const payload = { batchId: form.get("batchId"), subjectId: form.get("subjectId"), facultyId: form.get("facultyId"), roomId: form.get("roomId"), startsAt: new Date(form.get("startsAt")).toISOString(), endsAt: new Date(form.get("endsAt")).toISOString(), notes: String(form.get("notes") || "").trim(), allowOverride: form.get("allowOverride") === "on", overrideReason: String(form.get("overrideReason") || "").trim() || null };
   try { await api("/api/timetable/sessions", { method: "POST", body: JSON.stringify(payload) }); state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; state.attendanceSessions = await api("/api/attendance/sessions"); closeDetail(); renderTimetable(); renderAttendance(); toast("Class scheduled."); }
   catch (error) { showFormError("#session-form-error", error); button.disabled = false; }
+}
+
+function openTeachingAssignmentForm(item = null) {
+  openDrawer(item ? "Edit teaching assignment" : "Assign faculty", `<form class="auth-form" id="teaching-assignment-form" data-assignment-id="${esc(item?.id || "")}">
+    <label class="field"><span>Faculty</span><select name="facultyId" required><option value="">Select faculty</option>${(state.timetable.faculty || []).map(row => `<option value="${esc(row.id)}"${selected(row.id, item?.facultyId)}>${esc(row.fullName)}</option>`).join("")}</select></label>
+    <label class="field"><span>Batch</span><select name="batchId" required><option value="">Select batch</option>${(state.timetable.batches || []).map(row => `<option value="${esc(row.id)}"${selected(row.id, item?.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label>
+    <label class="field"><span>Subject</span><select name="subjectId" required><option value="">Select subject</option>${(state.timetable.subjects || []).map(row => `<option value="${esc(row.id)}"${selected(row.id, item?.subjectId)}>${esc(row.name)} · ${esc(row.code)}</option>`).join("")}</select></label>
+    ${item ? `<label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Teaching assignment active</span></label>` : ""}
+    ${formError("teaching-assignment-form-error")}
+    <button class="button button-primary button-large" type="submit">${icon(item ? "edit" : "plus")}${item ? "Save changes" : "Assign faculty"}</button>
+  </form>`);
+  $("#teaching-assignment-form").addEventListener("submit", submitTeachingAssignment);
+}
+
+async function submitTeachingAssignment(event) {
+  event.preventDefault();
+  const form = event.currentTarget, data = new FormData(form), assignmentId = form.dataset.assignmentId;
+  const button = $("button[type=submit]", form); button.disabled = true;
+  const payload = {
+    facultyId: data.get("facultyId"),
+    batchId: data.get("batchId"),
+    subjectId: data.get("subjectId"),
+    ...(assignmentId ? { isActive: form.elements.isActive.checked } : {}),
+  };
+  try {
+    await api(assignmentId ? `/api/timetable/teaching-assignments/${encodeURIComponent(assignmentId)}` : "/api/timetable/teaching-assignments", {
+      method: assignmentId ? "PATCH" : "POST",
+      body: JSON.stringify(payload),
+    });
+    state.timetable = await api("/api/timetable/bootstrap");
+    state.sessions = state.timetable.sessions || [];
+    closeDetail();
+    renderTimetable();
+    toast(assignmentId ? "Teaching assignment updated." : "Faculty assigned.");
+  } catch (error) {
+    showFormError("#teaching-assignment-form-error", error);
+    button.disabled = false;
+  }
 }
 
 function openAssignmentForm() {
@@ -1212,6 +1260,11 @@ function bindEvents() {
       const item = state.examinations.find(row => row.id === examinationEdit.dataset.examinationEdit);
       if (item) openExaminationForm(item);
     }
+    const teachingAssignmentEdit = event.target.closest("[data-teaching-assignment-edit]");
+    if (teachingAssignmentEdit) {
+      const item = (state.timetable.teachingAssignments || []).find(row => row.id === teachingAssignmentEdit.dataset.teachingAssignmentEdit);
+      if (item) openTeachingAssignmentForm(item);
+    }
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
@@ -1233,7 +1286,7 @@ function bindEvents() {
   $("#print-student-ledger").addEventListener("click", () => window.print());
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
-  $("#new-session").addEventListener("click", openSessionForm); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-master").addEventListener("click", openMasterForm);
+  $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-master").addEventListener("click", openMasterForm);
   $("#new-examination").addEventListener("click", () => openExaminationForm());
   $("#examination-search").addEventListener("input", renderExaminations);
   $("#examination-status-filter").addEventListener("change", renderExaminations);

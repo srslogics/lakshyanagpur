@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=34">
+  <link rel="stylesheet" href="./styles.css?v=35">
   <link rel="stylesheet" href="./auth-shared.css?v=4">
 </head>
 <body>
@@ -260,8 +260,14 @@
         </section>
 
         <section class="app-view" id="timetable" aria-labelledby="timetable-heading">
-          <div class="page-heading"><h2 id="timetable-heading">Faculty &amp; timetable</h2><button class="button button-primary" id="new-session" type="button"><span data-icon="plus"></span>Schedule class</button></div>
+          <div class="page-heading"><h2 id="timetable-heading">Faculty &amp; timetable</h2><div class="heading-actions"><button class="button button-secondary" id="new-session" type="button"><span data-icon="calendar-check"></span>Schedule class</button><button class="button button-primary" id="new-teaching-assignment" type="button"><span data-icon="plus"></span>Assign faculty</button></div></div>
           <div class="compact-metrics" id="timetable-metrics"></div>
+          <article class="surface table-surface teaching-register">
+            <div class="surface-head teaching-register-head"><h3>Teaching assignments</h3><span class="count-badge" id="teaching-assignment-count">0 active</span></div>
+            <div class="data-table-wrap"><table class="data-table teaching-assignment-table"><thead><tr><th>Faculty</th><th>Batch</th><th>Subject</th><th>Classes</th><th>Status</th><th aria-label="Actions"></th></tr></thead><tbody id="teaching-assignments-table-body"></tbody></table></div>
+            <div class="mobile-records" id="teaching-assignments-mobile-list"></div>
+          </article>
+          <div class="timetable-section-head"><h3>Class schedule</h3><span id="class-session-count">0 classes</span></div>
           <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date &amp; time</th><th>Batch</th><th>Subject</th><th>Faculty</th><th>Room</th><th>Status</th></tr></thead><tbody id="sessions-table-body"></tbody></table></div><div class="mobile-records" id="sessions-mobile-list"></div></article>
         </section>
 
@@ -309,6 +315,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=37" defer></script>
+  <script src="./app.js?v=38" defer></script>
 </body>
 </html>

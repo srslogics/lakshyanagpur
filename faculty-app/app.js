@@ -266,7 +266,7 @@ function renderAll() {
   $("#faculty-first-name").textContent = firstName;
   $("#teaching-summary").textContent = teachingPairs.length
     ? `${teachingPairs.length} teaching ${teachingPairs.length === 1 ? "assignment" : "assignments"} across ${summary.activeBatches} ${summary.activeBatches === 1 ? "batch" : "batches"}.`
-    : "Your timetable assignments will appear here.";
+    : "Your assigned batches and subjects will appear here.";
   $("#header-avatar").textContent = initials(profile.fullName);
   $("#sidebar-avatar").textContent = initials(profile.fullName);
   $("#sidebar-name").textContent = profile.fullName;
@@ -550,7 +550,7 @@ function renderBatches() {
         <dl><div><dt>Classes</dt><dd>${matchingSessions.length}</dd></div><div><dt>Next class</dt><dd>${next ? `${dateLong(next.startsAt)} · ${timeText(next.startsAt)}` : "Not scheduled"}</dd></div></dl>
         <button type="button" data-go="schedule">View timetable</button>
       </article>`;
-  }).join("") : empty("users", "No assigned batches", "Teaching assignments appear after classes are added to the timetable.");
+  }).join("") : empty("users", "No assigned batches", "Ask the owner to assign a batch and subject.");
 }
 
 function renderNotices() {
@@ -606,7 +606,7 @@ function closeModal(id) {
 function openAssignmentModal(trigger) {
   const pairs = state.data.teachingPairs;
   if (!pairs.length) {
-    toast("A timetable assignment is required before publishing work.");
+    toast("Ask the owner to assign you a batch and subject.");
     return;
   }
   $("#assignment-pair").innerHTML = pairs.map(item => `
@@ -655,7 +655,7 @@ async function createAssignment(event) {
 function openExaminationModal(trigger) {
   const pairs = state.data.teachingPairs;
   if (!pairs.length) {
-    toast("A timetable assignment is required before scheduling an examination.");
+    toast("Ask the owner to assign you a batch and subject.");
     return;
   }
   $("#examination-pair").innerHTML = pairs.map(item => `

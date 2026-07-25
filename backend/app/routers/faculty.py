@@ -13,6 +13,7 @@ from ..models import (
     Batch,
     ClassSession,
     Enrollment,
+    FacultyTeachingAssignment,
     Notice,
     Room,
     Subject,
@@ -63,7 +64,24 @@ def bootstrap(
         .all()
     )
 
-    batch_names = {batch.name for _, batch, _, _, _, _ in session_rows}
+    teaching_assignment_rows = (
+        db.query(FacultyTeachingAssignment, Batch, Subject)
+        .join(Batch, Batch.id == FacultyTeachingAssignment.batch_id)
+        .join(Subject, Subject.id == FacultyTeachingAssignment.subject_id)
+        .filter(
+            FacultyTeachingAssignment.faculty_id == faculty_user.id,
+            FacultyTeachingAssignment.is_active.is_(True),
+        )
+        .order_by(Batch.name, Subject.name)
+        .all()
+    )
+    batch_names = {
+        batch.name
+        for _, batch, _ in teaching_assignment_rows
+    } | {
+        batch.name
+        for _, batch, _, _, _, _ in session_rows
+    }
     student_count_rows = (
         db.query(
             Enrollment.batch,
@@ -80,7 +98,19 @@ def bootstrap(
     }
 
     sessions = []
-    teaching_pairs = {}
+    teaching_pairs = {
+        (batch.id, subject.id): {
+            "assignmentId": assignment.id,
+            "batchId": batch.id,
+            "batch": batch.name,
+            "program": batch.program,
+            "subjectId": subject.id,
+            "subject": subject.name,
+            "subjectCode": subject.code,
+            "studentCount": student_counts.get((batch.name, batch.program), 0),
+        }
+        for assignment, batch, subject in teaching_assignment_rows
+    }
     now = datetime.now(timezone.utc)
     today = now.astimezone(INDIA_TZ).date()
     for session, batch, subject, room, register, marked_count in session_rows:
@@ -101,16 +131,6 @@ def bootstrap(
             "studentCount": student_counts.get((batch.name, batch.program), 0),
             "markedCount": marked_count,
         })
-        teaching_pairs[(batch.id, subject.id)] = {
-            "batchId": batch.id,
-            "batch": batch.name,
-            "program": batch.program,
-            "subjectId": subject.id,
-            "subject": subject.name,
-            "subjectCode": subject.code,
-            "studentCount": student_counts.get((batch.name, batch.program), 0),
-        }
-
     assignment_rows = (
         db.query(Assignment, Batch, Subject)
         .join(Batch, Batch.id == Assignment.batch_id)

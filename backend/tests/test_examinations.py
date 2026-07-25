@@ -5,6 +5,7 @@ from app.models import (
     Batch,
     Enrollment,
     ExaminationResult,
+    FacultyTeachingAssignment,
     Student,
     StudentAccount,
     Subject,
@@ -229,3 +230,39 @@ def test_faculty_sees_only_assigned_examinations(
         headers=faculty_headers,
     )
     assert over_maximum.status_code == 422
+
+
+def test_faculty_can_schedule_from_explicit_assignment_without_a_class(
+    client,
+    database,
+):
+    faculty, second_faculty, _, batch, subject, _, _ = examination_setup(
+        database,
+    )
+    owner = database.query(User).filter_by(role="owner").one()
+    database.add(
+        FacultyTeachingAssignment(
+            faculty_id=faculty.id,
+            batch_id=batch.id,
+            subject_id=subject.id,
+            created_by=owner.id,
+        ),
+    )
+    database.commit()
+    faculty_headers = {
+        "Authorization": f"Bearer {create_token(faculty)}",
+    }
+    created = client.post(
+        "/api/examinations",
+        json=exam_payload(faculty, batch, subject),
+        headers=faculty_headers,
+    )
+    assert created.status_code == 201
+    denied = client.post(
+        "/api/examinations",
+        json=exam_payload(second_faculty, batch, subject),
+        headers={
+            "Authorization": f"Bearer {create_token(second_faculty)}",
+        },
+    )
+    assert denied.status_code == 403

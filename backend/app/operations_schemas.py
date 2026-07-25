@@ -129,6 +129,17 @@ class ClassSessionUpdate(ClassSessionCreate):
     status: Literal["scheduled", "completed", "cancelled"] = "scheduled"
 
 
+class FacultyTeachingAssignmentCreate(BaseModel):
+    faculty_id: str = Field(alias="facultyId")
+    batch_id: str = Field(alias="batchId")
+    subject_id: str = Field(alias="subjectId")
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class FacultyTeachingAssignmentUpdate(FacultyTeachingAssignmentCreate):
+    is_active: bool = Field(alias="isActive")
+
+
 class AssignmentCreate(BaseModel):
     batch_id: str = Field(alias="batchId")
     subject_id: str = Field(alias="subjectId")
