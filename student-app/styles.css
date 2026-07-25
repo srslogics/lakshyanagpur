@@ -4,6 +4,10 @@
     linear-gradient(135deg, var(--navy-950), #242a6b);
 }
 
+.student-shell .summary-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .sidebar-section-label {
   width: auto !important;
   height: auto !important;
@@ -354,20 +358,6 @@
   font-weight: 700;
 }
 
-.fee-note {
-  margin: 18px 0 0;
-  color: rgba(255, 255, 255, .66);
-  font-size: .76rem;
-}
-
-.payment-row .payment-icon { color: var(--navy-800); }
-.payment-row time {
-  color: var(--navy-800);
-  font-size: .72rem;
-  font-weight: 800;
-  text-align: right;
-}
-
 .full-notice-list { gap: 12px; }
 .full-notice-list .notice-card { padding: 20px; }
 .notice-card-top {
@@ -499,6 +489,11 @@
 }
 
 @media (max-width: 1023px) {
+  .student-shell .summary-strip {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 150px;
+  }
   .with-back {
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr);
@@ -544,11 +539,6 @@
   .with-back { gap: 11px; }
   .with-back h1 { font-size: 2.05rem; }
   .detail-grid { grid-template-columns: 1fr; }
-  .payment-row { grid-template-columns: 42px minmax(0, 1fr); }
-  .payment-row time {
-    grid-column: 2;
-    text-align: left;
-  }
   .assignment-card footer {
     align-items: stretch;
     flex-direction: column;

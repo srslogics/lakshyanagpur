@@ -131,6 +131,8 @@ def test_student_portal_returns_only_the_linked_student(client, database, owner_
     assert body["profile"]["id"] != other_student.id
     assert [item["title"] for item in body["assignments"]] == ["Portal practice"]
     assert body["schedule"][0]["subject"] == "Physics"
+    assert "fees" not in body
+    assert "outstandingAmount" not in body["summary"]
     assert client.get("/api/portal/bootstrap", headers=owner_headers).status_code == 403
 
 
@@ -315,6 +317,8 @@ def test_parent_portal_uses_a_separate_contact_account(client, database, owner_h
     assert body["profile"]["id"] == student.id
     assert body["profile"]["id"] != other_student.id
     assert body["schedule"][0]["subject"] == "Physics"
+    assert "fees" in body
+    assert "outstandingAmount" in body["summary"]
     assert client.get("/api/portal/bootstrap", headers=parent_headers).status_code == 403
 
 

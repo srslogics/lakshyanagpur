@@ -13,8 +13,6 @@ const icons = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   notice: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/>',
   logout: '<path d="m10 17 5-5-5-5m5 5H3m12-9h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5"/>',
-  wallet: '<path d="M4 5h15a2 2 0 0 1 2 2v12H4a2 2 0 0 1-2-2V5.5A2.5 2.5 0 0 1 4.5 3H18"/><path d="M16 11h5v4h-5a2 2 0 0 1 0-4Z"/>',
-  receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6m-6 4h6"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
   external: '<path d="M14 4h6v6m0-6-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/>',
@@ -22,15 +20,14 @@ const icons = {
   "eye-off": '<path d="m3 3 18 18M10.6 5.2A11.4 11.4 0 0 1 12 5c6.5 0 10 7 10 7a16 16 0 0 1-2.1 3.2M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.1-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
 };
 
-const views = new Set(["home", "schedule", "assignments", "examinations", "attendance", "fees", "notices", "profile", "more"]);
-const overflowViews = new Set(["examinations", "fees", "notices", "profile", "more"]);
+const views = new Set(["home", "schedule", "assignments", "examinations", "attendance", "notices", "profile", "more"]);
+const overflowViews = new Set(["examinations", "notices", "profile", "more"]);
 const titles = {
   home: "Home",
   schedule: "Schedule",
   assignments: "Assignments",
   examinations: "Examinations",
   attendance: "Attendance",
-  fees: "Fees",
   notices: "Notices",
   profile: "Profile",
   more: "More",
@@ -64,11 +61,6 @@ const initials = (name) => String(name || "LS")
   .map((part) => part[0])
   .join("")
   .toUpperCase();
-const money = (value) => new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  maximumFractionDigits: 0,
-}).format(Number(value || 0));
 const validDate = (value) => value && !Number.isNaN(new Date(value).getTime());
 const dateKey = (value) => (validDate(value) ? new Date(value).toISOString().slice(0, 10) : "");
 const dateText = (value, fallback = "Date pending") => validDate(value)
@@ -293,7 +285,6 @@ function renderAll() {
   renderAssignments();
   renderExaminations();
   renderAttendance();
-  renderFees();
   renderNotices();
   renderProfile();
   renderMore();
@@ -307,7 +298,6 @@ function renderHome() {
     summaryCard("Upcoming classes", String(summary.upcomingClasses), false, "schedule"),
     summaryCard("Open assignments", String(openAssignments.length), openAssignments.length > 0, "assignments"),
     summaryCard("Upcoming exams", String(summary.upcomingExams ?? examinations.filter((item) => item.status === "scheduled").length), false, "examinations"),
-    summaryCard("Outstanding fees", money(summary.outstandingAmount), summary.outstandingAmount > 0, "fees"),
   ].join("");
   const next = schedule.find((item) => validDate(item.startsAt) && new Date(item.startsAt) >= new Date());
   $("#next-class").innerHTML = next
@@ -513,30 +503,6 @@ function renderAttendance() {
     : empty("check", "Attendance not recorded yet", "Records will appear after faculty submits attendance.");
 }
 
-function renderFees() {
-  const { fees } = state.data;
-  const hasAgreement = Number(fees.agreedAmount) > 0;
-  const percent = hasAgreement ? Math.min(100, Math.round((Number(fees.paidAmount) / Number(fees.agreedAmount)) * 100)) : 0;
-  const stateLabel = !hasAgreement ? "Not configured" : Number(fees.outstandingAmount) <= 0 ? "Paid" : `${percent}% paid`;
-  $("#student-fee-hero").innerHTML = `<div class="fee-top">
-    <span><span>Outstanding</span><strong>${money(fees.outstandingAmount)}</strong></span>
-    <span class="fee-state">${esc(stateLabel)}</span>
-  </div>
-  <div class="fee-progress" aria-label="${percent}% of agreed fee paid"><span style="width:${percent}%"></span></div>
-  <div class="fee-total">
-    <span><span>Agreed fee</span><strong>${money(fees.agreedAmount)}</strong></span>
-    <span><span>Amount paid</span><strong>${money(fees.paidAmount)}</strong></span>
-  </div>
-  ${!hasAgreement ? '<p class="fee-note">A fee agreement has not been recorded for this student.</p>' : ""}`;
-  $("#student-payment-list").innerHTML = fees.payments.length
-    ? fees.payments.map((payment) => `<article class="payment-row">
-      <span class="payment-icon">${icon("receipt")}</span>
-      <span><strong>${money(payment.amount)}</strong><small>${esc(titleCase(payment.method))} · ${esc(titleCase(payment.status))}</small></span>
-      <time>${dateText(payment.date)}</time>
-    </article>`).join("")
-    : empty("receipt", "No payments recorded", hasAgreement ? "Payments will appear here after they are entered by the accounts team." : "A payment history will appear once the fee agreement is configured.");
-}
-
 function renderNotices() {
   const notices = state.data.notices;
   const batchNotices = notices.filter((item) => item.batch).length;
@@ -573,10 +539,9 @@ function renderProfile() {
 }
 
 function renderMore() {
-  const { profile, fees, examinations, notices } = state.data;
+  const { profile, examinations, notices } = state.data;
   const upcomingExams = (examinations || []).filter((item) => item.status === "scheduled" && new Date(item.scheduledAt).getTime() >= Date.now()).length;
   $("#more-examination-copy").textContent = upcomingExams ? `${upcomingExams} upcoming examination${upcomingExams === 1 ? "" : "s"}` : `${(examinations || []).filter((item) => item.status === "published").length} published results`;
-  $("#more-fee-copy").textContent = Number(fees.agreedAmount) > 0 ? `${money(fees.outstandingAmount)} outstanding` : "Fee agreement not configured";
   $("#more-notice-copy").textContent = notices.length ? `${notices.length} published notice${notices.length === 1 ? "" : "s"}` : "No published notices";
   $("#more-profile-copy").textContent = [profile.admissionNumber, profile.batch].filter(Boolean).join(" · ") || "Student and login details";
 }

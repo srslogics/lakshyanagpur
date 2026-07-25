@@ -327,13 +327,13 @@ def _portal_payload(
     student: Student,
     enrollment: Enrollment | None,
     notice_audience: str,
+    include_finance: bool = False,
 ):
     schedule = schedule_rows(db, enrollment)
     assignments = assignment_rows(db, student, enrollment)
     attendance = attendance_rows(db, student)
     examinations = examination_rows(db, student, enrollment)
     notices = notice_rows(db, enrollment, notice_audience)
-    fees = fee_summary(db, student)
     now = datetime.now(timezone.utc)
     classified_attendance = [
         row for row in attendance if row["status"] != "unclassified"
@@ -342,33 +342,37 @@ def _portal_payload(
         1 for row in attendance
         if row["status"] in ("present", "late", "excused")
     )
-    return {
+    summary = {
+        "upcomingClasses": sum(
+            1 for row in schedule if _aware(row["startsAt"]) >= now
+        ),
+        "openAssignments": sum(
+            1 for row in assignments if row["status"] != "completed"
+        ),
+        "upcomingExams": sum(
+            1 for row in examinations
+            if row["status"] == "scheduled"
+            and _aware(row["scheduledAt"]) >= now
+        ),
+        "attendanceRate": (
+            round(present / len(classified_attendance) * 100, 1)
+            if classified_attendance else None
+        ),
+    }
+    payload = {
         "profile": _student_profile(student, enrollment),
-        "summary": {
-            "upcomingClasses": sum(
-                1 for row in schedule if _aware(row["startsAt"]) >= now
-            ),
-            "openAssignments": sum(
-                1 for row in assignments if row["status"] != "completed"
-            ),
-            "upcomingExams": sum(
-                1 for row in examinations
-                if row["status"] == "scheduled"
-                and _aware(row["scheduledAt"]) >= now
-            ),
-            "attendanceRate": (
-                round(present / len(classified_attendance) * 100, 1)
-                if classified_attendance else None
-            ),
-            "outstandingAmount": fees["outstandingAmount"],
-        },
+        "summary": summary,
         "schedule": schedule,
         "assignments": assignments,
         "examinations": examinations,
         "attendance": attendance,
         "notices": notices,
-        "fees": fees,
     }
+    if include_finance:
+        fees = fee_summary(db, student)
+        summary["outstandingAmount"] = fees["outstandingAmount"]
+        payload["fees"] = fees
+    return payload
 
 
 @router.get("/bootstrap")
@@ -455,7 +459,13 @@ def parent_bootstrap(
     user: User = Depends(require_roles("parent")),
 ):
     account, student, enrollment = _student_for_account(db, ParentAccount, user)
-    payload = _portal_payload(db, student, enrollment, "parents")
+    payload = _portal_payload(
+        db,
+        student,
+        enrollment,
+        "parents",
+        include_finance=True,
+    )
     payload["account"] = {
         "id": user.id,
         "fullName": user.full_name,
