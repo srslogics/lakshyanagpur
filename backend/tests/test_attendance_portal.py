@@ -166,6 +166,7 @@ def test_owner_can_create_attendance_operator(client, owner_headers):
         headers=owner_headers,
         json={
             "fullName": "Attendance Desk Operator",
+            "mobile": "+91 90000 00091",
             "email": "attendance.desk@example.com",
             "password": "AttendancePass123!",
             "role": "attendance_operator",
@@ -173,3 +174,16 @@ def test_owner_can_create_attendance_operator(client, owner_headers):
     )
     assert response.status_code == 201
     assert response.json()["role"] == "attendance_operator"
+    assert response.json()["mobile"] == "9000000091"
+    duplicate = client.post(
+        "/api/settings/users",
+        headers=owner_headers,
+        json={
+            "fullName": "Second Attendance Operator",
+            "mobile": "9000000091",
+            "password": "AttendancePass123!",
+            "role": "attendance_operator",
+        },
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "This mobile number is already assigned to another account"

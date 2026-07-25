@@ -123,7 +123,7 @@ function showLogin(message = "") {
   $("#login-password").value = "";
   $("#login-error").textContent = message;
   $("#login-error").classList.toggle("hidden", !message);
-  requestAnimationFrame(() => $("#login-email").focus());
+  requestAnimationFrame(() => $("#login-mobile").focus());
 }
 
 function toast(message) {
@@ -162,7 +162,7 @@ async function login(event) {
     const result = await api("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({
-        email: String(form.get("email")).trim(),
+        mobile: String(form.get("mobile")).trim(),
         password: String(form.get("password")),
       }),
     });
@@ -533,7 +533,7 @@ function renderProfile() {
     ["Primary contact", profile.mobile],
     ["Secondary contact", profile.secondaryMobile],
     ["Student email", profile.email],
-    ["Portal login", account?.email],
+    ["Portal login", account?.mobile ? `+91 ${account.mobile}` : "Mobile not assigned"],
   ];
   $("#profile-details").innerHTML = details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(displayValue(value))}</dd></div>`).join("");
 }

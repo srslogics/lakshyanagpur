@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
+from ..identity import normalize_mobile
 from ..models import RevokedToken, User
 from ..schemas import BootstrapOwnerRequest, LoginRequest, TokenResponse
 from ..security import bearer, create_token, current_user, decode_token, hash_password, verify_password
@@ -19,6 +20,7 @@ def _token_response(user: User):
         "expires_in": settings.access_token_minutes * 60,
         "user": {
             "id": user.id,
+            "mobile": user.mobile,
             "email": user.email,
             "fullName": user.full_name,
             "role": user.role,
@@ -28,14 +30,23 @@ def _token_response(user: User):
 
 @router.get("/bootstrap-status")
 def bootstrap_status(db: Session = Depends(get_db)):
-    return {"setupRequired": db.query(User).count() == 0}
+    return {
+        "setupRequired": db.query(User).count() == 0,
+        "allowLegacyEmailLogin": settings.allow_legacy_email_login,
+    }
 
 
 @router.post("/bootstrap", response_model=TokenResponse, status_code=201)
 def bootstrap_owner(payload: BootstrapOwnerRequest, db: Session = Depends(get_db)):
     if db.query(User).count() > 0:
         raise HTTPException(409, "Initial owner setup has already been completed")
-    user = User(email=payload.email.lower(), full_name=payload.full_name, role="owner", password_hash=hash_password(payload.password))
+    user = User(
+        mobile=payload.mobile,
+        email=str(payload.email).lower() if payload.email else None,
+        full_name=payload.full_name,
+        role="owner",
+        password_hash=hash_password(payload.password),
+    )
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -44,15 +55,22 @@ def bootstrap_owner(payload: BootstrapOwnerRequest, db: Session = Depends(get_db
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
+    if payload.mobile:
+        user = db.query(User).filter(User.mobile == normalize_mobile(payload.mobile)).first()
+    elif settings.allow_legacy_email_login:
+        # Temporary Operations-only fallback for live accounts that have not yet
+        # been assigned a mobile number. It can be disabled after migration.
+        user = db.query(User).filter(User.email == str(payload.email).lower()).first()
+    else:
+        user = None
     if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
-        raise HTTPException(401, "Invalid email or password")
+        raise HTTPException(401, "Invalid mobile number or password")
     return _token_response(user)
 
 
 @router.get("/me")
 def me(user: User = Depends(current_user)):
-    return {"id": user.id, "email": user.email, "fullName": user.full_name, "role": user.role}
+    return {"id": user.id, "mobile": user.mobile, "email": user.email, "fullName": user.full_name, "role": user.role}
 
 
 @router.post("/logout", status_code=204)

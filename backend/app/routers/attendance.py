@@ -124,6 +124,7 @@ def attendance_portal_bootstrap(
         "profile": {
             "id": operator.id,
             "fullName": operator.full_name,
+            "mobile": operator.mobile,
             "email": operator.email,
             "role": operator.role,
         },

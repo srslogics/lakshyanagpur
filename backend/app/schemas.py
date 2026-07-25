@@ -1,27 +1,48 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
+from .identity import normalize_mobile
 
 LEAD_STAGES = ("New Enquiry", "Contact Attempted", "Contacted", "Follow-up Scheduled", "Counselling Planned", "Counselling Done", "Interested", "Documents Pending", "Admission Confirmed", "Converted", "Lost", "Not Interested")
 LEAD_SOURCES = ("walk-in", "website", "phone", "whatsapp", "referral", "campaign", "seminar", "social media")
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    mobile: str | None = None
+    email: EmailStr | None = None
     password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("mobile")
+    @classmethod
+    def valid_mobile(cls, value):
+        return normalize_mobile(value) if value else None
+
+    @model_validator(mode="after")
+    def has_identifier(self):
+        if not self.mobile and not self.email:
+            raise ValueError("A mobile number is required")
+        return self
 
 
 class BootstrapOwnerRequest(BaseModel):
     full_name: Annotated[str, Field(min_length=2, max_length=255, alias="fullName")]
-    email: EmailStr
+    mobile: str
+    email: EmailStr | None = None
     password: str = Field(min_length=10, max_length=128)
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("mobile")
+    @classmethod
+    def valid_mobile(cls, value):
+        return normalize_mobile(value)
 
 
 class AuthenticatedUser(BaseModel):
     id: str
-    email: str
+    mobile: str | None
+    email: str | None
     full_name: str = Field(alias="fullName")
     role: str
     model_config = ConfigDict(populate_by_name=True)

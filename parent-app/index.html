@@ -45,7 +45,7 @@
         <h1 id="login-title">Sign in</h1>
         <p class="login-intro">Use the account issued by Lakshya Institute.</p>
         <form id="login-form" novalidate>
-          <label for="login-email"><span>Email address</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="parent@lakshya.edu" required></label>
+          <label for="login-mobile"><span>Mobile number</span><input id="login-mobile" name="mobile" type="tel" autocomplete="username" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
           <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span><small class="field-help">Use at least 8 characters.</small></label>
           <div class="form-error hidden" id="login-error" role="alert"></div>
           <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
@@ -133,6 +133,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=5" defer></script>
+  <script src="./app.js?v=6" defer></script>
 </body>
 </html>

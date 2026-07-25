@@ -5,24 +5,31 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
     database.query(User).delete()
     database.commit()
 
-    assert client.get("/api/auth/bootstrap-status").json() == {"setupRequired": True}
+    assert client.get("/api/auth/bootstrap-status").json() == {
+        "setupRequired": True,
+        "allowLegacyEmailLogin": True,
+    }
     created = client.post(
         "/api/auth/bootstrap",
-        json={"fullName": "Lakshya Director", "email": "director@lakshya.edu", "password": "SecurePass123!"},
+        json={"fullName": "Lakshya Director", "mobile": "+91 98765 43210", "password": "SecurePass123!"},
     )
     assert created.status_code == 201
     assert created.json()["token_type"] == "bearer"
     assert created.json()["user"] == {
         "id": database.query(User).one().id,
-        "email": "director@lakshya.edu",
+        "mobile": "9876543210",
+        "email": None,
         "fullName": "Lakshya Director",
         "role": "owner",
     }
-    assert client.get("/api/auth/bootstrap-status").json() == {"setupRequired": False}
+    assert client.get("/api/auth/bootstrap-status").json() == {
+        "setupRequired": False,
+        "allowLegacyEmailLogin": True,
+    }
 
     duplicate = client.post(
         "/api/auth/bootstrap",
-        json={"fullName": "Second Owner", "email": "second@lakshya.edu", "password": "SecurePass123!"},
+        json={"fullName": "Second Owner", "mobile": "9876543211", "password": "SecurePass123!"},
     )
     assert duplicate.status_code == 409
     assert database.query(User).count() == 1
@@ -48,6 +55,16 @@ def test_frontend_shell_is_served(client):
     assert client.get("/student-app/sw.js").headers["cache-control"] == "no-cache"
 
 
+def test_every_application_uses_a_mobile_login_field(client):
+    for path in ("/", "/student-app/", "/parent-app/", "/faculty-app/", "/attendance-app/"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "Mobile number" in response.text
+        assert 'name="mobile"' in response.text
+        assert 'inputmode="tel"' in response.text
+        assert "Email address" not in response.text
+
+
 def test_health_checks_support_get_and_head(client):
     for path in ("/health", "/api/health"):
         response = client.get(path)
@@ -59,10 +76,11 @@ def test_health_checks_support_get_and_head(client):
 def test_login_logout_revokes_the_active_token(client):
     logged_in = client.post(
         "/api/auth/login",
-        json={"email": "owner@example.com", "password": "Password123!"},
+        json={"mobile": "+91 90000 00001", "password": "Password123!"},
     )
     assert logged_in.status_code == 200
     assert logged_in.json()["user"]["role"] == "owner"
+    assert logged_in.json()["user"]["mobile"] == "9000000001"
     assert logged_in.json()["user"]["email"] == "owner@example.com"
     token = logged_in.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -73,3 +91,33 @@ def test_login_logout_revokes_the_active_token(client):
     rejected = client.get("/api/auth/me", headers=headers)
     assert rejected.status_code == 401
     assert rejected.json()["detail"] == "Session has been signed out"
+
+
+def test_legacy_email_login_remains_available_during_mobile_migration(client):
+    logged_in = client.post(
+        "/api/auth/login",
+        json={"email": "owner@example.com", "password": "Password123!"},
+    )
+    assert logged_in.status_code == 200
+    assert logged_in.json()["user"]["mobile"] == "9000000001"
+
+
+def test_legacy_email_login_can_be_disabled_after_migration(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.routers.auth.settings.allow_legacy_email_login",
+        False,
+    )
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "owner@example.com", "password": "Password123!"},
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid mobile number or password"
+
+
+def test_invalid_mobile_is_rejected_without_account_lookup(client):
+    response = client.post(
+        "/api/auth/login",
+        json={"mobile": "12345", "password": "Password123!"},
+    )
+    assert response.status_code == 422

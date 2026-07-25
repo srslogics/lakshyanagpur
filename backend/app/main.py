@@ -66,8 +66,11 @@ async def request_context(request: Request, call_next):
 
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
+    details = exc.errors()
+    for item in details:
+        item.pop("ctx", None)
     return JSONResponse(
-        content={"error": {"code": "VALIDATION_ERROR", "message": "The request contains invalid data", "details": exc.errors()}},
+        content={"error": {"code": "VALIDATION_ERROR", "message": "The request contains invalid data", "details": details}},
         status_code=422,
     )
 

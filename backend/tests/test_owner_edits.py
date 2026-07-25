@@ -166,6 +166,7 @@ def test_owner_can_edit_master_data_and_last_owner_is_protected(
         f"/api/settings/users/{owner.id}",
         json={
             "fullName": owner.full_name,
+            "mobile": owner.mobile,
             "email": owner.email,
             "role": "owner",
             "isActive": False,

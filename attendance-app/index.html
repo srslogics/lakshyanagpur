@@ -40,7 +40,7 @@
         <p class="eyebrow">ATTENDANCE OPERATIONS</p>
         <h1 id="login-title">Sign in</h1>
         <form id="login-form" novalidate>
-          <label for="login-email"><span>Email address</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="attendance@lakshya.edu" required></label>
+          <label for="login-mobile"><span>Mobile number</span><input id="login-mobile" name="mobile" type="tel" autocomplete="username" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
           <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span></label>
           <div class="form-error hidden" id="login-error" role="alert"></div>
           <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
@@ -60,7 +60,7 @@
         <span class="operator-copy"><strong id="operator-name">Attendance Operator</strong><small>All classes</small></span>
         <button class="avatar-button" id="account-button" type="button" aria-expanded="false" aria-controls="account-menu"><span id="operator-avatar">AO</span><span class="sr-only">Open account menu</span></button>
         <div class="account-menu hidden" id="account-menu">
-          <span><strong id="menu-name">Attendance Operator</strong><small id="menu-email"></small></span>
+          <span><strong id="menu-name">Attendance Operator</strong><small id="menu-mobile"></small></span>
           <button id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
         </div>
       </div>
@@ -133,6 +133,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=1" defer></script>
+  <script src="./app.js?v=2" defer></script>
 </body>
 </html>

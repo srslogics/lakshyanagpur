@@ -28,6 +28,7 @@ class Settings:
     secret_key: str = os.getenv("SECRET_KEY", "development-only-change-me")
     access_token_minutes: int = int(os.getenv("ACCESS_TOKEN_MINUTES", "480"))
     seed_demo_data: bool = os.getenv("SEED_DEMO_DATA", "false").lower() == "true"
+    allow_legacy_email_login: bool = os.getenv("ALLOW_LEGACY_EMAIL_LOGIN", "true").lower() == "true"
 
 
 settings = Settings()

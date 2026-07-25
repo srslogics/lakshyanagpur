@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=35">
+  <link rel="stylesheet" href="./styles.css?v=36">
   <link rel="stylesheet" href="./auth-shared.css?v=4">
 </head>
 <body>
@@ -65,11 +65,12 @@
             <input id="auth-name" name="fullName" autocomplete="name" placeholder="Director name">
             <small class="field-error" data-error-for="fullName"></small>
           </label>
-          <label class="field" for="auth-email">
-            <span>Email address</span>
-            <input id="auth-email" name="email" type="email" autocomplete="email" placeholder="director@lakshya.edu" required>
-            <small class="field-error" data-error-for="email"></small>
+          <label class="field" for="auth-mobile">
+            <span id="auth-identity-label">Mobile number</span>
+            <input id="auth-mobile" name="mobile" type="tel" autocomplete="username" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required>
+            <small class="field-error" data-error-for="mobile"></small>
           </label>
+          <button class="auth-mode-toggle" id="legacy-login-toggle" type="button">Existing account without mobile?</button>
           <label class="field" for="auth-password">
             <span>Password</span>
             <span class="password-control">
@@ -315,6 +316,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=38" defer></script>
+  <script src="./app.js?v=40" defer></script>
 </body>
 </html>

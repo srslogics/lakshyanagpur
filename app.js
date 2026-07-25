@@ -46,6 +46,13 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
 const initials = name => String(name || "Lakshya").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 const normalize = value => String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const normalizedMobile = value => {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  return /^[6-9]\d{9}$/.test(digits) ? digits : "";
+};
+const mobileLabel = value => value ? `+91 ${String(value).slice(0, 5)} ${String(value).slice(5)}` : "Mobile not assigned";
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.info}</svg>`;
 const money = value => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(value || 0));
 const shortMoney = value => Number(value || 0) >= 100000 ? `₹${(Number(value) / 100000).toFixed(2)}L` : money(value);
@@ -89,13 +96,29 @@ function toast(message, tone = "success") {
   setTimeout(() => node.remove(), 3600);
 }
 
-function setAuthMode(setup) {
+function setAuthMode(setup, allowLegacyEmailLogin = false) {
   state.setupRequired = setup;
+  state.allowLegacyEmailLogin = allowLegacyEmailLogin;
+  setLegacyLoginMode(false);
   $$(".setup-only").forEach(node => node.classList.toggle("hidden", !setup));
+  $("#legacy-login-toggle").classList.toggle("hidden", setup || !allowLegacyEmailLogin);
   $("#auth-title").textContent = setup ? "Create owner" : "Sign in";
   $("#auth-submit-label").textContent = setup ? "Create account" : "Sign in";
   $("#password-help").textContent = setup ? "Use at least 10 characters." : "Use at least 8 characters.";
   $("#auth-password").autocomplete = setup ? "new-password" : "current-password";
+}
+
+function setLegacyLoginMode(enabled) {
+  state.legacyEmailLogin = enabled;
+  const field = $("#auth-mobile");
+  $("#auth-identity-label").textContent = enabled ? "Existing email address" : "Mobile number";
+  field.type = enabled ? "email" : "tel";
+  field.inputMode = enabled ? "email" : "tel";
+  field.placeholder = enabled ? "owner email address" : "10-digit mobile number";
+  field.maxLength = enabled ? 255 : 16;
+  field.value = "";
+  $("#legacy-login-toggle").textContent = enabled ? "Use mobile number" : "Existing account without mobile?";
+  $('[data-error-for="mobile"]').textContent = "";
 }
 
 async function initialize() {
@@ -117,7 +140,7 @@ async function initialize() {
       }
     } else {
       const setup = await api("/api/auth/bootstrap-status");
-      setAuthMode(setup.setupRequired);
+      setAuthMode(setup.setupRequired, setup.allowLegacyEmailLogin);
       showAuth();
     }
   } catch (error) {
@@ -178,18 +201,23 @@ async function handleAuth(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const fullName = String(form.get("fullName") || "").trim();
-  const email = String(form.get("email") || "").trim();
+  const identity = String(form.get("mobile") || "").trim();
+  const legacyEmail = !state.setupRequired && state.legacyEmailLogin;
+  const mobile = legacyEmail ? "" : normalizedMobile(identity);
   const password = String(form.get("password") || "");
   $$(".field-error").forEach(node => node.textContent = "");
   $("#auth-error").classList.add("hidden");
   let invalid = false;
   if (state.setupRequired && fullName.length < 2) { $('[data-error-for="fullName"]').textContent = "Enter the owner’s full name."; invalid = true; }
-  if (!/^\S+@\S+\.\S+$/.test(email)) { $('[data-error-for="email"]').textContent = "Enter a valid email address."; invalid = true; }
+  if (legacyEmail && !/^\S+@\S+\.\S+$/.test(identity)) { $('[data-error-for="mobile"]').textContent = "Enter the existing owner email address."; invalid = true; }
+  if (!legacyEmail && !mobile) { $('[data-error-for="mobile"]').textContent = "Enter a valid 10-digit Indian mobile number."; invalid = true; }
   if (password.length < (state.setupRequired ? 10 : 8)) { $('[data-error-for="password"]').textContent = `Use at least ${state.setupRequired ? 10 : 8} characters.`; invalid = true; }
   if (invalid) return;
   const button = $("#auth-submit"); button.disabled = true; $("#auth-submit-label").textContent = state.setupRequired ? "Creating…" : "Signing in…";
   try {
-    const payload = state.setupRequired ? { fullName, email, password } : { email, password };
+    const payload = state.setupRequired
+      ? { fullName, mobile, password }
+      : legacyEmail ? { email: identity, password } : { mobile, password };
     const result = await api(state.setupRequired ? "/api/auth/bootstrap" : "/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
     state.token = result.access_token; sessionStorage.setItem("lakshya_token", state.token);
     state.user = result.user;
@@ -722,11 +750,11 @@ function auditRows(rows) { return rows.length ? rows.map(item => `<div class="au
 function renderSettings() {
   const masters = state.masters;
   $("#settings-metrics").innerHTML = compactMetrics([{ label: "Users", value: String(masters.users?.length || 0) }, { label: "Batches", value: String(masters.batches?.length || 0) }, { label: "Subjects", value: String(masters.subjects?.length || 0) }, { label: "Rooms", value: String(masters.rooms?.length || 0) }]);
-  $("#settings-users").innerHTML = masterRows(masters.users || [], item => [item.fullName, item.role.replaceAll("_", " "), item.isActive ? "active" : "inactive"], "user");
+  $("#settings-users").innerHTML = masterRows(masters.users || [], item => [item.fullName, `${mobileLabel(item.mobile)} · ${item.role.replaceAll("_", " ")}`, item.isActive ? "active" : "inactive"], "user");
   $("#student-access-count").textContent = `${masters.studentAccess?.length || 0} / 100`;
-  $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${item.email}`, item.isActive ? "active" : "inactive"], "access-user", "userId");
+  $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${mobileLabel(item.mobile)}`, item.isActive ? "active" : "inactive"], "access-user", "userId");
   $("#parent-access-count").textContent = `${masters.parentAccess?.length || 0}`;
-  $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${item.email}`, item.contactType === "secondary_contact" ? "secondary" : "primary"], "access-user", "userId");
+  $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${mobileLabel(item.mobile)}`, item.contactType === "secondary_contact" ? "secondary" : "primary"], "access-user", "userId");
   const academicImport = masters.academicImports?.[0];
   $("#academic-import-status").textContent = academicImport ? "Loaded" : "Not loaded";
   $("#academic-import-message").textContent = academicImport
@@ -1044,19 +1072,19 @@ async function submitAttendance(event) {
 }
 
 function openUserForm() {
-  openDrawer("New user", `<form class="auth-form" id="user-form"><label class="field"><span>Full name</span><input name="fullName" required></label><label class="field"><span>Email</span><input name="email" type="email" required></label><label class="field"><span>Role</span><select name="role"><option value="faculty">Faculty</option><option value="attendance_operator">Attendance operator</option><option value="academic_coordinator">Academic coordinator</option><option value="admissions_manager">Admissions manager</option><option value="counsellor">Counsellor</option><option value="front_desk">Front desk</option><option value="accounts">Accounts</option><option value="storekeeper">Storekeeper</option></select></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" required></label>${formError("user-form-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create user</button></form>`);
+  openDrawer("New user", `<form class="auth-form" id="user-form"><label class="field"><span>Full name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label><label class="field"><span>Role</span><select name="role"><option value="faculty">Faculty</option><option value="attendance_operator">Attendance operator</option><option value="academic_coordinator">Academic coordinator</option><option value="admissions_manager">Admissions manager</option><option value="counsellor">Counsellor</option><option value="front_desk">Front desk</option><option value="accounts">Accounts</option><option value="storekeeper">Storekeeper</option></select></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("user-form-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create user</button></form>`);
   $("#user-form").addEventListener("submit", async event => { event.preventDefault(); const form = new FormData(event.currentTarget), button = $('button[type="submit"]', event.currentTarget); button.disabled = true; try { await api("/api/settings/users", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) }); state.masters = await api("/api/settings/bootstrap"); closeDetail(); renderSettings(); toast("User created."); } catch (error) { showFormError("#user-form-error", error); button.disabled = false; } });
 }
 
 function openStudentAccessForm() {
   const linked = new Set((state.masters.studentAccess || []).map(item => item.studentId));
   const available = state.students.filter(item => !linked.has(item.id));
-  openDrawer("Student portal access", `<form class="auth-form" id="student-access-form"><div class="inline-notice">${icon("shield")}<span>${state.masters.studentAccess?.length || 0} of 100 accounts active</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(available, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Login email</span><input name="email" type="email" required></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" required></label>${formError("student-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create student access</button></form>`);
+  openDrawer("Student portal access", `<form class="auth-form" id="student-access-form"><div class="inline-notice">${icon("shield")}<span>${state.masters.studentAccess?.length || 0} of 100 accounts active</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(available, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Login mobile</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("student-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create student access</button></form>`);
   $("#student-access-form").addEventListener("submit", async event => { event.preventDefault(); const form=new FormData(event.currentTarget),button=$("button[type=submit]",event.currentTarget);button.disabled=true;try{await api("/api/settings/student-access",{method:"POST",body:JSON.stringify(Object.fromEntries(form.entries()))});state.masters=await api("/api/settings/bootstrap");closeDetail();renderSettings();toast("Student portal access created.");}catch(error){showFormError("#student-access-error",error);button.disabled=false;} });
 }
 
 function openParentAccessForm() {
-  openDrawer("Parent portal access", `<form class="auth-form" id="parent-access-form"><div class="inline-notice">${icon("shield")}<span>Create a separate parent login linked to one student record.</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(state.students, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Contact name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Contact type</span><select name="contactType"><option value="primary_contact">Primary contact</option><option value="secondary_contact">Secondary contact</option></select></label><label class="field"><span>Login email</span><input name="email" type="email" autocomplete="email" required></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("parent-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create parent access</button></form>`);
+  openDrawer("Parent portal access", `<form class="auth-form" id="parent-access-form"><div class="inline-notice">${icon("shield")}<span>Create a separate parent login linked to one student record. A mobile number can belong to only one login.</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(state.students, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Contact name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Contact type</span><select name="contactType"><option value="primary_contact">Primary contact</option><option value="secondary_contact">Secondary contact</option></select></label><label class="field"><span>Login mobile</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("parent-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create parent access</button></form>`);
   $("#parent-access-form").addEventListener("submit", async event => { event.preventDefault(); const form = new FormData(event.currentTarget), button = $("button[type=submit]", event.currentTarget); button.disabled = true; try { await api("/api/settings/parent-access", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) }); state.masters = await api("/api/settings/bootstrap"); closeDetail(); renderSettings(); toast("Parent portal access created."); } catch (error) { showFormError("#parent-access-error", error); button.disabled = false; } });
 }
 
@@ -1125,7 +1153,7 @@ async function openOwnerEdit(kind, id) {
     fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><label class="field"><span>Message</span><textarea name="body" required>${esc(item.body)}</textarea></label><div class="form-pair"><label class="field"><span>Audience</span><select name="audience">${ownerStatusOptions(["all","parents","students","faculty","batch"], item.audience)}</select></label><label class="field"><span>Channel</span><select name="channel">${ownerStatusOptions(["in_app","email","sms","whatsapp"], item.channel)}</select></label></div><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)}</option>`).join("")}</select></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
   } else if (kind === "user" || kind === "access-user") {
     title = "Edit user access";
-    fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" required></label><label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email)}" required></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","attendance_operator","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span><input name="password" type="password" minlength="10" autocomplete="new-password"><small>Leave blank to keep the existing password.</small></label>`;
+    fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" value="${esc(item.mobile || "")}" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional contact only)</small></span><input name="email" type="email" autocomplete="email" value="${esc(item.email || "")}"></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","attendance_operator","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span><input name="password" type="password" minlength="10" autocomplete="new-password"><small>Leave blank to keep the existing password.</small></label>`;
   } else if (kind === "batch") {
     title = "Edit batch"; fields = `<label class="field"><span>Name</span><input name="name" value="${esc(item.name)}" required></label><label class="field"><span>Program</span><input name="program" value="${esc(item.program)}" required></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Batch active</span></label>`;
   } else if (kind === "subject") {
@@ -1236,6 +1264,10 @@ function exportStudents() {
 function bindEvents() {
   $("#boot-retry").addEventListener("click", () => window.location.reload());
   $("#auth-form").addEventListener("submit", handleAuth);
+  $("#legacy-login-toggle").addEventListener("click", () => {
+    setLegacyLoginMode(!state.legacyEmailLogin);
+    $("#auth-mobile").focus();
+  });
   $(".password-toggle").addEventListener("click", event => { const field = $("#auth-password"), visible = field.type === "text"; field.type = visible ? "password" : "text"; event.currentTarget.setAttribute("aria-label", visible ? "Show password" : "Hide password"); });
   document.addEventListener("click", event => {
     const view = event.target.closest("[data-view], [data-view-target]")?.dataset; if (view) showView(view.view || view.viewTarget);

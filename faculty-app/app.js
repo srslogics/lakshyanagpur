@@ -127,7 +127,7 @@ function showLogin(message = "") {
   } else {
     $("#login-error").classList.add("hidden");
   }
-  requestAnimationFrame(() => $("#login-email").focus());
+  requestAnimationFrame(() => $("#login-mobile").focus());
 }
 
 function toast(message) {
@@ -173,7 +173,7 @@ async function login(event) {
     const result = await api("/api/auth/login", {
       method:"POST",
       body:JSON.stringify({
-        email:String(data.get("email")).trim(),
+        mobile:String(data.get("mobile")).trim(),
         password:String(data.get("password"))
       })
     });
@@ -489,11 +489,11 @@ function renderProfile() {
   const {profile, teachingPairs, summary} = state.data;
   $("#profile-card").innerHTML = `
     <span class="profile-avatar">${initials(profile.fullName)}</span>
-    <span><strong>${esc(profile.fullName)}</strong><span>${esc(profile.email)}</span><span>Faculty account</span></span>
+    <span><strong>${esc(profile.fullName)}</strong><span>${esc(profile.mobile ? `+91 ${profile.mobile}` : "Mobile not assigned")}</span><span>Faculty account</span></span>
   `;
   const details = [
     ["Full name", profile.fullName],
-    ["Portal login", profile.email],
+    ["Portal login", profile.mobile ? `+91 ${profile.mobile}` : "Mobile not assigned"],
     ["Role", "Faculty"],
     ["Teaching assignments", teachingPairs.length],
     ["Active batches", summary.activeBatches],
@@ -506,7 +506,7 @@ function renderMore() {
   const {profile, teachingPairs, notices} = state.data;
   $("#more-batch-copy").textContent = teachingPairs.length ? `${teachingPairs.length} teaching ${teachingPairs.length === 1 ? "assignment" : "assignments"}` : "No teaching assignments";
   $("#more-notice-copy").textContent = notices.length ? `${notices.length} published ${notices.length === 1 ? "notice" : "notices"}` : "No published notices";
-  $("#more-profile-copy").textContent = profile.email;
+  $("#more-profile-copy").textContent = profile.mobile ? `+91 ${profile.mobile}` : "Mobile not assigned";
 }
 
 function openModal(id, trigger) {

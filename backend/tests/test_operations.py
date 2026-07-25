@@ -126,6 +126,7 @@ def test_student_portal_returns_only_the_linked_student(client, database, owner_
     portal = client.get("/api/portal/bootstrap", headers=parent_headers)
     assert portal.status_code == 200
     body = portal.json()
+    assert body["account"]["mobile"] == parent.mobile
     assert body["account"]["email"] == parent.email
     assert body["profile"]["id"] == student.id
     assert body["profile"]["id"] != other_student.id
@@ -270,11 +271,11 @@ def test_student_can_update_only_their_assignment_status(client, database, owner
 
 def test_owner_can_provision_one_portal_account_per_student(client, database, owner_headers):
     _, _, _, _, _, student, _ = operational_setup(database)
-    payload = {"studentId": student.id, "email": "aarav.student@example.com", "password": "StudentPass123!"}
+    payload = {"studentId": student.id, "mobile": "9000000031", "password": "StudentPass123!"}
     created = client.post("/api/settings/student-access", json=payload, headers=owner_headers)
     assert created.status_code == 201
     assert created.json()["studentId"] == student.id
-    duplicate = client.post("/api/settings/student-access", json={**payload, "email": "second@example.com"}, headers=owner_headers)
+    duplicate = client.post("/api/settings/student-access", json={**payload, "mobile": "9000000032"}, headers=owner_headers)
     assert duplicate.status_code == 409
     account = database.query(StudentAccount).filter_by(student_id=student.id).one()
     assert database.get(User, account.user_id).role == "student"
@@ -283,6 +284,7 @@ def test_owner_can_provision_one_portal_account_per_student(client, database, ow
 def test_parent_portal_uses_a_separate_contact_account(client, database, owner_headers):
     faculty, batch, subject, room, _, student, other_student = operational_setup(database)
     parent = User(
+        mobile="9000000041",
         email="aarav.parent@example.com",
         full_name="Asha Sharma",
         role="parent",
@@ -311,6 +313,7 @@ def test_parent_portal_uses_a_separate_contact_account(client, database, owner_h
     assert body["account"] == {
         "id": parent.id,
         "fullName": "Asha Sharma",
+        "mobile": "9000000041",
         "email": "aarav.parent@example.com",
         "contactType": "primary_contact",
     }
@@ -329,7 +332,7 @@ def test_owner_can_provision_parent_access_without_a_guardian_relationship(clien
         json={
             "studentId": student.id,
             "fullName": "Asha Sharma",
-            "email": "asha.parent@example.com",
+            "mobile": "9000000042",
             "password": "ParentPass123!",
             "contactType": "primary_contact",
         },
@@ -340,4 +343,5 @@ def test_owner_can_provision_parent_access_without_a_guardian_relationship(clien
     account = database.query(ParentAccount).filter_by(student_id=student.id).one()
     user = database.get(User, account.user_id)
     assert user.role == "parent"
+    assert user.mobile == "9000000042"
     assert account.contact_type == "primary_contact"

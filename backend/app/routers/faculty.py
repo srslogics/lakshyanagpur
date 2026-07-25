@@ -177,6 +177,7 @@ def bootstrap(
         "profile": {
             "id": faculty_user.id,
             "fullName": faculty_user.full_name,
+            "mobile": faculty_user.mobile,
             "email": faculty_user.email,
             "role": faculty_user.role,
         },

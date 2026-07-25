@@ -34,7 +34,7 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
         .all()
     )
     return {
-        "users": [{"id": item.id, "fullName": item.full_name, "email": item.email, "role": item.role, "isActive": item.is_active} for item in users],
+        "users": [{"id": item.id, "fullName": item.full_name, "mobile": item.mobile, "email": item.email, "role": item.role, "isActive": item.is_active} for item in users],
         "batches": [_batch(item) for item in db.query(Batch).order_by(Batch.program, Batch.name).all()],
         "subjects": [_subject(item) for item in db.query(Subject).order_by(Subject.program, Subject.name).all()],
         "rooms": [_room(item) for item in db.query(Room).order_by(Room.name).all()],
@@ -49,13 +49,14 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
             "unresolvedItems": item.unresolved_items,
             "createdAt": item.created_at,
         } for item in academic_imports],
-        "studentAccess": [{"userId": account.user_id, "studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
+        "studentAccess": [{"userId": account.user_id, "studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "mobile": account_user.mobile, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
         "parentAccess": [{
             "userId": account.user_id,
             "studentId": student.id,
             "admissionNumber": student.admission_number,
             "studentName": student.full_name,
             "fullName": account_user.full_name,
+            "mobile": account_user.mobile,
             "email": account_user.email,
             "contactType": account.contact_type,
             "isActive": account_user.is_active,
@@ -79,14 +80,16 @@ def import_academic_workbook(
 
 @router.post("/users", status_code=201)
 def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
-    email = payload.email.lower()
-    if db.query(User).filter(User.email == email).first():
+    if db.query(User).filter(User.mobile == payload.mobile).first():
+        raise HTTPException(409, "This mobile number is already assigned to another account")
+    email = str(payload.email).lower() if payload.email else None
+    if email and db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
-    row = User(email=email, full_name=payload.full_name.strip(), role=payload.role, password_hash=hash_password(payload.password))
+    row = User(mobile=payload.mobile, email=email, full_name=payload.full_name.strip(), role=payload.role, password_hash=hash_password(payload.password))
     db.add(row); db.flush()
-    audit(db, actor, "settings.user.create", "user", row.id, after={"email": row.email, "role": row.role})
+    audit(db, actor, "settings.user.create", "user", row.id, after={"mobile": row.mobile, "email": row.email, "role": row.role})
     db.commit()
-    return {"id": row.id, "fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active}
+    return {"id": row.id, "fullName": row.full_name, "mobile": row.mobile, "email": row.email, "role": row.role, "isActive": row.is_active}
 
 
 @router.patch("/users/{user_id}")
@@ -98,20 +101,21 @@ def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db)
         active_owners = db.query(User).filter(User.role == "owner", User.is_active.is_(True)).count()
         if active_owners <= 1:
             raise HTTPException(409, "The last active owner cannot be deactivated or reassigned")
-    before = {"fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active}
+    before = {"fullName": row.full_name, "mobile": row.mobile, "email": row.email, "role": row.role, "isActive": row.is_active}
     row.full_name = payload.full_name.strip()
-    row.email = str(payload.email).lower()
+    row.mobile = payload.mobile
+    row.email = str(payload.email).lower() if payload.email else None
     row.role = payload.role
     row.is_active = payload.is_active
     if payload.password:
         row.password_hash = hash_password(payload.password)
-    audit(db, actor, "settings.user.update", "user", row.id, before=before, after={"fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active, "passwordChanged": bool(payload.password)})
+    audit(db, actor, "settings.user.update", "user", row.id, before=before, after={"fullName": row.full_name, "mobile": row.mobile, "email": row.email, "role": row.role, "isActive": row.is_active, "passwordChanged": bool(payload.password)})
     try:
         db.commit()
     except IntegrityError as error:
         db.rollback()
-        raise HTTPException(409, "A user with this email already exists") from error
-    return {"id": row.id, "fullName": row.full_name, "email": row.email, "role": row.role, "isActive": row.is_active}
+        raise HTTPException(409, "This mobile number or email is already assigned to another account") from error
+    return {"id": row.id, "fullName": row.full_name, "mobile": row.mobile, "email": row.email, "role": row.role, "isActive": row.is_active}
 
 
 @router.post("/student-access", status_code=201)
@@ -123,15 +127,17 @@ def create_student_access(payload: StudentAccessCreate, db: Session = Depends(ge
         raise HTTPException(409, "This student already has portal access")
     if db.query(StudentAccount).count() >= 100:
         raise HTTPException(409, "The student portal is configured for a maximum of 100 accounts")
-    email = payload.email.lower()
-    if db.query(User).filter(User.email == email).first():
+    if db.query(User).filter(User.mobile == payload.mobile).first():
+        raise HTTPException(409, "This mobile number is already assigned to another account")
+    email = str(payload.email).lower() if payload.email else None
+    if email and db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
-    account_user = User(email=email, full_name=student.full_name, role="student", password_hash=hash_password(payload.password))
+    account_user = User(mobile=payload.mobile, email=email, full_name=student.full_name, role="student", password_hash=hash_password(payload.password))
     db.add(account_user); db.flush()
     db.add(StudentAccount(user_id=account_user.id, student_id=student.id))
-    audit(db, actor, "settings.student_access.create", "student", student.id, after={"user_id": account_user.id, "email": email})
+    audit(db, actor, "settings.student_access.create", "student", student.id, after={"user_id": account_user.id, "mobile": payload.mobile, "email": email})
     db.commit()
-    return {"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "email": email, "isActive": True}
+    return {"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "mobile": payload.mobile, "email": email, "isActive": True}
 
 
 @router.post("/parent-access", status_code=201)
@@ -139,10 +145,13 @@ def create_parent_access(payload: ParentAccessCreate, db: Session = Depends(get_
     student = db.get(Student, payload.student_id)
     if not student:
         raise HTTPException(404, "Student not found")
-    email = payload.email.lower()
-    if db.query(User).filter(User.email == email).first():
+    if db.query(User).filter(User.mobile == payload.mobile).first():
+        raise HTTPException(409, "This mobile number is already assigned to another account")
+    email = str(payload.email).lower() if payload.email else None
+    if email and db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
     account_user = User(
+        mobile=payload.mobile,
         email=email,
         full_name=payload.full_name.strip(),
         role="parent",
@@ -163,6 +172,7 @@ def create_parent_access(payload: ParentAccessCreate, db: Session = Depends(get_
         student.id,
         after={
             "user_id": account_user.id,
+            "mobile": payload.mobile,
             "email": email,
             "contact_type": payload.contact_type,
         },
@@ -174,6 +184,7 @@ def create_parent_access(payload: ParentAccessCreate, db: Session = Depends(get_
         "admissionNumber": student.admission_number,
         "studentName": student.full_name,
         "fullName": account_user.full_name,
+        "mobile": payload.mobile,
         "email": email,
         "contactType": payload.contact_type,
         "isActive": True,

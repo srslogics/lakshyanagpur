@@ -123,6 +123,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .password-control input { padding-right: 54px; }
 .password-toggle { position: absolute !important; right: 3px; top: 2px; }
 .field-help, .field-error { min-height: 16px; color: var(--ink-500); font-size: .73rem; line-height: 1.4; }
+.auth-mode-toggle { min-height: 44px; justify-self: start; margin-top: -10px; padding: 0; border: 0; color: var(--forest-700); background: transparent; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+.auth-mode-toggle:hover { color: var(--forest-950); text-decoration: underline; text-underline-offset: 3px; }
+.auth-mode-toggle:focus-visible { border-radius: 5px; outline: 3px solid rgba(48,53,120,.22); outline-offset: 3px; }
 .field-error { color: var(--danger); }
 .auth-error { padding: 12px 14px; border-radius: var(--radius-md); color: var(--danger); background: var(--danger-bg); font-size: .84rem; line-height: 1.5; }
 .auth-footnote { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 26px 0 0; color: var(--ink-500); font-size: .75rem; text-align: center; }

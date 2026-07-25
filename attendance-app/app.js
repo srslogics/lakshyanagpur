@@ -96,7 +96,7 @@ function showLogin(message = "") {
   $("#login-password").value = "";
   $("#login-error").textContent = message;
   $("#login-error").classList.toggle("hidden", !message);
-  requestAnimationFrame(() => $("#login-email").focus());
+  requestAnimationFrame(() => $("#login-mobile").focus());
 }
 
 function toast(message) {
@@ -138,7 +138,7 @@ async function login(event) {
     const result = await api("/api/auth/login", {
       method:"POST",
       body:JSON.stringify({
-        email:String(form.get("email")).trim(),
+        mobile:String(form.get("mobile")).trim(),
         password:String(form.get("password"))
       })
     });
@@ -162,7 +162,7 @@ async function loadDesk(message = "") {
   const profile = state.data.profile;
   $("#operator-name").textContent = profile.fullName;
   $("#menu-name").textContent = profile.fullName;
-  $("#menu-email").textContent = profile.email;
+  $("#menu-mobile").textContent = profile.mobile ? `+91 ${profile.mobile}` : "Mobile not assigned";
   $("#operator-avatar").textContent = initials(profile.fullName);
   $("#working-date").value = state.selectedDate;
   renderDesk();

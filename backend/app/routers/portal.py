@@ -385,6 +385,7 @@ def student_bootstrap(
     payload["account"] = {
         "id": user.id,
         "fullName": user.full_name,
+        "mobile": user.mobile,
         "email": user.email,
     }
     return payload
@@ -469,6 +470,7 @@ def parent_bootstrap(
     payload["account"] = {
         "id": user.id,
         "fullName": user.full_name,
+        "mobile": user.mobile,
         "email": user.email,
         "contactType": account.contact_type,
     }
