@@ -23,6 +23,7 @@ FRONTEND_DIR = Path(__file__).resolve().parents[2]
 STUDENT_APP_DIR = FRONTEND_DIR / "student-app"
 PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
 FACULTY_APP_DIR = FRONTEND_DIR / "faculty-app"
+ATTENDANCE_APP_DIR = FRONTEND_DIR / "attendance-app"
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.include_router(auth.router)
@@ -87,6 +88,9 @@ if PARENT_APP_DIR.exists():
 
 if FACULTY_APP_DIR.exists():
     app.mount("/faculty-app", StaticFiles(directory=FACULTY_APP_DIR, html=True), name="faculty-app")
+
+if ATTENDANCE_APP_DIR.exists():
+    app.mount("/attendance-app", StaticFiles(directory=ATTENDANCE_APP_DIR, html=True), name="attendance-app")
 
 @app.get("/", include_in_schema=False)
 def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")

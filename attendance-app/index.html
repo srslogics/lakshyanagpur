@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>
+    if (window.location.protocol === "file:") {
+      window.location.replace("http://127.0.0.1:8000/attendance-app/" + window.location.search);
+    }
+  </script>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#171a4b">
+  <meta name="description" content="Lakshya Attendance Desk for recording attendance across every scheduled class.">
+  <meta property="og:title" content="Lakshya Attendance Desk">
+  <meta property="og:description" content="A focused class attendance workspace for Lakshya Institute.">
+  <meta property="og:image" content="../share-card.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <title>Lakshya Attendance Desk</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="icon" href="../pwa-icon-192.png">
+  <link rel="stylesheet" href="../auth-shared.css?v=5">
+  <link rel="stylesheet" href="./styles.css?v=1">
+</head>
+<body>
+  <a class="skip-link" href="#attendance-main">Skip to attendance</a>
+
+  <div class="boot-screen" id="boot-screen" aria-label="Loading Lakshya Attendance Desk">
+    <img src="../lakshya-logo-576.png" width="576" height="384" alt="Lakshya">
+    <span aria-hidden="true"></span>
+  </div>
+
+  <section class="login-screen hidden" id="login-screen" aria-labelledby="login-title">
+    <div class="login-brand">
+      <img src="../lakshya-logo-576.png" width="576" height="384" alt="Lakshya">
+      <span>Attendance Desk</span>
+    </div>
+    <div class="login-card">
+      <div class="login-form-wrap">
+        <p class="eyebrow">ATTENDANCE OPERATIONS</p>
+        <h1 id="login-title">Sign in</h1>
+        <form id="login-form" novalidate>
+          <label for="login-email"><span>Email address</span><input id="login-email" name="email" type="email" autocomplete="username" inputmode="email" placeholder="attendance@lakshya.edu" required></label>
+          <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span></label>
+          <div class="form-error hidden" id="login-error" role="alert"></div>
+          <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <div class="attendance-shell hidden" id="attendance-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Lakshya Attendance Desk home">
+        <img src="../lakshya-logo-576.png" width="576" height="384" alt="">
+        <span><strong>Attendance Desk</strong><small>Class operations</small></span>
+      </a>
+      <div class="operator">
+        <span class="live-status"><i aria-hidden="true"></i>Online</span>
+        <span class="operator-copy"><strong id="operator-name">Attendance Operator</strong><small>All classes</small></span>
+        <button class="avatar-button" id="account-button" type="button" aria-expanded="false" aria-controls="account-menu"><span id="operator-avatar">AO</span><span class="sr-only">Open account menu</span></button>
+        <div class="account-menu hidden" id="account-menu">
+          <span><strong id="menu-name">Attendance Operator</strong><small id="menu-email"></small></span>
+          <button id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="attendance-main" tabindex="-1">
+      <section class="page-hero" aria-labelledby="page-heading">
+        <div>
+          <p class="eyebrow">DAILY OPERATIONS</p>
+          <h1 id="page-heading">Class attendance</h1>
+          <p>Open each scheduled class, verify the roster, and submit the final register.</p>
+        </div>
+        <div class="date-control" aria-label="Attendance date">
+          <button id="previous-day" type="button" aria-label="Previous day"><span data-icon="chevron-left"></span></button>
+          <label><span>Working date</span><input id="working-date" type="date"></label>
+          <button id="next-day" type="button" aria-label="Next day"><span data-icon="chevron-right"></span></button>
+          <button class="today-button" id="today-button" type="button">Today</button>
+        </div>
+      </section>
+
+      <section class="metric-grid" id="metric-grid" aria-label="Daily attendance summary"></section>
+
+      <section class="workspace" aria-labelledby="registers-heading">
+        <div class="workspace-head">
+          <div><p class="eyebrow">CLASS REGISTERS</p><h2 id="registers-heading">Scheduled classes</h2></div>
+          <span id="class-count">0 classes</span>
+        </div>
+        <div class="toolbar">
+          <label class="search-field" for="class-search"><span data-icon="search"></span><input id="class-search" type="search" placeholder="Search batch, subject, faculty or room"><span class="sr-only">Search classes</span></label>
+          <div class="filter-pills" aria-label="Filter classes">
+            <button class="active" type="button" data-filter="action" aria-pressed="true">Needs action</button>
+            <button type="button" data-filter="upcoming" aria-pressed="false">Upcoming</button>
+            <button type="button" data-filter="submitted" aria-pressed="false">Submitted</button>
+            <button type="button" data-filter="all" aria-pressed="false">All</button>
+          </div>
+        </div>
+        <div class="session-list" id="session-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="dialog-backdrop hidden" id="register-dialog" role="dialog" aria-modal="true" aria-labelledby="register-title">
+    <section class="register-dialog">
+      <header>
+        <div>
+          <p class="eyebrow">CLASS REGISTER</p>
+          <h2 id="register-title">Attendance</h2>
+          <p id="register-meta"></p>
+        </div>
+        <button class="icon-button" type="button" id="close-register" aria-label="Close class register"><span data-icon="close"></span></button>
+      </header>
+      <div class="register-toolbar">
+        <div class="register-progress"><span id="roster-count">0 students</span><strong id="marked-summary">All present</strong></div>
+        <label class="roster-search" for="roster-search"><span data-icon="search"></span><input id="roster-search" type="search" placeholder="Find a student"><span class="sr-only">Search roster</span></label>
+        <button id="mark-all-present" type="button"><span data-icon="check"></span>Mark all present</button>
+      </div>
+      <div class="register-note" id="register-note" role="status"></div>
+      <form id="attendance-form">
+        <div class="roster-list" id="roster-list"></div>
+        <div class="dialog-error hidden" id="attendance-error" role="alert"></div>
+        <footer>
+          <button class="secondary-button" id="cancel-register" type="button">Close</button>
+          <span class="footer-actions">
+            <button class="secondary-button" id="save-draft" type="button">Save draft</button>
+            <button class="primary-button" id="submit-register" type="submit">Submit register</button>
+          </span>
+        </footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="./app.js?v=1" defer></script>
+</body>
+</html>

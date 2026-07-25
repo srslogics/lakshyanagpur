@@ -9,9 +9,9 @@
   </script>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171a4b">
-  <meta name="description" content="Lakshya Faculty portal for classes, attendance, assignments, batches and institute notices.">
+  <meta name="description" content="Lakshya Faculty portal for classes, assignments, examinations, batches and institute notices.">
   <meta property="og:title" content="Lakshya Faculty">
-  <meta property="og:description" content="Classes, attendance and academic work in one focused faculty workspace.">
+  <meta property="og:description" content="Classes, assignments and academic work in one focused faculty workspace.">
   <meta property="og:image" content="../share-card.png">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
@@ -19,7 +19,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=5">
+  <link rel="stylesheet" href="./styles.css?v=6">
   <link rel="stylesheet" href="../auth-shared.css?v=4">
 </head>
 <body>
@@ -58,7 +58,6 @@
       <a class="sidebar-brand" href="#dashboard" data-view="dashboard" aria-label="Lakshya Faculty home"><img src="../lakshya-logo-576.png" width="576" height="384" alt=""><span><strong>Lakshya</strong><small>Faculty</small></span></a>
       <nav>
         <button class="active" type="button" data-view="dashboard" aria-current="page"><span data-icon="home"></span><em>Today</em></button>
-        <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em><i id="sidebar-attendance-badge" class="hidden">0</i></button>
         <button type="button" data-view="assignments"><span data-icon="book"></span><em>Assignments</em></button>
         <button type="button" data-view="examinations"><span data-icon="exam"></span><em>Examinations</em><i id="sidebar-examination-badge" class="hidden">0</i></button>
         <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
@@ -88,7 +87,7 @@
             <h1 id="dashboard-heading">Good morning, <span id="faculty-first-name">Faculty</span></h1>
             <p id="teaching-summary">Your academic workspace is ready.</p>
           </div>
-          <button class="hero-action" id="hero-attendance-action" type="button" data-go="attendance"><span data-icon="check"></span><span>Attendance<strong id="hero-attendance-count">0 pending</strong></span></button>
+          <button class="hero-action" type="button" data-open-assignment><span data-icon="book"></span><span>Assignments<strong>Create new work</strong></span></button>
         </article>
 
         <div class="metric-grid" id="dashboard-metrics" aria-label="Faculty summary"></div>
@@ -99,10 +98,6 @@
             <div id="next-class"></div>
           </section>
           <section class="panel">
-            <div class="section-head"><div><p class="eyebrow">ACTION</p><h2>Attendance</h2></div><button type="button" data-go="attendance">View all</button></div>
-            <div class="stack-list" id="dashboard-attendance"></div>
-          </section>
-          <section class="panel">
             <div class="section-head"><div><p class="eyebrow">ACADEMICS</p><h2>Recent assignments</h2></div><button type="button" data-open-assignment>New assignment</button></div>
             <div class="stack-list" id="dashboard-assignments"></div>
           </section>
@@ -111,21 +106,6 @@
             <div id="latest-notice"></div>
           </section>
         </div>
-      </section>
-
-      <section class="app-view" id="attendance" aria-labelledby="attendance-heading">
-        <div class="view-heading">
-          <div><p class="eyebrow">CLASS RECORDS</p><h1 id="attendance-heading">Attendance</h1><p>Open a class, mark every student and submit the register.</p></div>
-          <span class="view-count" id="attendance-view-count">0 pending</span>
-        </div>
-        <div class="module-metrics" id="attendance-metrics"></div>
-        <div class="filter-pills" aria-label="Attendance filter">
-          <button class="active" data-attendance-filter="action" type="button" aria-pressed="true">Needs action</button>
-          <button data-attendance-filter="upcoming" type="button" aria-pressed="false">Upcoming</button>
-          <button data-attendance-filter="submitted" type="button" aria-pressed="false">Submitted</button>
-          <button data-attendance-filter="all" type="button" aria-pressed="false">All</button>
-        </div>
-        <div class="session-list" id="attendance-session-list"></div>
       </section>
 
       <section class="app-view" id="assignments" aria-labelledby="assignments-heading">
@@ -196,8 +176,8 @@
 
     <nav class="bottom-nav" aria-label="Faculty navigation">
       <button class="active" type="button" data-view="dashboard" aria-current="page"><span data-icon="home"></span><em>Today</em></button>
-      <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em><i id="attendance-badge" class="hidden">0</i></button>
       <button type="button" data-view="assignments"><span data-icon="book"></span><em>Work</em></button>
+      <button type="button" data-view="examinations"><span data-icon="exam"></span><em>Exams</em><i id="examination-badge" class="hidden">0</i></button>
       <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
       <button type="button" data-view="more"><span data-icon="more"></span><em>More</em></button>
     </nav>
@@ -217,22 +197,6 @@
         <label><span>Material link</span><input name="externalUrl" type="url" inputmode="url" placeholder="https://…" required></label>
         <div class="modal-error hidden" id="assignment-error" role="alert"></div>
         <footer><button class="secondary-button" type="button" data-close-modal="assignment-modal">Cancel</button><button class="primary-button" id="assignment-submit" type="submit">Create assignment</button></footer>
-      </form>
-    </section>
-  </div>
-
-  <div class="modal-backdrop hidden" id="attendance-modal" role="dialog" aria-modal="true" aria-labelledby="attendance-modal-title">
-    <section class="modal-card attendance-modal-card">
-      <header><div><p class="eyebrow" id="attendance-modal-kicker">ATTENDANCE</p><h2 id="attendance-modal-title">Class register</h2><p id="attendance-modal-meta"></p></div><button class="icon-button" type="button" data-close-modal="attendance-modal" aria-label="Close attendance register"><span data-icon="close"></span></button></header>
-      <div class="attendance-toolbar">
-        <span id="attendance-progress">0 students</span>
-        <button type="button" id="mark-all-present">Mark all present</button>
-      </div>
-      <p class="attendance-window-note" id="attendance-window-note">Review every student before submitting.</p>
-      <form id="attendance-form">
-        <div class="roster-list" id="roster-list"></div>
-        <div class="modal-error hidden" id="attendance-error" role="alert"></div>
-        <footer><button class="secondary-button" id="save-attendance" type="button">Save draft</button><button class="primary-button" id="submit-attendance" type="submit">Submit attendance</button></footer>
       </form>
     </section>
   </div>
@@ -271,6 +235,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=4" defer></script>
+  <script src="./app.js?v=5" defer></script>
 </body>
 </html>

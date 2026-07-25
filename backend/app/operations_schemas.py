@@ -53,14 +53,14 @@ class UserCreate(BaseModel):
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
-    role: Literal["admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "storekeeper", "student", "parent", "parent_student"]
+    role: Literal["admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
     model_config = ConfigDict(populate_by_name=True)
 
 
 class UserUpdate(BaseModel):
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr
-    role: Literal["owner", "admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "storekeeper", "student", "parent", "parent_student"]
+    role: Literal["owner", "admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
     is_active: bool = Field(alias="isActive")
     password: str | None = Field(default=None, min_length=10, max_length=128)
     model_config = ConfigDict(populate_by_name=True)

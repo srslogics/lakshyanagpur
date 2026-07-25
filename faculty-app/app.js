@@ -29,20 +29,15 @@ const state = {
   token: localStorage.getItem("lakshya_faculty_token"),
   data: null,
   view: "dashboard",
-  attendanceFilter: "action",
   assignmentFilter: "active",
   examinationFilter: "action",
   scheduleDate: "all",
-  activeSession: null,
   activeExam: null,
-  roster: [],
-  rosterLocked: false,
-  rosterUpcoming: false,
   publishingAssignment: null,
   lastFocus: null
 };
-const PORTAL_VIEWS = new Set(["dashboard", "attendance", "assignments", "examinations", "schedule", "batches", "notices", "profile", "more"]);
-const OVERFLOW_VIEWS = new Set(["examinations", "batches", "notices", "profile", "more"]);
+const PORTAL_VIEWS = new Set(["dashboard", "assignments", "examinations", "schedule", "batches", "notices", "profile", "more"]);
+const OVERFLOW_VIEWS = new Set(["batches", "notices", "profile", "more"]);
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -248,7 +243,7 @@ function showView(view, updateHash = true) {
     node.classList.toggle("active", active);
     active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current");
   });
-  const titles = {dashboard:"Today", attendance:"Attendance", assignments:"Assignments", examinations:"Examinations", schedule:"Schedule", batches:"Batches", notices:"Notices", profile:"Profile", more:"More"};
+  const titles = {dashboard:"Today", assignments:"Assignments", examinations:"Examinations", schedule:"Schedule", batches:"Batches", notices:"Notices", profile:"Profile", more:"More"};
   $("#header-title").textContent = titles[view];
   if (updateHash && location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
   $("#faculty-main").focus({preventScroll:true});
@@ -270,14 +265,7 @@ function renderAll() {
   $("#header-avatar").textContent = initials(profile.fullName);
   $("#sidebar-avatar").textContent = initials(profile.fullName);
   $("#sidebar-name").textContent = profile.fullName;
-  $("#hero-attendance-count").textContent = `${summary.attendanceActions} pending`;
-  $("#attendance-view-count").textContent = `${summary.attendanceActions} pending`;
-  for (const badge of [$("#attendance-badge"), $("#sidebar-attendance-badge")]) {
-    badge.textContent = summary.attendanceActions;
-    badge.classList.toggle("hidden", !summary.attendanceActions);
-  }
   renderDashboard();
-  renderAttendance();
   renderAssignments();
   renderExaminations();
   renderSchedule();
@@ -292,24 +280,16 @@ function metric(label, value, attention = false) {
   return `<article class="metric-card ${attention ? "attention" : ""}"><span>${esc(label)}</span><strong>${esc(value)}</strong></article>`;
 }
 
-function pendingAttendanceSessions() {
-  const now = Date.now();
-  return state.data.sessions.filter(item => item.status === "scheduled" && new Date(item.startsAt).getTime() <= now && item.registerStatus !== "submitted");
-}
-
 function renderDashboard() {
   const {summary, sessions, assignments, notices} = state.data;
   $("#dashboard-metrics").innerHTML = [
     metric("Classes today", String(summary.todayClasses)),
-    metric("Attendance due", String(summary.attendanceActions), summary.attendanceActions > 0),
     metric("Open assignments", String(summary.openAssignments)),
     metric("Active batches", String(summary.activeBatches))
   ].join("");
 
   const next = sessions.find(item => item.status === "scheduled" && new Date(item.endsAt).getTime() >= Date.now());
   $("#next-class").innerHTML = next ? classCard(next) : empty("calendar", "No upcoming class", "Your next scheduled class will appear here.");
-  $("#dashboard-attendance").innerHTML = pendingAttendanceSessions().slice(0, 3).map(item => compactSession(item)).join("")
-    || empty("check", "Attendance is up to date");
   $("#dashboard-assignments").innerHTML = assignments.slice(0, 3).map(item => `
     <div class="compact-row">
       <span class="row-icon">${icon("book")}</span>
@@ -321,7 +301,6 @@ function renderDashboard() {
 }
 
 function classCard(item) {
-  const canMark = item.registerStatus !== "submitted" && item.studentCount > 0 && new Date(item.startsAt).getTime() <= Date.now();
   return `
     <article class="class-card">
       <div class="class-time"><strong>${timeText(item.startsAt)}</strong><span>${dateLong(item.startsAt)}</span></div>
@@ -331,68 +310,10 @@ function classCard(item) {
         <footer>
           <span class="tag">${esc(item.subjectCode)}</span>
           <span class="tag">${item.studentCount} students</span>
-          ${canMark ? `<button class="tag attendance-launch" type="button" data-open-attendance="${esc(item.id)}">Mark attendance</button>` : ""}
         </footer>
       </div>
     </article>
   `;
-}
-
-function compactSession(item) {
-  return `
-    <button class="compact-row" type="button" data-open-attendance="${esc(item.id)}">
-      <span class="row-icon">${icon("check")}</span>
-      <span><strong>${esc(item.subject)} · ${esc(item.batch)}</strong><small>${dateLong(item.startsAt)} · ${timeText(item.startsAt)}</small></span>
-      <time>${item.markedCount}/${item.studentCount}</time>
-    </button>
-  `;
-}
-
-function sessionCard(item) {
-  const submitted = item.registerStatus === "submitted";
-  const upcoming = new Date(item.startsAt).getTime() > Date.now();
-  const actionText = submitted ? "View register" : upcoming ? "Open roster" : item.registerStatus === "draft" ? "Continue" : "Mark attendance";
-  const actionClass = submitted || upcoming ? "secondary" : "";
-  return `
-    <article class="session-card">
-      <div class="session-date"><strong>${dateText(item.startsAt).split(" ")[0]}</strong><small>${dateText(item.startsAt).split(" ")[1]}</small></div>
-      <div>
-        <h3>${esc(item.subject)} · ${esc(item.batch)}</h3>
-        <p>${timeText(item.startsAt)}–${timeText(item.endsAt)} · ${esc(item.room)}</p>
-        <div class="session-meta">
-          <span class="tag">${item.studentCount} students</span>
-          <span class="tag">${submitted ? "Submitted" : item.registerStatus === "draft" ? `${item.markedCount} marked` : "Not started"}</span>
-        </div>
-      </div>
-      <button class="session-action ${actionClass}" type="button" data-open-attendance="${esc(item.id)}" ${item.studentCount ? "" : "disabled"}>${actionText}</button>
-    </article>
-  `;
-}
-
-function renderAttendance() {
-  const now = Date.now();
-  const filter = state.attendanceFilter;
-  const sessions = state.data.sessions.filter(item => item.status === "scheduled");
-  const actionCount = sessions.filter(item => new Date(item.startsAt).getTime() <= now && item.registerStatus !== "submitted").length;
-  const upcomingCount = sessions.filter(item => new Date(item.startsAt).getTime() > now).length;
-  const submittedCount = sessions.filter(item => item.registerStatus === "submitted").length;
-  $("#attendance-metrics").innerHTML = [
-    metric("Needs action", String(actionCount), actionCount > 0),
-    metric("Upcoming", String(upcomingCount)),
-    metric("Submitted", String(submittedCount))
-  ].join("");
-  const rows = sessions.filter(item => {
-    if (filter === "action") return new Date(item.startsAt).getTime() <= now && item.registerStatus !== "submitted";
-    if (filter === "upcoming") return new Date(item.startsAt).getTime() > now;
-    if (filter === "submitted") return item.registerStatus === "submitted";
-    return true;
-  }).sort((a, b) => {
-    if (filter === "action") return new Date(b.startsAt) - new Date(a.startsAt);
-    return new Date(a.startsAt) - new Date(b.startsAt);
-  });
-  $("#attendance-session-list").innerHTML = rows.length
-    ? rows.map(sessionCard).join("")
-    : empty("check", filter === "action" ? "Nothing needs attention" : "No classes in this view");
 }
 
 function assignmentState(item) {
@@ -514,7 +435,7 @@ function renderSchedule() {
         <p>${esc(item.batch)} · ${esc(item.program)}</p>
         <footer><span class="tag">${esc(item.room)}</span><span class="tag">${item.studentCount} students</span></footer>
       </div>
-      <span class="timeline-state state-${esc(item.registerStatus)}">${esc(titleCase(item.registerStatus))}</span>
+      <span class="timeline-state state-${esc(item.status)}">${esc(titleCase(item.status))}</span>
     </article>
   `).join("") : empty("calendar", rows.length ? "No classes on this day" : "Schedule not published");
 }
@@ -810,77 +731,6 @@ async function saveExaminationResults(publish = false) {
   }
 }
 
-async function openAttendance(sessionId, trigger) {
-  const session = state.data.sessions.find(item => item.id === sessionId);
-  if (!session) return;
-  state.activeSession = session;
-  $("#attendance-error").classList.add("hidden");
-  $("#attendance-modal-title").textContent = `${session.subject} · ${session.batch}`;
-  $("#attendance-modal-meta").textContent = `${dateLong(session.startsAt)} · ${timeText(session.startsAt)} · ${session.room}`;
-  $("#roster-list").innerHTML = empty("users", "Loading roster");
-  openModal("attendance-modal", trigger);
-  try {
-    const result = await api(`/api/attendance/sessions/${encodeURIComponent(sessionId)}`);
-    state.roster = result.entries.map(item => ({...item}));
-    state.rosterLocked = result.session.registerStatus === "submitted";
-    state.rosterUpcoming = new Date(result.session.startsAt).getTime() > Date.now();
-    renderRoster();
-  } catch (error) {
-    $("#roster-list").innerHTML = empty("users", "Unable to load roster", error.message);
-  }
-}
-
-function renderRoster() {
-  const locked = state.rosterLocked;
-  const statuses = ["present", "late", "absent", "excused"];
-  $("#attendance-progress").textContent = `${state.roster.length} ${state.roster.length === 1 ? "student" : "students"}`;
-  $("#mark-all-present").disabled = locked;
-  $("#save-attendance").classList.toggle("hidden", locked);
-  $("#submit-attendance").classList.toggle("hidden", locked);
-  $("#submit-attendance").disabled = state.rosterUpcoming;
-  $("#attendance-window-note").textContent = locked ? "This register is submitted and read-only." : state.rosterUpcoming ? "You can prepare a draft now. Submission opens when the class begins." : "Review every student before submitting.";
-  $("#attendance-window-note").classList.toggle("warning", state.rosterUpcoming);
-  $("#roster-list").innerHTML = state.roster.length ? state.roster.map(item => `
-    <div class="roster-row" data-student-id="${esc(item.studentId)}">
-      <span class="roster-student"><strong>${esc(item.fullName)}</strong><small>${esc(item.admissionNumber)}</small></span>
-      ${statuses.map(status => `<button class="status-option ${item.status === status ? "active" : ""}" type="button" data-status="${status}" aria-pressed="${item.status === status}" ${locked ? "disabled" : ""}>${status[0].toUpperCase() + status.slice(1)}</button>`).join("")}
-    </div>
-  `).join("") : empty("users", "No active students in this batch");
-}
-
-function attendancePayload() {
-  return {
-    entries:state.roster.map(item => ({
-      studentId:item.studentId,
-      status:item.status,
-      reason:item.reason || ""
-    }))
-  };
-}
-
-async function saveAttendance(submit = false) {
-  if (!state.activeSession || !state.roster.length) return;
-  const button = submit ? $("#submit-attendance") : $("#save-attendance");
-  const idle = button.textContent;
-  button.disabled = true;
-  button.textContent = submit ? "Submitting…" : "Saving…";
-  $("#attendance-error").classList.add("hidden");
-  try {
-    await api(`/api/attendance/sessions/${encodeURIComponent(state.activeSession.id)}${submit ? "/submit" : ""}`, {
-      method:submit ? "POST" : "PUT",
-      body:JSON.stringify(attendancePayload())
-    });
-    closeModal("attendance-modal");
-    await refreshPortal(submit ? "Attendance submitted." : "Attendance draft saved.");
-  } catch (error) {
-    $("#attendance-error").textContent = error.message;
-    $("#attendance-error").classList.remove("hidden");
-  } finally {
-    button.disabled = false;
-    button.textContent = idle;
-  }
-}
-
 function togglePassword() {
   const field = $("#login-password");
   const button = $("#password-toggle");
@@ -913,21 +763,9 @@ function bindEvents() {
     marks.disabled = !graded;
     if (!graded) marks.value = "";
   });
-  $("#attendance-form").addEventListener("submit", event => {
-    event.preventDefault();
-    saveAttendance(true);
-  });
-  $("#save-attendance").addEventListener("click", () => saveAttendance(false));
-  $("#mark-all-present").addEventListener("click", () => {
-    state.roster.forEach(item => { item.status = "present"; item.reason = ""; });
-    renderRoster();
-  });
   document.addEventListener("click", event => {
     const view = event.target.closest("[data-view]")?.dataset.view || event.target.closest("[data-go]")?.dataset.go;
     if (view) showView(view);
-
-    const attendanceTrigger = event.target.closest("[data-open-attendance]");
-    if (attendanceTrigger) openAttendance(attendanceTrigger.dataset.openAttendance, attendanceTrigger);
 
     const assignmentTrigger = event.target.closest("[data-open-assignment]");
     if (assignmentTrigger) openAssignmentModal(assignmentTrigger);
@@ -943,17 +781,6 @@ function bindEvents() {
 
     const closeTrigger = event.target.closest("[data-close-modal]");
     if (closeTrigger) closeModal(closeTrigger.dataset.closeModal);
-
-    const attendanceFilter = event.target.closest("[data-attendance-filter]")?.dataset.attendanceFilter;
-    if (attendanceFilter) {
-      state.attendanceFilter = attendanceFilter;
-      $$("[data-attendance-filter]").forEach(node => {
-        const active = node.dataset.attendanceFilter === attendanceFilter;
-        node.classList.toggle("active", active);
-        node.setAttribute("aria-pressed", String(active));
-      });
-      renderAttendance();
-    }
 
     const assignmentFilter = event.target.closest("[data-assignment-filter]")?.dataset.assignmentFilter;
     if (assignmentFilter) {
@@ -981,14 +808,6 @@ function bindEvents() {
     if (scheduleDate) {
       state.scheduleDate = scheduleDate;
       renderSchedule();
-    }
-
-    const statusButton = event.target.closest(".status-option");
-    if (statusButton && !statusButton.disabled) {
-      const row = statusButton.closest("[data-student-id]");
-      const student = state.roster.find(item => item.studentId === row.dataset.studentId);
-      if (student) student.status = statusButton.dataset.status;
-      renderRoster();
     }
 
     const backdrop = event.target.classList.contains("modal-backdrop") ? event.target : null;

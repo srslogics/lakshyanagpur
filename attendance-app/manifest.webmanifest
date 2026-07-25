@@ -1,0 +1,15 @@
+{
+  "name": "Lakshya Attendance Desk",
+  "short_name": "Attendance",
+  "description": "Class attendance operations for Lakshya Institute.",
+  "start_url": "/attendance-app/",
+  "scope": "/attendance-app/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f4ec",
+  "theme_color": "#171a4b",
+  "icons": [
+    {"src": "../pwa-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "../pwa-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}

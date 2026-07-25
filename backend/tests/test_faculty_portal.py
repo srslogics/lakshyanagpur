@@ -4,7 +4,6 @@ from app.models import (
     Assignment,
     AssignmentRecipient,
     AuditLog,
-    AttendanceRegister,
     Batch,
     ClassSession,
     Enrollment,
@@ -89,10 +88,6 @@ def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_hea
         ),
     ])
     database.flush()
-    database.add(AttendanceRegister(
-        class_session_id=own_session.id,
-        status="draft",
-    ))
     assignment = Assignment(
         batch_id=batch.id,
         subject_id=physics.id,
@@ -133,10 +128,9 @@ def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_hea
     assert body["profile"]["fullName"] == "Dr Meera Rao"
     assert [row["id"] for row in body["sessions"]] == [own_session.id]
     assert body["sessions"][0]["studentCount"] == 1
-    assert body["sessions"][0]["registerStatus"] == "draft"
+    assert "registerStatus" not in body["sessions"][0]
     assert body["summary"] == {
         "todayClasses": 1,
-        "attendanceActions": 1,
         "openAssignments": 1,
         "activeBatches": 1,
     }

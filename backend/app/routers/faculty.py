@@ -8,8 +8,6 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import (
     Assignment,
-    AttendanceEntry,
-    AttendanceRegister,
     Batch,
     ClassSession,
     Enrollment,
@@ -34,31 +32,16 @@ def bootstrap(
     db: Session = Depends(get_db),
     faculty_user: User = Depends(require_roles("faculty")),
 ):
-    attendance_counts = (
-        db.query(
-            AttendanceEntry.register_id.label("register_id"),
-            func.count(AttendanceEntry.student_id).label("marked_count"),
-        )
-        .group_by(AttendanceEntry.register_id)
-        .subquery()
-    )
     session_rows = (
         db.query(
             ClassSession,
             Batch,
             Subject,
             Room,
-            AttendanceRegister,
-            func.coalesce(attendance_counts.c.marked_count, 0),
         )
         .join(Batch, Batch.id == ClassSession.batch_id)
         .join(Subject, Subject.id == ClassSession.subject_id)
         .join(Room, Room.id == ClassSession.room_id)
-        .outerjoin(AttendanceRegister, AttendanceRegister.class_session_id == ClassSession.id)
-        .outerjoin(
-            attendance_counts,
-            attendance_counts.c.register_id == AttendanceRegister.id,
-        )
         .filter(ClassSession.faculty_id == faculty_user.id)
         .order_by(ClassSession.starts_at)
         .all()
@@ -80,7 +63,7 @@ def bootstrap(
         for _, batch, _ in teaching_assignment_rows
     } | {
         batch.name
-        for _, batch, _, _, _, _ in session_rows
+        for _, batch, _, _ in session_rows
     }
     student_count_rows = (
         db.query(
@@ -113,7 +96,7 @@ def bootstrap(
     }
     now = datetime.now(timezone.utc)
     today = now.astimezone(INDIA_TZ).date()
-    for session, batch, subject, room, register, marked_count in session_rows:
+    for session, batch, subject, room in session_rows:
         sessions.append({
             "id": session.id,
             "batchId": batch.id,
@@ -127,9 +110,7 @@ def bootstrap(
             "endsAt": session.ends_at,
             "status": session.status,
             "notes": session.notes,
-            "registerStatus": register.status if register else "not_started",
             "studentCount": student_counts.get((batch.name, batch.program), 0),
-            "markedCount": marked_count,
         })
     assignment_rows = (
         db.query(Assignment, Batch, Subject)
@@ -187,14 +168,6 @@ def bootstrap(
             and _aware(row["startsAt"]).astimezone(INDIA_TZ).date() == today
         )
     ]
-    attendance_actions = [
-        row for row in sessions
-        if (
-            row["status"] == "scheduled"
-            and _aware(row["startsAt"]) <= now
-            and row["registerStatus"] != "submitted"
-        )
-    ]
     open_assignments = [
         row for row in assignments
         if _aware(row["dueAt"]) >= now and row["status"] == "published"
@@ -209,7 +182,6 @@ def bootstrap(
         },
         "summary": {
             "todayClasses": len(today_sessions),
-            "attendanceActions": len(attendance_actions),
             "openAssignments": len(open_assignments),
             "activeBatches": len({pair["batchId"] for pair in teaching_pairs.values()}),
         },

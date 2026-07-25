@@ -108,7 +108,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .hero-action>span:last-child{display:grid;font-size:.72rem;color:rgba(255,255,255,.6)}
 .hero-action strong{margin-top:2px;color:#fff;font-size:.92rem}
 
-.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px}
+.metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px}
 .metric-card{min-height:118px;display:flex;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:var(--shadow-sm)}
 .metric-card span{color:var(--muted);font-size:.78rem;font-weight:700}
 .metric-card strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.75rem;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
@@ -137,7 +137,6 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .class-card footer{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
 .tag{display:inline-flex;align-items:center;min-height:28px;padding:0 10px;border:1px solid currentColor;border-radius:999px;font-size:.68rem;font-weight:800}
 .class-card .tag{color:rgba(255,255,255,.72)}
-.class-card .attendance-launch{min-height:42px;padding:0 14px;border:0;color:var(--navy-950);background:var(--yellow)}
 .notice-card,.notice-preview{padding:16px;border:1px solid rgba(138,112,0,.18);border-radius:16px;background:rgba(255,255,255,.58)}
 .notice-card h3,.notice-preview h3{margin:0;font-size:.94rem}
 .notice-card p,.notice-preview p{margin:7px 0 0;color:var(--muted);font-size:.82rem;line-height:1.55}
@@ -248,8 +247,6 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .service-card strong{font-size:.86rem}
 .service-card small{margin-top:5px;color:var(--muted);font-size:.72rem;line-height:1.45}
 .service-arrow{width:20px;height:20px;align-self:center;color:var(--muted)}
-.attendance-window-note{margin:0;padding:10px 24px;border-bottom:1px solid var(--line);color:var(--muted);background:var(--surface-soft);font-size:.73rem}
-.attendance-window-note.warning{color:var(--warning);background:var(--warning-soft)}
 .empty{min-height:142px;display:grid;place-items:center;padding:22px;border:1px dashed var(--line);border-radius:17px;color:var(--muted);text-align:center}
 .empty>div{display:grid;justify-items:center}
 .empty span{width:42px;height:42px;display:grid;place-items:center;margin-bottom:9px;border-radius:12px;color:var(--navy-800);background:var(--navy-50)}
@@ -272,7 +269,6 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .modal-card form>footer{display:flex;justify-content:flex-end;gap:10px;padding-top:6px}
 .secondary-button{min-height:48px;padding:0 18px;border:1px solid var(--line);border-radius:13px;color:var(--ink);background:var(--surface);font-weight:800}
-.attendance-modal-card{width:min(840px,100%)}
 .examination-results-card{width:min(920px,100%)}
 .examination-result-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:14px 24px;border-bottom:1px solid var(--line);background:var(--surface-soft)}
 .examination-result-summary>div{min-width:0;padding:5px 14px;border-right:1px solid var(--line)}
@@ -295,19 +291,6 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .exam-result-row{min-height:66px;display:grid;grid-template-columns:minmax(180px,1fr) 100px 92px minmax(120px,.8fr);align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
 .exam-result-row>strong{font-size:.76rem;font-variant-numeric:tabular-nums}
 .exam-result-row>small{overflow:hidden;color:var(--muted);font-size:.66rem;text-overflow:ellipsis;white-space:nowrap}
-.attendance-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 24px;border-bottom:1px solid var(--line);color:var(--muted);font-size:.76rem;font-weight:800}
-.attendance-toolbar button{min-height:40px;padding:0 10px;border:0;color:var(--navy-800);background:transparent;font-weight:800}
-.attendance-modal-card>form{padding-top:14px}
-.roster-list{display:grid;gap:8px}
-.roster-row{display:grid;grid-template-columns:minmax(150px,1fr) repeat(4,76px);align-items:center;gap:6px;padding:10px;border:1px solid var(--line);border-radius:14px}
-.roster-student{min-width:0;display:grid}
-.roster-student strong{overflow:hidden;font-size:.82rem;text-overflow:ellipsis;white-space:nowrap}
-.roster-student small{color:var(--muted);font-size:.67rem}
-.status-option{min-height:38px;padding:0 6px;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:var(--surface);font-size:.67rem;font-weight:800}
-.status-option.active[data-status="present"]{color:var(--success);border-color:var(--success);background:var(--success-soft)}
-.status-option.active[data-status="late"]{color:var(--warning);border-color:var(--warning);background:var(--warning-soft)}
-.status-option.active[data-status="absent"]{color:var(--red);border-color:var(--red);background:var(--red-soft)}
-.status-option.active[data-status="excused"]{color:var(--navy-800);border-color:var(--navy-800);background:var(--navy-50)}
 .toast-region{position:fixed;z-index:70;right:20px;bottom:20px;display:grid;gap:8px;pointer-events:none}
 .toast{max-width:340px;padding:13px 16px;border-radius:13px;color:#fff;background:var(--navy-900);box-shadow:var(--shadow-md);font-size:.82rem;font-weight:700;animation:toast-in .2s var(--ease)}
 @keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -392,11 +375,6 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .exam-result-row{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px}
   .exam-result-row>span:nth-child(3){justify-self:end}
   .exam-result-row>small{grid-column:1/-1}
-  .attendance-toolbar{padding:10px 18px}
-  .roster-row{grid-template-columns:minmax(0,1fr) repeat(2,72px)}
-  .status-option:nth-of-type(3),.status-option:nth-of-type(4){grid-row:2}
-  .status-option:nth-of-type(3){grid-column:2}
-  .status-option:nth-of-type(4){grid-column:3}
   .modal-card form>footer{position:sticky;bottom:-18px;margin:0 -18px -18px;padding:12px 18px calc(12px + var(--safe-bottom));border-top:1px solid var(--line);background:var(--surface)}
 }
 
