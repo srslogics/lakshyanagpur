@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -24,6 +24,21 @@ STUDENT_APP_DIR = FRONTEND_DIR / "student-app"
 PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
 FACULTY_APP_DIR = FRONTEND_DIR / "faculty-app"
 ATTENDANCE_APP_DIR = FRONTEND_DIR / "attendance-app"
+PUBLIC_ROOT_FILES = frozenset({
+    "app.js",
+    "apple-touch-icon.png",
+    "auth-shared.css",
+    "index.html",
+    "lakshya-logo-576.png",
+    "lakshya-logo.png",
+    "manifest.webmanifest",
+    "portal-shared.css",
+    "pwa-icon-192.png",
+    "pwa-icon-512.png",
+    "share-card.png",
+    "styles.css",
+    "sw.js",
+})
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.include_router(auth.router)
@@ -107,5 +122,6 @@ def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")
 
 @app.get("/{file_path:path}", include_in_schema=False)
 def frontend_routes(file_path: str):
-    requested = FRONTEND_DIR / file_path
-    return FileResponse(requested if requested.is_file() else FRONTEND_DIR / "index.html")
+    if file_path not in PUBLIC_ROOT_FILES:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(FRONTEND_DIR / file_path)

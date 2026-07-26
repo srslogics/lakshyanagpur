@@ -59,6 +59,34 @@ def test_frontend_shell_is_served(client):
     assert client.get("/student-app/sw.js").headers["cache-control"] == "no-cache"
 
 
+def test_unknown_and_sensitive_frontend_paths_return_not_found(client):
+    for path in (
+        "/this-route-does-not-exist",
+        "/backend/app/main.py",
+        "/render.yaml",
+        "/README.md",
+        "/.git/config",
+    ):
+        response = client.get(path)
+        assert response.status_code == 404
+
+
+def test_allowlisted_root_assets_remain_public(client):
+    for path in (
+        "/index.html",
+        "/app.js",
+        "/styles.css",
+        "/auth-shared.css",
+        "/portal-shared.css",
+        "/manifest.webmanifest",
+        "/sw.js",
+        "/share-card.png",
+        "/lakshya-logo-576.png",
+        "/pwa-icon-192.png",
+    ):
+        assert client.get(path).status_code == 200
+
+
 def test_every_application_uses_a_mobile_login_field(client):
     for path in ("/", "/student-app/", "/parent-app/", "/faculty-app/", "/attendance-app/"):
         response = client.get(path)
