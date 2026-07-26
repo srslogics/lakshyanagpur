@@ -139,6 +139,33 @@ def attendance_rows(db: Session, student: Student):
         "reason": entry.reason,
         "source": "class_register",
     } for entry, _, session, subject in rows]
+    manual = (
+        db.query(AttendanceEntry, AttendanceRegister)
+        .join(
+            AttendanceRegister,
+            AttendanceRegister.id == AttendanceEntry.register_id,
+        )
+        .filter(
+            AttendanceEntry.student_id == student.id,
+            AttendanceRegister.status == "submitted",
+            AttendanceRegister.register_kind == "manual",
+        )
+        .order_by(AttendanceRegister.attendance_date.desc())
+        .all()
+    )
+    manual_rows = [{
+        "sessionId": register.id,
+        "subject": register.subject_name,
+        "startsAt": register.attendance_date,
+        "dateLabel": (
+            register.attendance_date.isoformat()
+            if register.attendance_date else None
+        ),
+        "status": entry.status,
+        "rawStatus": None,
+        "reason": entry.reason,
+        "source": "manual_register",
+    } for entry, register in manual]
     daily = (
         db.query(DailyAttendanceEntry)
         .filter_by(student_id=student.id)
@@ -158,7 +185,7 @@ def attendance_rows(db: Session, student: Student):
         "reason": "",
         "source": "imported_daily",
     } for entry in daily]
-    return class_rows + daily_rows
+    return class_rows + manual_rows + daily_rows
 
 
 def examination_rows(

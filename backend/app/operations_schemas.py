@@ -237,6 +237,13 @@ class AttendanceSave(BaseModel):
     entries: list[AttendanceMark] = Field(min_length=1)
 
 
+class ManualAttendanceRegisterOpen(BaseModel):
+    date: date
+    batch: str = Field(min_length=1, max_length=120)
+    stream: str = Field(min_length=1, max_length=120)
+    subject: str = Field(min_length=1, max_length=120)
+
+
 class AttendanceCorrection(BaseModel):
     status: AttendanceStatus
     reason: str = Field(min_length=3, max_length=1000)

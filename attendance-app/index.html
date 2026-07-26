@@ -20,7 +20,7 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
   <link rel="stylesheet" href="../auth-shared.css?v=5">
-  <link rel="stylesheet" href="./styles.css?v=1">
+  <link rel="stylesheet" href="./styles.css?v=2">
 </head>
 <body>
   <a class="skip-link" href="#attendance-main">Skip to attendance</a>
@@ -71,7 +71,7 @@
         <div>
           <p class="eyebrow">DAILY OPERATIONS</p>
           <h1 id="page-heading">Class attendance</h1>
-          <p>Open each scheduled class, verify the roster, and submit the final register.</p>
+          <p>Select the student group, course and subject, then mark the complete roster.</p>
         </div>
         <div class="date-control" aria-label="Attendance date">
           <button id="previous-day" type="button" aria-label="Previous day"><span data-icon="chevron-left"></span></button>
@@ -82,6 +82,20 @@
       </section>
 
       <section class="metric-grid" id="metric-grid" aria-label="Daily attendance summary"></section>
+
+      <section class="quick-register" aria-labelledby="quick-register-heading">
+        <div class="quick-register-head">
+          <div><p class="eyebrow">NEW REGISTER</p><h2 id="quick-register-heading">Select student roster</h2></div>
+          <span id="catalog-student-count">0 students</span>
+        </div>
+        <form class="quick-register-form" id="manual-register-form">
+          <label for="manual-batch"><span>Student group</span><select id="manual-batch" name="batch" required><option value="">Select group</option></select></label>
+          <label for="manual-stream"><span>Course</span><select id="manual-stream" name="stream" required disabled><option value="">Select course</option></select></label>
+          <label for="manual-subject"><span>Subject</span><select id="manual-subject" name="subject" required disabled><option value="">Select subject</option></select></label>
+          <button class="primary-button" id="open-manual-register" type="submit" disabled>Load roster</button>
+        </form>
+        <div class="quick-register-status" id="manual-roster-summary" role="status" aria-live="polite">Select a group, course and subject.</div>
+      </section>
 
       <section class="workspace" aria-labelledby="registers-heading">
         <div class="workspace-head">
@@ -133,6 +147,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=2" defer></script>
+  <script src="./app.js?v=3" defer></script>
 </body>
 </html>

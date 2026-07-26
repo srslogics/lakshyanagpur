@@ -368,8 +368,22 @@ class ClassSession(TimestampMixin, Base):
 
 class AttendanceRegister(TimestampMixin, Base):
     __tablename__ = "attendance_registers"
+    __table_args__ = (
+        UniqueConstraint(
+            "attendance_date",
+            "batch_name",
+            "stream_name",
+            "subject_name",
+            name="uq_attendance_register_manual_scope",
+        ),
+    )
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("reg"))
-    class_session_id: Mapped[str] = mapped_column(ForeignKey("class_sessions.id", ondelete="CASCADE"), unique=True, index=True)
+    class_session_id: Mapped[str | None] = mapped_column(ForeignKey("class_sessions.id", ondelete="CASCADE"), unique=True, index=True)
+    register_kind: Mapped[str] = mapped_column(String(24), default="scheduled", index=True)
+    attendance_date: Mapped[date | None] = mapped_column(Date, index=True)
+    batch_name: Mapped[str | None] = mapped_column(String(120), index=True)
+    stream_name: Mapped[str | None] = mapped_column(String(120), index=True)
+    subject_name: Mapped[str | None] = mapped_column(String(120), index=True)
     status: Mapped[str] = mapped_column(String(24), default="draft", index=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     submitted_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))

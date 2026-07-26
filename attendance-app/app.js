@@ -211,7 +211,82 @@ function renderDesk() {
     metric("Upcoming", String(summary.upcoming)),
     metric("Submitted", String(summary.submitted))
   ].join("");
+  renderManualPicker();
   renderSessions();
+}
+
+function optionMarkup(rows, placeholder) {
+  return `<option value="">${esc(placeholder)}</option>${rows.map(item => `<option value="${esc(item.name)}">${esc(item.name)} · ${item.studentCount}</option>`).join("")}`;
+}
+
+function manualSelection() {
+  const group = (state.data?.catalog?.groups || []).find(item => item.name === $("#manual-batch").value);
+  const stream = group?.streams.find(item => item.name === $("#manual-stream").value);
+  const subject = stream?.subjects.find(item => item.name === $("#manual-subject").value);
+  return {group, stream, subject};
+}
+
+function updateManualSummary() {
+  const {group, stream, subject} = manualSelection();
+  const summary = $("#manual-roster-summary");
+  const button = $("#open-manual-register");
+  summary.className = "quick-register-status";
+  if (!(state.data?.catalog?.groups || []).length) {
+    summary.textContent = "Academic student data is not loaded.";
+    summary.classList.add("error");
+    button.disabled = true;
+    button.textContent = "Load roster";
+    return;
+  }
+  if (subject) {
+    summary.textContent = `${subject.studentCount} students · ${group.name} · ${stream.name} · ${subject.name}`;
+    summary.classList.add("ready");
+    button.disabled = false;
+    button.textContent = `Load ${subject.studentCount} students`;
+    return;
+  }
+  summary.textContent = stream
+    ? "Select a subject."
+    : group
+      ? "Select a course and subject."
+      : "Select a group, course and subject.";
+  button.disabled = true;
+  button.textContent = "Load roster";
+}
+
+function populateManualSubjects(preferred = "") {
+  const {stream} = manualSelection();
+  const select = $("#manual-subject");
+  const rows = stream?.subjects || [];
+  select.innerHTML = optionMarkup(rows, "Select subject");
+  select.disabled = !rows.length;
+  if (rows.some(item => item.name === preferred)) select.value = preferred;
+  updateManualSummary();
+}
+
+function populateManualStreams(preferredStream = "", preferredSubject = "") {
+  const group = (state.data?.catalog?.groups || []).find(item => item.name === $("#manual-batch").value);
+  const select = $("#manual-stream");
+  const rows = group?.streams || [];
+  select.innerHTML = optionMarkup(rows, "Select course");
+  select.disabled = !rows.length;
+  if (rows.some(item => item.name === preferredStream)) select.value = preferredStream;
+  populateManualSubjects(preferredSubject);
+}
+
+function renderManualPicker() {
+  const previous = {
+    batch: $("#manual-batch").value,
+    stream: $("#manual-stream").value,
+    subject: $("#manual-subject").value
+  };
+  const catalog = state.data?.catalog || {studentCount:0, groups:[]};
+  $("#catalog-student-count").textContent = `${catalog.studentCount || 0} students`;
+  $("#manual-batch").innerHTML = optionMarkup(catalog.groups || [], "Select group");
+  if ((catalog.groups || []).some(item => item.name === previous.batch)) {
+    $("#manual-batch").value = previous.batch;
+  }
+  populateManualStreams(previous.stream, previous.subject);
 }
 
 function renderSessions() {
@@ -267,13 +342,60 @@ async function openRegister(sessionId, trigger) {
   $("#close-register").focus();
   try {
     const result = await api(`/api/attendance/sessions/${encodeURIComponent(sessionId)}`);
-    state.activeSession = result.session;
-    state.roster = result.entries.map(item => ({...item}));
-    state.locked = result.session.registerStatus === "submitted";
-    state.upcoming = new Date(result.session.startsAt).getTime() > Date.now();
-    renderRoster();
+    applyRegister(result);
   } catch (error) {
     $("#roster-list").innerHTML = empty("Unable to load roster", error.message);
+  }
+}
+
+function applyRegister(result) {
+  state.activeSession = result.session;
+  state.roster = result.entries.map(item => ({...item}));
+  state.locked = result.session.registerStatus === "submitted";
+  state.upcoming = result.session.registerKind !== "manual"
+    && new Date(result.session.startsAt).getTime() > Date.now();
+  $("#register-title").textContent = `${result.session.subject} · ${result.session.batch}`;
+  $("#register-meta").textContent = result.session.registerKind === "manual"
+    ? `${dateLong(result.session.startsAt)} · ${result.session.stream} · selected roster`
+    : `${dateLong(result.session.startsAt)} · ${timeText(result.session.startsAt)}–${timeText(result.session.endsAt)} · ${result.session.faculty} · ${result.session.room}`;
+  renderRoster();
+}
+
+async function openManualRegister(event) {
+  event.preventDefault();
+  if (!event.currentTarget.reportValidity()) return;
+  const {group, stream, subject} = manualSelection();
+  if (!group || !stream || !subject) return updateManualSummary();
+  const button = $("#open-manual-register");
+  const idle = button.textContent;
+  button.disabled = true;
+  button.textContent = "Loading roster…";
+  $("#manual-roster-summary").classList.remove("error");
+  try {
+    const result = await api("/api/attendance/manual-registers", {
+      method:"POST",
+      body:JSON.stringify({
+        date:state.selectedDate,
+        batch:group.name,
+        stream:stream.name,
+        subject:subject.name
+      })
+    });
+    state.lastFocus = button;
+    state.rosterSearch = "";
+    $("#roster-search").value = "";
+    $("#attendance-error").classList.add("hidden");
+    $("#register-dialog").classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    applyRegister(result);
+    $("#close-register").focus();
+  } catch (error) {
+    const summary = $("#manual-roster-summary");
+    summary.textContent = error.message;
+    summary.className = "quick-register-status error";
+  } finally {
+    button.disabled = false;
+    button.textContent = idle;
   }
 }
 
@@ -348,7 +470,10 @@ async function saveAttendance(submit = false) {
   button.textContent = submit ? "Submitting…" : "Saving…";
   $("#attendance-error").classList.add("hidden");
   try {
-    await api(`/api/attendance/sessions/${encodeURIComponent(state.activeSession.id)}${submit ? "/submit" : ""}`, {
+    const resource = state.activeSession.registerKind === "manual"
+      ? "manual-registers"
+      : "sessions";
+    await api(`/api/attendance/${resource}/${encodeURIComponent(state.activeSession.id)}${submit ? "/submit" : ""}`, {
       method:submit ? "POST" : "PUT",
       body:JSON.stringify(attendancePayload())
     });
@@ -423,6 +548,10 @@ function bindEvents() {
   $("#next-day").addEventListener("click", () => setDate(shiftDate(state.selectedDate, 1)));
   $("#today-button").addEventListener("click", () => setDate(localDateKey()));
   $("#working-date").addEventListener("change", event => { if (event.target.value) setDate(event.target.value); });
+  $("#manual-register-form").addEventListener("submit", openManualRegister);
+  $("#manual-batch").addEventListener("change", () => populateManualStreams());
+  $("#manual-stream").addEventListener("change", () => populateManualSubjects());
+  $("#manual-subject").addEventListener("change", updateManualSummary);
   $("#class-search").addEventListener("input", event => { state.search = event.target.value; renderSessions(); });
   $("#roster-search").addEventListener("input", event => { syncVisibleReasons(); state.rosterSearch = event.target.value; renderRoster(); });
   $("#close-register").addEventListener("click", closeRegister);

@@ -6,8 +6,24 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import AttendanceEntry, AttendanceRegister, Batch, ClassSession, Enrollment, Room, Student, Subject, User
-from ..operations_schemas import AttendanceCorrection, AttendanceSave
+from ..models import (
+    AttendanceEntry,
+    AttendanceRegister,
+    Batch,
+    ClassSession,
+    Enrollment,
+    Room,
+    Student,
+    StudentAcademicProfile,
+    StudentSubjectSelection,
+    Subject,
+    User,
+)
+from ..operations_schemas import (
+    AttendanceCorrection,
+    AttendanceSave,
+    ManualAttendanceRegisterOpen,
+)
 from ..security import require_roles
 from ..services import audit
 
@@ -33,6 +49,122 @@ def _get_session(db: Session, session_id: str, user: User):
 
 def _eligible_students(db: Session, batch: Batch):
     return db.query(Student).join(Enrollment, Enrollment.student_id == Student.id).filter(Enrollment.is_active.is_(True), Enrollment.batch == batch.name).order_by(Student.full_name).all()
+
+
+def _eligible_manual_students(
+    db: Session,
+    batch_name: str,
+    stream_name: str,
+    subject_name: str,
+):
+    return (
+        db.query(Student)
+        .join(Enrollment, Enrollment.student_id == Student.id)
+        .join(
+            StudentAcademicProfile,
+            StudentAcademicProfile.student_id == Student.id,
+        )
+        .join(
+            StudentSubjectSelection,
+            StudentSubjectSelection.student_id == Student.id,
+        )
+        .filter(
+            Student.status == "active",
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == batch_name,
+            StudentAcademicProfile.batch_name == batch_name,
+            StudentAcademicProfile.source_stream == stream_name,
+            StudentSubjectSelection.subject_name == subject_name,
+        )
+        .distinct()
+        .order_by(Student.full_name)
+        .all()
+    )
+
+
+def _attendance_catalog(db: Session):
+    rows = (
+        db.query(
+            Student.id,
+            StudentAcademicProfile.batch_name,
+            StudentAcademicProfile.source_stream,
+            StudentSubjectSelection.subject_name,
+        )
+        .join(
+            StudentAcademicProfile,
+            StudentAcademicProfile.student_id == Student.id,
+        )
+        .join(Enrollment, Enrollment.student_id == Student.id)
+        .join(
+            StudentSubjectSelection,
+            StudentSubjectSelection.student_id == Student.id,
+        )
+        .filter(
+            Student.status == "active",
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == StudentAcademicProfile.batch_name,
+            StudentAcademicProfile.source_stream.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    group_students = {}
+    stream_students = {}
+    subject_students = {}
+    for student_id, batch_name, stream_name, subject_name in rows:
+        group_students.setdefault(batch_name, set()).add(student_id)
+        stream_students.setdefault(
+            (batch_name, stream_name),
+            set(),
+        ).add(student_id)
+        subject_students.setdefault(
+            (batch_name, stream_name, subject_name),
+            set(),
+        ).add(student_id)
+    batch_order = {"Essential": 0, "Tatva": 1}
+    stream_order = {"JEE": 0, "NEET": 1, "MHT-CET": 2, "Boards": 3}
+    groups = []
+    for batch_name, students in sorted(
+        group_students.items(),
+        key=lambda item: (batch_order.get(item[0], 99), item[0]),
+    ):
+        streams = []
+        for (batch, stream_name), stream_roster in sorted(
+            stream_students.items(),
+            key=lambda item: (
+                batch_order.get(item[0][0], 99),
+                stream_order.get(item[0][1], 99),
+                item[0][1],
+            ),
+        ):
+            if batch != batch_name:
+                continue
+            subjects = [
+                {"name": subject, "studentCount": len(subject_roster)}
+                for (
+                    subject_batch,
+                    subject_stream,
+                    subject,
+                ), subject_roster in sorted(
+                    subject_students.items(),
+                    key=lambda item: item[0][2],
+                )
+                if subject_batch == batch_name and subject_stream == stream_name
+            ]
+            streams.append({
+                "name": stream_name,
+                "studentCount": len(stream_roster),
+                "subjects": subjects,
+            })
+        groups.append({
+            "name": batch_name,
+            "studentCount": len(students),
+            "streams": streams,
+        })
+    return {
+        "studentCount": sum(len(students) for students in group_students.values()),
+        "groups": groups,
+    }
 
 
 def _session_summary(db: Session, row):
@@ -136,6 +268,301 @@ def attendance_portal_bootstrap(
             "submitted": len(submitted),
         },
         "sessions": sessions,
+        "catalog": _attendance_catalog(db),
+    }
+
+
+def _manual_register(db: Session, register_id: str):
+    register = (
+        db.query(AttendanceRegister)
+        .filter_by(id=register_id, register_kind="manual")
+        .first()
+    )
+    if not register:
+        raise HTTPException(404, "Attendance register not found")
+    return register
+
+
+def _manual_register_summary(
+    register: AttendanceRegister,
+    student_count: int,
+    marked_count: int,
+):
+    starts_at = datetime.combine(
+        register.attendance_date,
+        time.min,
+        tzinfo=INDIA_TZ,
+    ).astimezone(timezone.utc)
+    return {
+        "id": register.id,
+        "registerKind": "manual",
+        "batch": register.batch_name,
+        "stream": register.stream_name,
+        "subject": register.subject_name,
+        "faculty": "Attendance Desk",
+        "room": register.stream_name,
+        "startsAt": starts_at,
+        "endsAt": starts_at,
+        "status": "scheduled",
+        "registerStatus": register.status,
+        "studentCount": student_count,
+        "markedCount": marked_count,
+    }
+
+
+def _manual_register_payload(db: Session, register: AttendanceRegister):
+    students = _eligible_manual_students(
+        db,
+        register.batch_name,
+        register.stream_name,
+        register.subject_name,
+    )
+    entries = {
+        item.student_id: item
+        for item in db.query(AttendanceEntry)
+        .filter_by(register_id=register.id)
+        .all()
+    }
+    return {
+        "session": _manual_register_summary(
+            register,
+            len(students),
+            len(entries),
+        ),
+        "entries": [{
+            "studentId": student.id,
+            "admissionNumber": student.admission_number,
+            "fullName": student.full_name,
+            "status": (
+                entries[student.id].status
+                if student.id in entries
+                else "present"
+            ),
+            "reason": (
+                entries[student.id].reason
+                if student.id in entries
+                else ""
+            ),
+        } for student in students],
+    }
+
+
+@router.post("/manual-registers")
+def open_manual_register(
+    payload: ManualAttendanceRegisterOpen,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("attendance_operator")),
+):
+    if payload.date > datetime.now(INDIA_TZ).date():
+        raise HTTPException(409, "Attendance cannot be opened for a future date")
+    batch_name = payload.batch.strip()
+    stream_name = payload.stream.strip()
+    subject_name = payload.subject.strip()
+    students = _eligible_manual_students(
+        db,
+        batch_name,
+        stream_name,
+        subject_name,
+    )
+    if not students:
+        raise HTTPException(404, "No active students match this selection")
+    register = (
+        db.query(AttendanceRegister)
+        .filter_by(
+            register_kind="manual",
+            attendance_date=payload.date,
+            batch_name=batch_name,
+            stream_name=stream_name,
+            subject_name=subject_name,
+        )
+        .first()
+    )
+    if not register:
+        register = AttendanceRegister(
+            class_session_id=None,
+            register_kind="manual",
+            attendance_date=payload.date,
+            batch_name=batch_name,
+            stream_name=stream_name,
+            subject_name=subject_name,
+            status="draft",
+        )
+        db.add(register)
+        db.flush()
+        audit(
+            db,
+            actor,
+            "attendance.manual.open",
+            "attendance_register",
+            register.id,
+            after={
+                "date": payload.date.isoformat(),
+                "batch": batch_name,
+                "stream": stream_name,
+                "subject": subject_name,
+                "students": len(students),
+            },
+        )
+        db.commit()
+    return _manual_register_payload(db, register)
+
+
+@router.get("/manual-registers/{register_id}")
+def manual_attendance_roster(
+    register_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*ROLES)),
+):
+    return _manual_register_payload(db, _manual_register(db, register_id))
+
+
+def _save_manual(
+    register_id: str,
+    payload: AttendanceSave,
+    db: Session,
+    actor: User,
+    require_complete: bool = False,
+):
+    register = _manual_register(db, register_id)
+    students = _eligible_manual_students(
+        db,
+        register.batch_name,
+        register.stream_name,
+        register.subject_name,
+    )
+    eligible = {student.id for student in students}
+    incoming = {item.student_id for item in payload.entries}
+    if len(incoming) != len(payload.entries):
+        raise HTTPException(422, "A student appears more than once")
+    if not incoming.issubset(eligible):
+        raise HTTPException(
+            409,
+            "Attendance contains students outside the selected roster",
+        )
+    if require_complete and incoming != eligible:
+        raise HTTPException(
+            409,
+            "Every active student must be included before attendance can be submitted",
+        )
+    if register.status == "submitted":
+        raise HTTPException(
+            409,
+            "Submitted attendance is locked; use an authorised correction",
+        )
+    existing = {
+        item.student_id: item
+        for item in db.query(AttendanceEntry)
+        .filter_by(register_id=register.id)
+        .all()
+    }
+    for item in payload.entries:
+        entry = existing.get(item.student_id)
+        if entry:
+            entry.status = item.status
+            entry.reason = item.reason.strip()
+            entry.marked_by = actor.id
+        else:
+            db.add(AttendanceEntry(
+                register_id=register.id,
+                student_id=item.student_id,
+                status=item.status,
+                reason=item.reason.strip(),
+                marked_by=actor.id,
+            ))
+    audit(
+        db,
+        actor,
+        "attendance.manual.draft.save",
+        "attendance_register",
+        register.id,
+        after={"entries": len(payload.entries)},
+    )
+    db.commit()
+    return register
+
+
+@router.put("/manual-registers/{register_id}")
+def save_manual_attendance(
+    register_id: str,
+    payload: AttendanceSave,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*ROLES)),
+):
+    register = _save_manual(register_id, payload, db, actor)
+    return {"id": register.id, "status": register.status}
+
+
+@router.post("/manual-registers/{register_id}/submit")
+def submit_manual_attendance(
+    register_id: str,
+    payload: AttendanceSave,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*ROLES)),
+):
+    register = _save_manual(
+        register_id,
+        payload,
+        db,
+        actor,
+        require_complete=True,
+    )
+    register.status = "submitted"
+    register.submitted_at = datetime.now(timezone.utc)
+    register.submitted_by = actor.id
+    audit(
+        db,
+        actor,
+        "attendance.manual.submit",
+        "attendance_register",
+        register.id,
+        after={"status": "submitted"},
+    )
+    db.commit()
+    return {
+        "id": register.id,
+        "status": register.status,
+        "submittedAt": register.submitted_at,
+    }
+
+
+@router.post("/manual-registers/{register_id}/corrections/{student_id}")
+def correct_manual_attendance(
+    register_id: str,
+    student_id: str,
+    payload: AttendanceCorrection,
+    db: Session = Depends(get_db),
+    actor: User = Depends(
+        require_roles("owner", "academic_coordinator"),
+    ),
+):
+    register = _manual_register(db, register_id)
+    if register.status != "submitted":
+        raise HTTPException(409, "Only submitted attendance can be corrected")
+    entry = (
+        db.query(AttendanceEntry)
+        .filter_by(register_id=register.id, student_id=student_id)
+        .first()
+    )
+    if not entry:
+        raise HTTPException(404, "Attendance entry not found")
+    before = {"status": entry.status, "reason": entry.reason}
+    entry.status = payload.status
+    entry.reason = payload.reason.strip()
+    entry.marked_by = actor.id
+    audit(
+        db,
+        actor,
+        "attendance.manual.correction",
+        "attendance_entry",
+        f"{register.id}:{student_id}",
+        before=before,
+        after={"status": entry.status, "reason": entry.reason},
+    )
+    db.commit()
+    return {
+        "studentId": student_id,
+        "status": entry.status,
+        "reason": entry.reason,
     }
 
 
