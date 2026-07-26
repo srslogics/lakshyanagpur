@@ -427,6 +427,9 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 
 /* Operational modules */
 .heading-actions, .drawer-actions { display: flex; align-items: center; gap: 10px; }
+.settings-page-heading { align-items: stretch; flex-direction: column; }
+.settings-heading-actions { display: grid; width: 100%; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.settings-heading-actions .button { width: 100%; justify-content: center; }
 .form-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .check-field { display: flex; align-items: center; gap: 10px; color: var(--ink-600); font-size: .78rem; font-weight: 700; }
 .check-field input { width: 18px; height: 18px; accent-color: var(--forest-700); }
@@ -668,6 +671,8 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
   .inline-notice { align-items: flex-start; }
   .heading-actions, .drawer-actions { width: 100%; }
   .heading-actions .button, .drawer-actions .button { flex: 1; }
+  .settings-heading-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .settings-heading-actions .button { width: 100%; justify-content: center; }
   .notice-grid, .settings-grid { grid-template-columns: 1fr; }
   .settings-audit { grid-column: auto; }
   .form-pair { grid-template-columns: 1fr; }
@@ -702,6 +707,7 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 }
 
 @media (max-width: 420px) {
+  .settings-heading-actions { grid-template-columns: 1fr; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
   .metric-card { min-height: 112px; padding: 14px; }
   .topbar h1 { font-size: .9rem; }

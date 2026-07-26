@@ -40,6 +40,10 @@ def test_frontend_shell_is_served(client):
     assert response.status_code == 200
     assert '<h2 id="auth-title">Sign in</h2>' in response.text
     assert "Students" in response.text
+    assert 'id="new-faculty-access"' in response.text
+    assert 'id="new-attendance-access"' in response.text
+    assert 'id="settings-faculty-access"' in response.text
+    assert 'id="settings-attendance-access"' in response.text
     assert 'property="og:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=2"' in response.text
 
     share_card = client.get("/share-card.png")

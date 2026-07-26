@@ -749,12 +749,18 @@ function auditRows(rows) { return rows.length ? rows.map(item => `<div class="au
 
 function renderSettings() {
   const masters = state.masters;
+  const facultyAccess = (masters.users || []).filter(item => item.role === "faculty");
+  const attendanceAccess = (masters.users || []).filter(item => item.role === "attendance_operator");
   $("#settings-metrics").innerHTML = compactMetrics([{ label: "Users", value: String(masters.users?.length || 0) }, { label: "Batches", value: String(masters.batches?.length || 0) }, { label: "Subjects", value: String(masters.subjects?.length || 0) }, { label: "Rooms", value: String(masters.rooms?.length || 0) }]);
   $("#settings-users").innerHTML = masterRows(masters.users || [], item => [item.fullName, `${mobileLabel(item.mobile)} · ${item.role.replaceAll("_", " ")}`, item.isActive ? "active" : "inactive"], "user");
   $("#student-access-count").textContent = `${masters.studentAccess?.length || 0} / 100`;
   $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${mobileLabel(item.mobile)}`, item.isActive ? "active" : "inactive"], "access-user", "userId");
   $("#parent-access-count").textContent = `${masters.parentAccess?.length || 0}`;
   $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${mobileLabel(item.mobile)}`, item.contactType === "secondary_contact" ? "secondary" : "primary"], "access-user", "userId");
+  $("#faculty-access-count").textContent = `${facultyAccess.length}`;
+  $("#settings-faculty-access").innerHTML = masterRows(facultyAccess, item => [item.fullName, mobileLabel(item.mobile), item.isActive ? "active" : "inactive"], "user");
+  $("#attendance-access-count").textContent = `${attendanceAccess.length}`;
+  $("#settings-attendance-access").innerHTML = masterRows(attendanceAccess, item => [item.fullName, mobileLabel(item.mobile), item.isActive ? "active" : "inactive"], "user");
   const academicImport = masters.academicImports?.[0];
   $("#academic-import-status").textContent = academicImport ? "Loaded" : "Not loaded";
   $("#academic-import-message").textContent = academicImport
@@ -1071,9 +1077,29 @@ async function submitAttendance(event) {
   catch (error) { showFormError("#attendance-form-error", error); button.disabled = false; }
 }
 
-function openUserForm() {
-  openDrawer("New user", `<form class="auth-form" id="user-form"><label class="field"><span>Full name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label><label class="field"><span>Role</span><select name="role"><option value="faculty">Faculty</option><option value="attendance_operator">Attendance operator</option><option value="academic_coordinator">Academic coordinator</option><option value="admissions_manager">Admissions manager</option><option value="counsellor">Counsellor</option><option value="front_desk">Front desk</option><option value="accounts">Accounts</option><option value="storekeeper">Storekeeper</option></select></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("user-form-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create user</button></form>`);
-  $("#user-form").addEventListener("submit", async event => { event.preventDefault(); const form = new FormData(event.currentTarget), button = $('button[type="submit"]', event.currentTarget); button.disabled = true; try { await api("/api/settings/users", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) }); state.masters = await api("/api/settings/bootstrap"); closeDetail(); renderSettings(); toast("User created."); } catch (error) { showFormError("#user-form-error", error); button.disabled = false; } });
+function openUserForm(presetRole = "") {
+  const accessConfig = {
+    faculty: {
+      title: "Faculty access",
+      description: "Creates a mobile login for the Faculty portal.",
+      button: "Create faculty access",
+      success: "Faculty access created.",
+    },
+    attendance_operator: {
+      title: "Attendance access",
+      description: "Creates a mobile login for the Attendance Desk.",
+      button: "Create attendance access",
+      success: "Attendance access created.",
+    },
+  }[presetRole];
+  const roleField = accessConfig
+    ? `<input name="role" type="hidden" value="${esc(presetRole)}"><div class="inline-notice">${icon("shield")}<span>${esc(accessConfig.description)}</span></div>`
+    : `<label class="field"><span>Role</span><select name="role"><option value="academic_coordinator">Academic coordinator</option><option value="admissions_manager">Admissions manager</option><option value="counsellor">Counsellor</option><option value="front_desk">Front desk</option><option value="accounts">Accounts</option><option value="storekeeper">Storekeeper</option></select></label>`;
+  const title = accessConfig?.title || "New user";
+  const buttonLabel = accessConfig?.button || "Create user";
+  const successMessage = accessConfig?.success || "User created.";
+  openDrawer(title, `<form class="auth-form" id="user-form">${roleField}<label class="field"><span>Full name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("user-form-error")}<button class="button button-primary button-large" type="submit">${icon("user")}${esc(buttonLabel)}</button></form>`);
+  $("#user-form").addEventListener("submit", async event => { event.preventDefault(); const form = new FormData(event.currentTarget), button = $('button[type="submit"]', event.currentTarget); button.disabled = true; try { await api("/api/settings/users", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) }); state.masters = await api("/api/settings/bootstrap"); closeDetail(); renderSettings(); toast(successMessage); } catch (error) { showFormError("#user-form-error", error); button.disabled = false; } });
 }
 
 function openStudentAccessForm() {
@@ -1318,7 +1344,7 @@ function bindEvents() {
   $("#print-student-ledger").addEventListener("click", () => window.print());
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
-  $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", openUserForm); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-master").addEventListener("click", openMasterForm);
+  $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", () => openUserForm()); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-faculty-access").addEventListener("click", () => openUserForm("faculty")); $("#new-attendance-access").addEventListener("click", () => openUserForm("attendance_operator")); $("#new-master").addEventListener("click", openMasterForm);
   $("#new-examination").addEventListener("click", () => openExaminationForm());
   $("#examination-search").addEventListener("input", renderExaminations);
   $("#examination-status-filter").addEventListener("change", renderExaminations);
