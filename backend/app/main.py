@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from .config import settings
@@ -94,6 +94,13 @@ if FACULTY_APP_DIR.exists():
 
 if ATTENDANCE_APP_DIR.exists():
     app.mount("/attendance-app", StaticFiles(directory=ATTENDANCE_APP_DIR, html=True), name="attendance-app")
+
+@app.get("/attendence", include_in_schema=False)
+@app.get("/attendence/", include_in_schema=False)
+@app.get("/attendance", include_in_schema=False)
+@app.get("/attendance/", include_in_schema=False)
+def attendance_app_redirect():
+    return RedirectResponse(url="/attendance-app/", status_code=308)
 
 @app.get("/", include_in_schema=False)
 def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")

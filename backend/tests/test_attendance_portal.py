@@ -160,6 +160,13 @@ def test_attendance_app_is_served(client):
     assert "Attendance Desk" in response.text
 
 
+def test_legacy_attendance_links_redirect_to_the_attendance_app(client):
+    for path in ("/attendence", "/attendence/", "/attendance", "/attendance/"):
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 308
+        assert response.headers["location"] == "/attendance-app/"
+
+
 def test_owner_can_create_attendance_operator(client, owner_headers):
     response = client.post(
         "/api/settings/users",
