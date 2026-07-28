@@ -97,6 +97,33 @@ def test_every_application_uses_a_mobile_login_field(client):
         assert "Email address" not in response.text
 
 
+def test_portal_service_workers_only_delete_their_own_old_caches(client):
+    expected_prefixes = {
+        "/sw.js": "lakshya-erp-app-",
+        "/student-app/sw.js": "lakshya-student-",
+        "/parent-app/sw.js": "lakshya-parent-",
+        "/faculty-app/sw.js": "lakshya-faculty-",
+        "/attendance-app/sw.js": "lakshya-attendance-",
+    }
+    for path, cache_prefix in expected_prefixes.items():
+        response = client.get(path)
+        assert response.status_code == 200
+        assert f'key.startsWith("{cache_prefix}")' in response.text
+
+
+def test_portal_manifests_keep_installations_inside_their_app(client):
+    expected_scopes = {
+        "/student-app/manifest.webmanifest": "/student-app/",
+        "/parent-app/manifest.webmanifest": "/parent-app/",
+        "/faculty-app/manifest.webmanifest": "/faculty-app/",
+        "/attendance-app/manifest.webmanifest": "/attendance-app/",
+    }
+    for path, scope in expected_scopes.items():
+        manifest = client.get(path).json()
+        assert manifest["start_url"] == scope
+        assert manifest["scope"] == scope
+
+
 def test_health_checks_support_get_and_head(client):
     for path in ("/health", "/api/health"):
         response = client.get(path)

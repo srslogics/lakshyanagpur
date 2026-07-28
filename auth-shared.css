@@ -211,6 +211,18 @@
 }
 
 @media (max-width: 920px) {
+  .auth-screen {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auth-brand-panel {
+    display: none;
+  }
+
+  .auth-form-panel {
+    min-height: 100dvh;
+  }
+
   .login-screen {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
