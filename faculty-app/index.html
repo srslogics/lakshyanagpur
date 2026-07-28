@@ -14,7 +14,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=6">
+  <link rel="stylesheet" href="./styles.css?v=7">
   <link rel="stylesheet" href="../auth-shared.css?v=6">
 </head>
 <body>
@@ -39,10 +39,35 @@
         <p class="eyebrow">FACULTY ACCESS</p>
         <h1 id="login-title">Sign in</h1>
         <form id="login-form" novalidate>
-          <label for="login-mobile"><span>Mobile number</span><input id="login-mobile" name="mobile" type="tel" autocomplete="username" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
+          <label for="login-identity"><span id="login-identity-label">Mobile number</span><input id="login-identity" name="identity" type="tel" autocomplete="username" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
           <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span></label>
           <div class="form-error hidden" id="login-error" role="alert"></div>
           <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
+          <button class="login-mode-button" id="login-mode-button" type="button">First sign-in with email</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="login-screen hidden" id="mobile-setup-screen" aria-labelledby="mobile-setup-title">
+    <div class="login-brand">
+      <img src="../lakshya-logo-576.png" width="576" height="384" alt="Lakshya">
+      <span>Faculty</span>
+    </div>
+    <div class="login-copy" aria-hidden="true">
+      <p>ONE-TIME SETUP</p>
+      <strong>Secure your faculty access with your mobile.</strong>
+    </div>
+    <div class="login-card">
+      <div class="login-form-wrap">
+        <p class="eyebrow">ACCOUNT ACTIVATION</p>
+        <h1 id="mobile-setup-title">Add mobile number</h1>
+        <p class="login-support">This email sign-in is for setup only. After saving, use your mobile number and the same password.</p>
+        <p class="setup-identity" id="mobile-setup-identity"></p>
+        <form id="mobile-setup-form" novalidate>
+          <label for="faculty-mobile"><span>Mobile number</span><input id="faculty-mobile" name="mobile" type="tel" autocomplete="tel" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
+          <div class="form-error hidden" id="mobile-setup-error" role="alert"></div>
+          <button class="primary-button" id="mobile-setup-button" type="submit"><span id="mobile-setup-button-label">Save mobile number</span><span data-icon="arrow"></span></button>
         </form>
       </div>
     </div>
@@ -231,6 +256,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=9" defer></script>
+  <script src="./app.js?v=10" defer></script>
 </body>
 </html>

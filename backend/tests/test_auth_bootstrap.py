@@ -191,7 +191,7 @@ def test_legacy_email_login_can_be_disabled_after_migration(client, monkeypatch)
         json={"email": "owner@example.com", "password": "Password123!"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid mobile number or password"
+    assert response.json()["detail"] == "Invalid sign-in details"
 
 
 def test_invalid_mobile_is_rejected_without_account_lookup(client):

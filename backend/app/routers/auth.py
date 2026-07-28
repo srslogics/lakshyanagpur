@@ -110,15 +110,19 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     _check_login_rate_limit(login_key)
     if payload.mobile:
         user = db.query(User).filter(User.mobile == normalize_mobile(payload.mobile)).first()
-    elif settings.allow_legacy_email_login:
-        # Temporary Operations-only fallback for live accounts that have not yet
-        # been assigned a mobile number. It can be disabled after migration.
-        user = db.query(User).filter(User.email == str(payload.email).lower()).first()
+    elif payload.email:
+        candidate = db.query(User).filter(User.email == str(payload.email).lower()).first()
+        faculty_first_login = bool(
+            candidate
+            and candidate.role == "faculty"
+            and not candidate.mobile
+        )
+        user = candidate if faculty_first_login or settings.allow_legacy_email_login else None
     else:
         user = None
     if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
         _record_login_failure(login_key)
-        raise HTTPException(401, "Invalid mobile number or password")
+        raise HTTPException(401, "Invalid sign-in details")
     _clear_login_failures(login_key)
     return _token_response(user)
 

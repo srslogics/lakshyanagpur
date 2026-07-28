@@ -1,8 +1,9 @@
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -17,7 +18,9 @@ from ..models import (
     Subject,
     User,
 )
+from ..schemas import FacultyMobileActivationRequest
 from ..security import require_roles
+from ..services import audit
 
 router = APIRouter(prefix="/api/faculty", tags=["faculty portal"])
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
@@ -25,6 +28,42 @@ INDIA_TZ = ZoneInfo("Asia/Kolkata")
 
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+@router.post("/activate-mobile")
+def activate_mobile(
+    payload: FacultyMobileActivationRequest,
+    db: Session = Depends(get_db),
+    faculty_user: User = Depends(require_roles("faculty")),
+):
+    if faculty_user.mobile:
+        raise HTTPException(409, "A mobile number is already registered for this account")
+    if db.query(User).filter(User.mobile == payload.mobile, User.id != faculty_user.id).first():
+        raise HTTPException(409, "This mobile number is already assigned to another account")
+    faculty_user.mobile = payload.mobile
+    audit(
+        db,
+        faculty_user,
+        "faculty.mobile.activate",
+        "user",
+        faculty_user.id,
+        after={"mobile": payload.mobile},
+    )
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            409,
+            "This mobile number is already assigned to another account",
+        ) from error
+    return {
+        "id": faculty_user.id,
+        "fullName": faculty_user.full_name,
+        "mobile": faculty_user.mobile,
+        "email": faculty_user.email,
+        "role": faculty_user.role,
+    }
 
 
 @router.get("/bootstrap")

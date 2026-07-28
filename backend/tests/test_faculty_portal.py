@@ -17,6 +17,92 @@ from app.models import (
 from app.security import create_token, hash_password
 
 
+def test_faculty_email_is_first_login_only_until_mobile_activation(client, database):
+    faculty = User(
+        email="first.login.faculty@example.com",
+        full_name="First Login Faculty",
+        role="faculty",
+        password_hash=hash_password("FacultyPass123!"),
+    )
+    database.add(faculty)
+    database.commit()
+
+    first_login = client.post(
+        "/api/auth/login",
+        json={
+            "email": faculty.email,
+            "password": "FacultyPass123!",
+        },
+    )
+    assert first_login.status_code == 200
+    assert first_login.json()["user"]["mobile"] is None
+    headers = {
+        "Authorization": f"Bearer {first_login.json()['access_token']}",
+    }
+    activated = client.post(
+        "/api/faculty/activate-mobile",
+        headers=headers,
+        json={"mobile": "+91 98765 40001"},
+    )
+    assert activated.status_code == 200
+    assert activated.json()["mobile"] == "9876540001"
+
+    email_rejected = client.post(
+        "/api/auth/login",
+        json={
+            "email": faculty.email,
+            "password": "FacultyPass123!",
+        },
+    )
+    assert email_rejected.status_code == 401
+    assert email_rejected.json()["detail"] == "Invalid sign-in details"
+
+    mobile_login = client.post(
+        "/api/auth/login",
+        json={
+            "mobile": "9876540001",
+            "password": "FacultyPass123!",
+        },
+    )
+    assert mobile_login.status_code == 200
+    assert mobile_login.json()["user"]["role"] == "faculty"
+    assert database.query(AuditLog).filter_by(
+        action="faculty.mobile.activate",
+        entity_id=faculty.id,
+    ).count() == 1
+
+
+def test_faculty_mobile_activation_rejects_duplicates_and_other_roles(
+    client,
+    database,
+    parent_headers,
+):
+    faculty = User(
+        email="duplicate.mobile.faculty@example.com",
+        full_name="Duplicate Mobile Faculty",
+        role="faculty",
+        password_hash=hash_password("FacultyPass123!"),
+    )
+    database.add(faculty)
+    database.commit()
+    headers = {"Authorization": f"Bearer {create_token(faculty)}"}
+
+    duplicate = client.post(
+        "/api/faculty/activate-mobile",
+        headers=headers,
+        json={"mobile": "9000000001"},
+    )
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "This mobile number is already assigned to another account"
+
+    denied = client.post(
+        "/api/faculty/activate-mobile",
+        headers=parent_headers,
+        json={"mobile": "9876540002"},
+    )
+    assert denied.status_code == 403
+
+
 def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_headers):
     owner = database.query(User).filter_by(role="owner").one()
     faculty = User(

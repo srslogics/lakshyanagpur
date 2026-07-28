@@ -22,8 +22,17 @@ class LoginRequest(BaseModel):
     @model_validator(mode="after")
     def has_identifier(self):
         if not self.mobile and not self.email:
-            raise ValueError("A mobile number is required")
+            raise ValueError("A mobile number or email address is required")
         return self
+
+
+class FacultyMobileActivationRequest(BaseModel):
+    mobile: str
+
+    @field_validator("mobile")
+    @classmethod
+    def valid_mobile(cls, value):
+        return normalize_mobile(value)
 
 
 class BootstrapOwnerRequest(BaseModel):

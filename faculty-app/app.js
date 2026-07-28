@@ -27,6 +27,8 @@ const icons = {
 
 const state = {
   token: localStorage.getItem("lakshya_faculty_token"),
+  identity: null,
+  loginMode: "mobile",
   data: null,
   view: "dashboard",
   assignmentFilter: "active",
@@ -123,22 +125,50 @@ async function api(path, options = {}) {
 
 function clearSession() {
   state.token = null;
+  state.identity = null;
   state.data = null;
   localStorage.removeItem("lakshya_faculty_token");
 }
 
 function showLogin(message = "") {
   $("#startup-screen").classList.add("hidden");
+  $("#mobile-setup-screen").classList.add("hidden");
   $("#faculty-shell").classList.add("hidden");
   $("#login-screen").classList.remove("hidden");
   $("#login-password").value = "";
+  setLoginMode(state.loginMode);
   if (message) {
     $("#login-error").textContent = message;
     $("#login-error").classList.remove("hidden");
   } else {
     $("#login-error").classList.add("hidden");
   }
-  requestAnimationFrame(() => $("#login-mobile").focus());
+  requestAnimationFrame(() => $("#login-identity").focus());
+}
+
+function setLoginMode(mode) {
+  state.loginMode = mode === "email" ? "email" : "mobile";
+  const emailMode = state.loginMode === "email";
+  const field = $("#login-identity");
+  $("#login-identity-label").textContent = emailMode ? "Email address" : "Mobile number";
+  field.type = emailMode ? "email" : "tel";
+  field.inputMode = emailMode ? "email" : "tel";
+  field.placeholder = emailMode ? "Faculty email address" : "10-digit mobile number";
+  field.maxLength = emailMode ? 254 : 16;
+  $("#login-mode-button").textContent = emailMode ? "Use mobile number" : "First sign-in with email";
+  $("#login-error").classList.add("hidden");
+}
+
+function showMobileSetup(identity) {
+  state.identity = identity;
+  $("#startup-screen").classList.add("hidden");
+  $("#login-screen").classList.add("hidden");
+  $("#faculty-shell").classList.add("hidden");
+  $("#mobile-setup-screen").classList.remove("hidden");
+  $("#mobile-setup-identity").textContent = identity.email || identity.fullName;
+  $("#mobile-setup-error").classList.add("hidden");
+  $("#faculty-mobile").value = "";
+  requestAnimationFrame(() => $("#faculty-mobile").focus());
 }
 
 function toast(message) {
@@ -163,6 +193,13 @@ async function initialize() {
     return;
   }
   try {
+    const identity = await api("/api/auth/me");
+    if (identity.role !== "faculty") throw new Error("This account does not have Faculty access.");
+    state.identity = identity;
+    if (!identity.mobile) {
+      showMobileSetup(identity);
+      return;
+    }
     await loadPortal();
   } catch (error) {
     clearSession();
@@ -181,15 +218,22 @@ async function login(event) {
   $("#login-error").classList.add("hidden");
   try {
     const data = new FormData(form);
+    const identity = String(data.get("identity")).trim();
     const result = await api("/api/auth/login", {
       method:"POST",
       body:JSON.stringify({
-        mobile:String(data.get("mobile")).trim(),
+        [state.loginMode]:identity,
         password:String(data.get("password"))
       })
     });
+    if (result.user.role !== "faculty") throw new Error("This account does not have Faculty access.");
     state.token = result.access_token;
+    state.identity = result.user;
     localStorage.setItem("lakshya_faculty_token", state.token);
+    if (!result.user.mobile) {
+      showMobileSetup(result.user);
+      return;
+    }
     await loadPortal();
   } catch (error) {
     clearSession();
@@ -197,6 +241,43 @@ async function login(event) {
   } finally {
     button.disabled = false;
     label.textContent = "Sign in";
+  }
+}
+
+async function activateMobile(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const button = $("#mobile-setup-button");
+  const label = $("#mobile-setup-button-label");
+  button.disabled = true;
+  label.textContent = "Saving…";
+  $("#mobile-setup-error").classList.add("hidden");
+  try {
+    const data = new FormData(form);
+    const result = await api("/api/faculty/activate-mobile", {
+      method:"POST",
+      body:JSON.stringify({mobile:String(data.get("mobile")).trim()})
+    });
+    const token = state.token;
+    if (token) {
+      try {
+        await fetch("/api/auth/logout", {
+          method:"POST",
+          headers:{Authorization:`Bearer ${token}`}
+        });
+      } catch {}
+    }
+    clearSession();
+    setLoginMode("mobile");
+    showLogin("Mobile number saved. Sign in with it now.");
+    $("#login-identity").value = result.mobile;
+  } catch (error) {
+    $("#mobile-setup-error").textContent = error.message;
+    $("#mobile-setup-error").classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+    label.textContent = "Save mobile number";
   }
 }
 
@@ -208,6 +289,7 @@ async function loadPortal() {
   state.data = {...portal, examinations};
   $("#startup-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
+  $("#mobile-setup-screen").classList.add("hidden");
   $("#faculty-shell").classList.remove("hidden");
   renderAll();
   const hashView = location.hash.slice(1);
@@ -796,6 +878,12 @@ function togglePassword() {
 
 function bindEvents() {
   $("#login-form").addEventListener("submit", login);
+  $("#login-mode-button").addEventListener("click", () => {
+    setLoginMode(state.loginMode === "mobile" ? "email" : "mobile");
+    $("#login-identity").value = "";
+    $("#login-identity").focus();
+  });
+  $("#mobile-setup-form").addEventListener("submit", activateMobile);
   $("#password-toggle").addEventListener("click", togglePassword);
   $("#signout-button").addEventListener("click", logout);
   $("#sidebar-signout").addEventListener("click", logout);
