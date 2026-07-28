@@ -558,3 +558,4 @@
   }
   .examination-card footer strong { color: var(--success); }
 }
+.login-support{margin:14px 0 0;color:var(--muted);font-size:.84rem;line-height:1.55}

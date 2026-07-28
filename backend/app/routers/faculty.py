@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -14,12 +15,13 @@ from ..models import (
     Enrollment,
     FacultyTeachingAssignment,
     Notice,
+    RevokedToken,
     Room,
     Subject,
     User,
 )
 from ..schemas import FacultyMobileActivationRequest
-from ..security import require_roles
+from ..security import bearer, current_user, decode_token, hash_password, require_roles, verify_password
 from ..services import audit
 
 router = APIRouter(prefix="/api/faculty", tags=["faculty portal"])
@@ -33,21 +35,31 @@ def _aware(value: datetime) -> datetime:
 @router.post("/activate-mobile")
 def activate_mobile(
     payload: FacultyMobileActivationRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
     db: Session = Depends(get_db),
-    faculty_user: User = Depends(require_roles("faculty")),
+    faculty_user: User = Depends(current_user),
 ):
+    if faculty_user.role != "faculty":
+        raise HTTPException(403, "You do not have permission to perform this action")
     if faculty_user.mobile:
         raise HTTPException(409, "A mobile number is already registered for this account")
     if db.query(User).filter(User.mobile == payload.mobile, User.id != faculty_user.id).first():
         raise HTTPException(409, "This mobile number is already assigned to another account")
+    if verify_password(payload.new_password, faculty_user.password_hash):
+        raise HTTPException(400, "Choose a personal password different from the temporary password")
     faculty_user.mobile = payload.mobile
+    faculty_user.password_hash = hash_password(payload.new_password)
+    faculty_user.must_change_password = False
+    token = decode_token(credentials.credentials)
+    expires_at = datetime.fromtimestamp(token["exp"], timezone.utc)
+    db.add(RevokedToken(id=token["jti"], user_id=faculty_user.id, expires_at=expires_at))
     audit(
         db,
         faculty_user,
         "faculty.mobile.activate",
         "user",
         faculty_user.id,
-        after={"mobile": payload.mobile},
+        after={"mobile": payload.mobile, "mustChangePassword": False},
     )
     try:
         db.commit()

@@ -85,7 +85,14 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User 
     email = str(payload.email).lower() if payload.email else None
     if email and db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
-    row = User(mobile=payload.mobile, email=email, full_name=payload.full_name.strip(), role=payload.role, password_hash=hash_password(payload.password))
+    row = User(
+        mobile=payload.mobile,
+        email=email,
+        full_name=payload.full_name.strip(),
+        role=payload.role,
+        password_hash=hash_password(payload.password),
+        must_change_password=payload.role in {"student", "faculty"},
+    )
     db.add(row); db.flush()
     audit(db, actor, "settings.user.create", "user", row.id, after={"mobile": row.mobile, "email": row.email, "role": row.role})
     db.commit()
@@ -132,7 +139,14 @@ def create_student_access(payload: StudentAccessCreate, db: Session = Depends(ge
     email = str(payload.email).lower() if payload.email else None
     if email and db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
-    account_user = User(mobile=payload.mobile, email=email, full_name=student.full_name, role="student", password_hash=hash_password(payload.password))
+    account_user = User(
+        mobile=payload.mobile,
+        email=email,
+        full_name=student.full_name,
+        role="student",
+        password_hash=hash_password(payload.password),
+        must_change_password=True,
+    )
     db.add(account_user); db.flush()
     db.add(StudentAccount(user_id=account_user.id, student_id=student.id))
     audit(db, actor, "settings.student_access.create", "student", student.id, after={"user_id": account_user.id, "mobile": payload.mobile, "email": email})

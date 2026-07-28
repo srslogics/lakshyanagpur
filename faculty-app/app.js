@@ -133,6 +133,7 @@ function clearSession() {
 function showLogin(message = "") {
   $("#startup-screen").classList.add("hidden");
   $("#mobile-setup-screen").classList.add("hidden");
+  $("#faculty-password-change-screen").classList.add("hidden");
   $("#faculty-shell").classList.add("hidden");
   $("#login-screen").classList.remove("hidden");
   $("#login-password").value = "";
@@ -163,12 +164,25 @@ function showMobileSetup(identity) {
   state.identity = identity;
   $("#startup-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
+  $("#faculty-password-change-screen").classList.add("hidden");
   $("#faculty-shell").classList.add("hidden");
   $("#mobile-setup-screen").classList.remove("hidden");
   $("#mobile-setup-identity").textContent = identity.email || identity.fullName;
   $("#mobile-setup-error").classList.add("hidden");
   $("#faculty-mobile").value = "";
   requestAnimationFrame(() => $("#faculty-mobile").focus());
+}
+
+function showFacultyPasswordChange(identity) {
+  state.identity = identity;
+  $("#startup-screen").classList.add("hidden");
+  $("#login-screen").classList.add("hidden");
+  $("#mobile-setup-screen").classList.add("hidden");
+  $("#faculty-shell").classList.add("hidden");
+  $("#faculty-password-change-screen").classList.remove("hidden");
+  $("#faculty-password-change-form").reset();
+  $("#faculty-password-change-error").classList.add("hidden");
+  requestAnimationFrame(() => $("[name=currentPassword]", $("#faculty-password-change-form")).focus());
 }
 
 function toast(message) {
@@ -198,6 +212,10 @@ async function initialize() {
     state.identity = identity;
     if (!identity.mobile) {
       showMobileSetup(identity);
+      return;
+    }
+    if (identity.mustChangePassword) {
+      showFacultyPasswordChange(identity);
       return;
     }
     await loadPortal();
@@ -234,6 +252,10 @@ async function login(event) {
       showMobileSetup(result.user);
       return;
     }
+    if (result.user.mustChangePassword) {
+      showFacultyPasswordChange(result.user);
+      return;
+    }
     await loadPortal();
   } catch (error) {
     clearSession();
@@ -255,29 +277,70 @@ async function activateMobile(event) {
   $("#mobile-setup-error").classList.add("hidden");
   try {
     const data = new FormData(form);
+    const newPassword = String(data.get("newPassword"));
+    if (newPassword !== String(data.get("confirmPassword"))) {
+      throw new Error("The personal passwords do not match.");
+    }
     const result = await api("/api/faculty/activate-mobile", {
       method:"POST",
-      body:JSON.stringify({mobile:String(data.get("mobile")).trim()})
+      body:JSON.stringify({
+        mobile:String(data.get("mobile")).trim(),
+        newPassword
+      })
     });
-    const token = state.token;
-    if (token) {
-      try {
-        await fetch("/api/auth/logout", {
-          method:"POST",
-          headers:{Authorization:`Bearer ${token}`}
-        });
-      } catch {}
-    }
     clearSession();
     setLoginMode("mobile");
-    showLogin("Mobile number saved. Sign in with it now.");
+    showLogin("Account activated. Sign in with your mobile and personal password.");
     $("#login-identity").value = result.mobile;
   } catch (error) {
     $("#mobile-setup-error").textContent = error.message;
     $("#mobile-setup-error").classList.remove("hidden");
   } finally {
     button.disabled = false;
-    label.textContent = "Save mobile number";
+    label.textContent = "Activate account";
+  }
+}
+
+async function changeFacultyPassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const data = new FormData(form);
+  const currentPassword = String(data.get("currentPassword"));
+  const newPassword = String(data.get("newPassword"));
+  const error = $("#faculty-password-change-error");
+  if (newPassword !== String(data.get("confirmPassword"))) {
+    error.textContent = "The new passwords do not match.";
+    error.classList.remove("hidden");
+    return;
+  }
+  if (newPassword === currentPassword) {
+    error.textContent = "Choose a personal password different from the temporary password.";
+    error.classList.remove("hidden");
+    return;
+  }
+  const button = $("#faculty-password-change-button");
+  const idle = button.innerHTML;
+  button.disabled = true;
+  button.textContent = "Saving…";
+  error.classList.add("hidden");
+  try {
+    const mobile = state.identity?.mobile || "";
+    await api("/api/auth/change-password", {
+      method:"POST",
+      body:JSON.stringify({currentPassword, newPassword})
+    });
+    clearSession();
+    setLoginMode("mobile");
+    showLogin("Personal password saved. Sign in again.");
+    $("#login-identity").value = mobile;
+  } catch (requestError) {
+    error.textContent = requestError.message;
+    error.classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+    button.innerHTML = idle;
+    injectIcons(button);
   }
 }
 
@@ -290,6 +353,7 @@ async function loadPortal() {
   $("#startup-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
   $("#mobile-setup-screen").classList.add("hidden");
+  $("#faculty-password-change-screen").classList.add("hidden");
   $("#faculty-shell").classList.remove("hidden");
   renderAll();
   const hashView = location.hash.slice(1);
@@ -884,6 +948,7 @@ function bindEvents() {
     $("#login-identity").focus();
   });
   $("#mobile-setup-form").addEventListener("submit", activateMobile);
+  $("#faculty-password-change-form").addEventListener("submit", changeFacultyPassword);
   $("#password-toggle").addEventListener("click", togglePassword);
   $("#signout-button").addEventListener("click", logout);
   $("#sidebar-signout").addEventListener("click", logout);

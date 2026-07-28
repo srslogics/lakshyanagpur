@@ -62,6 +62,8 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
 
 def require_roles(*roles: str):
     def dependency(user: User = Depends(current_user)) -> User:
+        if user.must_change_password:
+            raise HTTPException(403, "Password change required")
         if user.role not in roles:
             raise HTTPException(403, "You do not have permission to perform this action")
         return user

@@ -28,11 +28,19 @@ class LoginRequest(BaseModel):
 
 class FacultyMobileActivationRequest(BaseModel):
     mobile: str
+    new_password: str = Field(alias="newPassword", min_length=10, max_length=128)
+    model_config = ConfigDict(populate_by_name=True)
 
     @field_validator("mobile")
     @classmethod
     def valid_mobile(cls, value):
         return normalize_mobile(value)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(alias="currentPassword", min_length=8, max_length=128)
+    new_password: str = Field(alias="newPassword", min_length=10, max_length=128)
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class BootstrapOwnerRequest(BaseModel):
@@ -54,6 +62,7 @@ class AuthenticatedUser(BaseModel):
     email: str | None
     full_name: str = Field(alias="fullName")
     role: str
+    must_change_password: bool = Field(alias="mustChangePassword")
     model_config = ConfigDict(populate_by_name=True)
 
 

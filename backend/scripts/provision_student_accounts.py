@@ -167,6 +167,7 @@ def provision_student_accounts(
                 role="student",
                 password_hash=hash_password(password),
                 is_active=True,
+                must_change_password=True,
             )
             db.add(account_user)
             db.flush()
@@ -243,7 +244,12 @@ def verify_credentials(
     for row in rows:
         mobile = normalize_mobile(row["Mobile number"])
         user = db.query(User).filter_by(mobile=mobile).first()
-        if not user or user.role != "student" or not user.is_active:
+        if (
+            not user
+            or user.role != "student"
+            or not user.is_active
+            or not user.must_change_password
+        ):
             raise RuntimeError(f"Student account verification failed for {mobile}")
         if not db.query(StudentAccount).filter_by(user_id=user.id).first():
             raise RuntimeError(f"Student link verification failed for {mobile}")

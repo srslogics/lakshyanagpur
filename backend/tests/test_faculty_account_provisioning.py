@@ -33,6 +33,7 @@ def test_faculty_email_provisioning_is_audited_and_idempotent(database, tmp_path
     )
     database.commit()
     assert created["createdAccounts"] == 5
+    assert all(row.must_change_password for row in faculty)
     assert database.query(AuditLog).filter_by(
         action="settings.faculty_access.email_onboard",
     ).count() == 5

@@ -59,6 +59,7 @@ def test_bulk_student_provisioning_is_scoped_audited_and_idempotent(database, tm
     user = database.get(User, account.user_id)
     assert user.mobile == "9876543210"
     assert user.role == "student"
+    assert user.must_change_password is True
     assert verify_password("UniquePass123!", user.password_hash)
     assert database.query(StudentAccount).filter_by(student_id=forfeited.id).count() == 0
     assert database.query(AuditLog).filter_by(

@@ -103,6 +103,7 @@ def provision_faculty_accounts(
             faculty.email = email
             faculty.password_hash = hash_password(password)
             faculty.is_active = True
+            faculty.must_change_password = True
             audit(
                 db,
                 actor,
@@ -110,7 +111,12 @@ def provision_faculty_accounts(
                 "user",
                 faculty.id,
                 before=before,
-                after={"email": email, "mobile": None, "provisioned": True},
+                after={
+                    "email": email,
+                    "mobile": None,
+                    "provisioned": True,
+                    "mustChangePassword": True,
+                },
             )
             credentials.append(FacultyCredential(
                 full_name=faculty.full_name,
@@ -161,7 +167,12 @@ def verify_credentials(db: Session, path: Path) -> int:
     for row in rows:
         email = row["First-login email"].strip().lower()
         faculty = db.query(User).filter_by(email=email, role="faculty").first()
-        if not faculty or faculty.mobile or not faculty.is_active:
+        if (
+            not faculty
+            or faculty.mobile
+            or not faculty.is_active
+            or not faculty.must_change_password
+        ):
             raise RuntimeError(f"Faculty first-login account verification failed for {email}")
         if not verify_password(row["Temporary password"], faculty.password_hash):
             raise RuntimeError(f"Faculty password verification failed for {email}")

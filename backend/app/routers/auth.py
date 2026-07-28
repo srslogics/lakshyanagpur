@@ -11,8 +11,9 @@ from ..config import settings
 from ..database import get_db
 from ..identity import normalize_mobile
 from ..models import RevokedToken, User
-from ..schemas import BootstrapOwnerRequest, LoginRequest, TokenResponse
+from ..schemas import BootstrapOwnerRequest, LoginRequest, PasswordChangeRequest, TokenResponse
 from ..security import bearer, create_token, current_user, decode_token, hash_password, verify_password
+from ..services import audit
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 LOGIN_FAILURE_LIMIT = 8
@@ -75,6 +76,7 @@ def _token_response(user: User):
             "email": user.email,
             "fullName": user.full_name,
             "role": user.role,
+            "mustChangePassword": user.must_change_password,
         },
     }
 
@@ -129,7 +131,43 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
 @router.get("/me")
 def me(user: User = Depends(current_user)):
-    return {"id": user.id, "mobile": user.mobile, "email": user.email, "fullName": user.full_name, "role": user.role}
+    return {
+        "id": user.id,
+        "mobile": user.mobile,
+        "email": user.email,
+        "fullName": user.full_name,
+        "role": user.role,
+        "mustChangePassword": user.must_change_password,
+    }
+
+
+@router.post("/change-password", status_code=204)
+def change_password(
+    payload: PasswordChangeRequest,
+    response: Response,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(400, "Current password is incorrect")
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(400, "Choose a new password different from the temporary password")
+    user.password_hash = hash_password(payload.new_password)
+    user.must_change_password = False
+    token = decode_token(credentials.credentials)
+    expires_at = datetime.fromtimestamp(token["exp"], timezone.utc)
+    db.add(RevokedToken(id=token["jti"], user_id=user.id, expires_at=expires_at))
+    audit(
+        db,
+        user,
+        "auth.password.change",
+        "user",
+        user.id,
+        after={"mustChangePassword": False},
+    )
+    db.commit()
+    response.status_code = 204
 
 
 @router.post("/logout", status_code=204)

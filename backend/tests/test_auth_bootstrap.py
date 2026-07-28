@@ -1,4 +1,5 @@
 from app.models import User
+from app.security import hash_password
 
 
 def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
@@ -21,6 +22,7 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
         "email": None,
         "fullName": "Lakshya Director",
         "role": "owner",
+        "mustChangePassword": False,
     }
     assert client.get("/api/auth/bootstrap-status").json() == {
         "setupRequired": False,
@@ -166,6 +168,58 @@ def test_login_logout_revokes_the_active_token(client):
     rejected = client.get("/api/auth/me", headers=headers)
     assert rejected.status_code == 401
     assert rejected.json()["detail"] == "Session has been signed out"
+
+
+def test_temporary_password_requires_replacement_and_revokes_the_session(
+    client,
+    database,
+):
+    user = User(
+        mobile="9876540091",
+        full_name="First Login Student",
+        role="student",
+        password_hash=hash_password("Lakshya@2026!"),
+        must_change_password=True,
+    )
+    database.add(user)
+    database.commit()
+    login = client.post(
+        "/api/auth/login",
+        json={"mobile": user.mobile, "password": "Lakshya@2026!"},
+    )
+    assert login.status_code == 200
+    assert login.json()["user"]["mustChangePassword"] is True
+    token = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    blocked = client.get("/api/portal/bootstrap", headers=headers)
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"] == "Password change required"
+    reused = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={
+            "currentPassword": "Lakshya@2026!",
+            "newPassword": "Lakshya@2026!",
+        },
+    )
+    assert reused.status_code == 400
+    changed = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={
+            "currentPassword": "Lakshya@2026!",
+            "newPassword": "PersonalPass456!",
+        },
+    )
+    assert changed.status_code == 204
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    replacement_login = client.post(
+        "/api/auth/login",
+        json={"mobile": user.mobile, "password": "PersonalPass456!"},
+    )
+    assert replacement_login.status_code == 200
+    assert replacement_login.json()["user"]["mustChangePassword"] is False
 
 
 def test_legacy_email_login_can_be_enabled_during_mobile_migration(client, monkeypatch):

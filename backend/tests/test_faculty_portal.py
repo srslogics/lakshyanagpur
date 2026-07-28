@@ -23,6 +23,7 @@ def test_faculty_email_is_first_login_only_until_mobile_activation(client, datab
         full_name="First Login Faculty",
         role="faculty",
         password_hash=hash_password("FacultyPass123!"),
+        must_change_password=True,
     )
     database.add(faculty)
     database.commit()
@@ -36,13 +37,17 @@ def test_faculty_email_is_first_login_only_until_mobile_activation(client, datab
     )
     assert first_login.status_code == 200
     assert first_login.json()["user"]["mobile"] is None
+    assert first_login.json()["user"]["mustChangePassword"] is True
     headers = {
         "Authorization": f"Bearer {first_login.json()['access_token']}",
     }
     activated = client.post(
         "/api/faculty/activate-mobile",
         headers=headers,
-        json={"mobile": "+91 98765 40001"},
+        json={
+            "mobile": "+91 98765 40001",
+            "newPassword": "PersonalFaculty456!",
+        },
     )
     assert activated.status_code == 200
     assert activated.json()["mobile"] == "9876540001"
@@ -51,7 +56,7 @@ def test_faculty_email_is_first_login_only_until_mobile_activation(client, datab
         "/api/auth/login",
         json={
             "email": faculty.email,
-            "password": "FacultyPass123!",
+            "password": "PersonalFaculty456!",
         },
     )
     assert email_rejected.status_code == 401
@@ -61,7 +66,7 @@ def test_faculty_email_is_first_login_only_until_mobile_activation(client, datab
         "/api/auth/login",
         json={
             "mobile": "9876540001",
-            "password": "FacultyPass123!",
+            "password": "PersonalFaculty456!",
         },
     )
     assert mobile_login.status_code == 200
@@ -82,6 +87,7 @@ def test_faculty_mobile_activation_rejects_duplicates_and_other_roles(
         full_name="Duplicate Mobile Faculty",
         role="faculty",
         password_hash=hash_password("FacultyPass123!"),
+        must_change_password=True,
     )
     database.add(faculty)
     database.commit()
@@ -90,7 +96,10 @@ def test_faculty_mobile_activation_rejects_duplicates_and_other_roles(
     duplicate = client.post(
         "/api/faculty/activate-mobile",
         headers=headers,
-        json={"mobile": "9000000001"},
+        json={
+            "mobile": "9000000001",
+            "newPassword": "PersonalFaculty456!",
+        },
     )
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "This mobile number is already assigned to another account"
@@ -98,7 +107,10 @@ def test_faculty_mobile_activation_rejects_duplicates_and_other_roles(
     denied = client.post(
         "/api/faculty/activate-mobile",
         headers=parent_headers,
-        json={"mobile": "9876540002"},
+        json={
+            "mobile": "9876540002",
+            "newPassword": "PersonalFaculty456!",
+        },
     )
     assert denied.status_code == 403
 

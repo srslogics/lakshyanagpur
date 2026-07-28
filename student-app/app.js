@@ -36,6 +36,7 @@ const titles = {
 const hashView = () => (views.has(location.hash.slice(1)) ? location.hash.slice(1) : "home");
 const state = {
   token: localStorage.getItem("lakshya_student_token"),
+  identity: null,
   data: null,
   view: hashView(),
   assignmentFilter: "open",
@@ -128,18 +129,31 @@ async function api(path, options = {}) {
 
 function clearSession() {
   state.token = null;
+  state.identity = null;
   state.data = null;
   localStorage.removeItem("lakshya_student_token");
 }
 
 function showLogin(message = "") {
   $("#boot-screen").classList.add("hidden");
+  $("#password-change-screen").classList.add("hidden");
   $("#student-shell").classList.add("hidden");
   $("#login-screen").classList.remove("hidden");
   $("#login-password").value = "";
   $("#login-error").textContent = message;
   $("#login-error").classList.toggle("hidden", !message);
   requestAnimationFrame(() => $("#login-mobile").focus());
+}
+
+function showPasswordChange(identity) {
+  state.identity = identity;
+  $("#boot-screen").classList.add("hidden");
+  $("#login-screen").classList.add("hidden");
+  $("#student-shell").classList.add("hidden");
+  $("#password-change-screen").classList.remove("hidden");
+  $("#password-change-form").reset();
+  $("#password-change-error").classList.add("hidden");
+  requestAnimationFrame(() => $("[name=currentPassword]", $("#password-change-form")).focus());
 }
 
 function toast(message) {
@@ -159,6 +173,15 @@ async function initialize() {
     return;
   }
   try {
+    const identity = await api("/api/auth/me");
+    if (!["student", "parent_student"].includes(identity.role)) {
+      throw new Error("This login is not assigned to the Student portal.");
+    }
+    state.identity = identity;
+    if (identity.mustChangePassword) {
+      showPasswordChange(identity);
+      return;
+    }
     await loadPortal();
   } catch (error) {
     clearSession();
@@ -187,11 +210,59 @@ async function login(event) {
     if (!["student", "parent_student"].includes(account.role)) {
       throw new Error("This login is not assigned to the Student portal.");
     }
+    state.identity = account;
     localStorage.setItem("lakshya_student_token", state.token);
+    if (account.mustChangePassword) {
+      showPasswordChange(account);
+      return;
+    }
     await loadPortal();
   } catch (error) {
     clearSession();
     showLogin(error.message);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = idle;
+    injectIcons(button);
+  }
+}
+
+async function changePassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const data = new FormData(form);
+  const currentPassword = String(data.get("currentPassword"));
+  const newPassword = String(data.get("newPassword"));
+  const confirmPassword = String(data.get("confirmPassword"));
+  const error = $("#password-change-error");
+  if (newPassword !== confirmPassword) {
+    error.textContent = "The new passwords do not match.";
+    error.classList.remove("hidden");
+    return;
+  }
+  if (newPassword === currentPassword) {
+    error.textContent = "Choose a personal password different from the temporary password.";
+    error.classList.remove("hidden");
+    return;
+  }
+  const button = $("#password-change-button");
+  const idle = button.innerHTML;
+  button.disabled = true;
+  button.textContent = "Saving…";
+  error.classList.add("hidden");
+  try {
+    const mobile = state.identity?.mobile || "";
+    await api("/api/auth/change-password", {
+      method:"POST",
+      body:JSON.stringify({currentPassword, newPassword})
+    });
+    clearSession();
+    showLogin("Personal password saved. Sign in again.");
+    $("#login-mobile").value = mobile;
+  } catch (requestError) {
+    error.textContent = requestError.message;
+    error.classList.remove("hidden");
   } finally {
     button.disabled = false;
     button.innerHTML = idle;
@@ -204,6 +275,7 @@ async function loadPortal() {
   renderAll();
   $("#boot-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
+  $("#password-change-screen").classList.add("hidden");
   $("#student-shell").classList.remove("hidden");
   showView(hashView(), false);
 }
@@ -575,6 +647,7 @@ function togglePassword() {
 
 function bindEvents() {
   $("#login-form").addEventListener("submit", login);
+  $("#password-change-form").addEventListener("submit", changePassword);
   $("#password-toggle").addEventListener("click", togglePassword);
   $("#signout-button").addEventListener("click", logout);
   $("#sidebar-signout").addEventListener("click", logout);
