@@ -1,6 +1,9 @@
+from collections import deque
 from datetime import datetime, timezone
+from threading import Lock
+from time import monotonic
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -12,6 +15,54 @@ from ..schemas import BootstrapOwnerRequest, LoginRequest, TokenResponse
 from ..security import bearer, create_token, current_user, decode_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
+LOGIN_FAILURE_LIMIT = 8
+LOGIN_FAILURE_WINDOW_SECONDS = 10 * 60
+_login_failures: dict[str, deque[float]] = {}
+_login_failures_lock = Lock()
+
+
+def _login_key(request: Request, payload: LoginRequest) -> str:
+    identity = normalize_mobile(payload.mobile) if payload.mobile else str(payload.email or "").strip().lower()
+    client_host = request.client.host if request.client else "unknown"
+    return f"{client_host}:{identity or 'unknown'}"
+
+
+def _prune_failures(key: str, now: float) -> deque[float]:
+    failures = _login_failures.setdefault(key, deque())
+    cutoff = now - LOGIN_FAILURE_WINDOW_SECONDS
+    while failures and failures[0] <= cutoff:
+        failures.popleft()
+    if not failures:
+        _login_failures.pop(key, None)
+        return deque()
+    return failures
+
+
+def _check_login_rate_limit(key: str) -> None:
+    now = monotonic()
+    with _login_failures_lock:
+        failures = _prune_failures(key, now)
+        if len(failures) < LOGIN_FAILURE_LIMIT:
+            return
+        retry_after = max(1, int(LOGIN_FAILURE_WINDOW_SECONDS - (now - failures[0])))
+    raise HTTPException(
+        429,
+        "Too many sign-in attempts. Please wait before trying again.",
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+def _record_login_failure(key: str) -> None:
+    now = monotonic()
+    with _login_failures_lock:
+        failures = _prune_failures(key, now)
+        failures.append(now)
+        _login_failures[key] = failures
+
+
+def _clear_login_failures(key: str) -> None:
+    with _login_failures_lock:
+        _login_failures.pop(key, None)
 
 
 def _token_response(user: User):
@@ -54,7 +105,9 @@ def bootstrap_owner(payload: BootstrapOwnerRequest, db: Session = Depends(get_db
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    login_key = _login_key(request, payload)
+    _check_login_rate_limit(login_key)
     if payload.mobile:
         user = db.query(User).filter(User.mobile == normalize_mobile(payload.mobile)).first()
     elif settings.allow_legacy_email_login:
@@ -64,7 +117,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     else:
         user = None
     if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
+        _record_login_failure(login_key)
         raise HTTPException(401, "Invalid mobile number or password")
+    _clear_login_failures(login_key)
     return _token_response(user)
 
 

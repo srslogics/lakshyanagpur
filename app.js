@@ -39,6 +39,7 @@ const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser
 let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
+let detailReturnFocus = null;
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
 const studentHierarchyState = { open: new Set(["batch:Essential", "batch:Tatva"]) };
@@ -58,9 +59,40 @@ const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] 
 const money = value => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(value || 0));
 const shortMoney = value => Number(value || 0) >= 100000 ? `₹${(Number(value) / 100000).toFixed(2)}L` : money(value);
 const formatDate = value => value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value}T00:00:00`)) : "—";
-const formatDateTime = value => value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
-const localInputValue = (date = new Date(Date.now() + 86400000)) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-const dateInputValue = (date = new Date()) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const asInstant = value => {
+  if (value instanceof Date) return value;
+  const text = String(value || "");
+  return new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text}Z`);
+};
+const indiaDateParts = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(asInstant(date));
+  const value = type => parts.find(part => part.type === type)?.value || "";
+  return { year: value("year"), month: value("month"), day: value("day"), hour: value("hour"), minute: value("minute") };
+};
+const formatDateTime = value => value ? new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+}).format(asInstant(value)) : "—";
+const localInputValue = (date = new Date(Date.now() + 86400000)) => {
+  const { year, month, day, hour, minute } = indiaDateParts(date);
+  return `${year}-${month}-${day}T${hour}:${minute}`;
+};
+const dateInputValue = (date = new Date()) => {
+  const { year, month, day } = indiaDateParts(date);
+  return `${year}-${month}-${day}`;
+};
+const indiaInputToISOString = value => new Date(`${String(value)}:00+05:30`).toISOString();
 const status = value => `<span class="status status-${normalize(value) || "neutral"}">${esc(String(value || "Unknown").replaceAll("_", " "))}</span>`;
 
 function injectIcons(root = document) {
@@ -683,12 +715,12 @@ function renderTimetable() {
   const now = Date.now();
   const teachingAssignments = state.timetable.teachingAssignments || [];
   const activeAssignments = teachingAssignments.filter(item => item.isActive);
-  $("#timetable-metrics").innerHTML = compactMetrics([{ label: "Teaching assignments", value: String(activeAssignments.length) }, { label: "Faculty assigned", value: String(new Set(activeAssignments.map(item => item.facultyId)).size) }, { label: "Batches covered", value: String(new Set(activeAssignments.map(item => item.batchId)).size) }, { label: "Upcoming classes", value: String(state.sessions.filter(item => new Date(item.startsAt).getTime() >= now && item.status === "scheduled").length) }]);
+  $("#timetable-metrics").innerHTML = compactMetrics([{ label: "Teaching assignments", value: String(activeAssignments.length) }, { label: "Faculty assigned", value: String(new Set(activeAssignments.map(item => item.facultyId)).size) }, { label: "Batches covered", value: String(new Set(activeAssignments.map(item => item.batchId)).size) }, { label: "Upcoming classes", value: String(state.sessions.filter(item => asInstant(item.startsAt).getTime() >= now && item.status === "scheduled").length) }]);
   $("#teaching-assignment-count").textContent = `${activeAssignments.length} active`;
   $("#class-session-count").textContent = `${state.sessions.length} ${state.sessions.length === 1 ? "class" : "classes"}`;
   $("#teaching-assignments-table-body").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<tr><td>${studentPrimary(item.faculty, item.sessionCount ? `${item.sessionCount} scheduled ${item.sessionCount === 1 ? "class" : "classes"}` : "No classes scheduled")}</td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.subjectCode)}</small></td><td>${item.sessionCount}</td><td>${status(item.isActive ? "active" : "inactive")}</td><td>${teachingAssignmentEditButton(item)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.")}</td></tr>`;
   $("#teaching-assignments-mobile-list").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.faculty)}</h3><p>${esc(item.subject)} · ${esc(item.subjectCode)}</p></div>${status(item.isActive ? "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Classes</span><strong>${item.sessionCount}</strong></div></div>${teachingAssignmentEditButton(item)}</article>`).join("") : emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.");
-  const rows = [...state.sessions].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  const rows = [...state.sessions].sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
   $("#sessions-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td><strong>${formatDateTime(item.startsAt)}</strong><br><small>${formatDateTime(item.endsAt).split(", ").pop()}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td>${esc(item.subject)}</td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("session", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("clock", "No classes scheduled")}</td></tr>`;
   $("#sessions-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${formatDateTime(item.startsAt)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Room</span><strong>${esc(item.room)}</strong></div><div><span>Ends</span><strong>${formatDateTime(item.endsAt)}</strong></div></div>${ownerEditButton("session", item.id)}</article>`).join("") : emptyState("clock", "No classes scheduled");
 }
@@ -699,9 +731,9 @@ function teachingAssignmentEditButton(item) {
 
 function renderAcademics() {
   const now = Date.now();
-  $("#academics-metrics").innerHTML = compactMetrics([{ label: "Assignments", value: String(state.assignments.length) }, { label: "Published", value: String(state.assignments.filter(item => item.status === "published").length) }, { label: "Due", value: String(state.assignments.filter(item => new Date(item.dueAt).getTime() >= now).length) }, { label: "Recipients", value: String(state.assignments.reduce((sum, item) => sum + Number(item.recipientCount || 0), 0)) }]);
-  $("#assignments-table-body").innerHTML = state.assignments.length ? state.assignments.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small><a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></small></td><td>${esc(item.batch)}</td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("assignment", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
-  $("#assignments-mobile-list").innerHTML = state.assignments.length ? state.assignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><div class="mobile-card-actions"><a class="button button-secondary" href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a>${ownerEditButton("assignment", item.id)}</div></article>`).join("") : emptyState("book", "No assignments");
+  $("#academics-metrics").innerHTML = compactMetrics([{ label: "Assignments", value: String(state.assignments.length) }, { label: "Published", value: String(state.assignments.filter(item => item.status === "published").length) }, { label: "Due", value: String(state.assignments.filter(item => asInstant(item.dueAt).getTime() >= now).length) }, { label: "Recipients", value: String(state.assignments.reduce((sum, item) => sum + Number(item.recipientCount || 0), 0)) }]);
+  $("#assignments-table-body").innerHTML = state.assignments.length ? state.assignments.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small><a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></small></td><td>${esc(item.batch)}<br><small>${esc(item.program || "")}</small></td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("assignment", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
+  $("#assignments-mobile-list").innerHTML = state.assignments.length ? state.assignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}${item.program ? ` · ${esc(item.program)}` : ""}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><div class="mobile-card-actions"><a class="button button-secondary" href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a>${ownerEditButton("assignment", item.id)}</div></article>`).join("") : emptyState("book", "No assignments");
 }
 
 function filteredExaminations() {
@@ -724,7 +756,7 @@ function renderExaminations() {
   const now = Date.now();
   $("#examination-metrics").innerHTML = compactMetrics([
     { label: "Examinations", value: String(state.examinations.length) },
-    { label: "Upcoming", value: String(state.examinations.filter(item => item.status === "scheduled" && new Date(item.scheduledAt).getTime() >= now).length) },
+    { label: "Upcoming", value: String(state.examinations.filter(item => item.status === "scheduled" && asInstant(item.scheduledAt).getTime() >= now).length) },
     { label: "Marks in progress", value: String(state.examinations.filter(item => item.status === "marks_entry").length) },
     { label: "Published", value: String(state.examinations.filter(item => item.status === "published").length) }
   ]);
@@ -742,13 +774,13 @@ function renderExaminations() {
 function renderAttendance() {
   const submitted = state.attendanceSessions.filter(item => item.registerStatus === "submitted").length;
   $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.attendanceSessions.length) }, { label: "Submitted", value: String(submitted) }, { label: "Draft", value: String(state.attendanceSessions.filter(item => item.registerStatus === "draft").length) }, { label: "Pending", value: String(state.attendanceSessions.length - submitted) }]);
-  $("#attendance-table-body").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<tr><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.batch)} · ${formatDateTime(item.startsAt)}</small></td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${item.markedCount}/${item.studentCount}</td><td>${status(item.registerStatus)}</td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">Open</button></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("calendar-check", "No attendance registers")}</td></tr>`;
-  $("#attendance-mobile-list").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${esc(item.batch)} · ${formatDateTime(item.startsAt)}</p></div>${status(item.registerStatus)}</div><div class="mobile-record-meta"><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Marked</span><strong>${item.markedCount}/${item.studentCount}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">Open register</button></article>`).join("") : emptyState("calendar-check", "No attendance registers");
+  $("#attendance-table-body").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<tr><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</small></td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${item.markedCount}/${item.studentCount}</td><td>${status(item.registerStatus)}</td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">Open</button></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("calendar-check", "No attendance registers")}</td></tr>`;
+  $("#attendance-mobile-list").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</p></div>${status(item.registerStatus)}</div><div class="mobile-record-meta"><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Marked</span><strong>${item.markedCount}/${item.studentCount}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">Open register</button></article>`).join("") : emptyState("calendar-check", "No attendance registers");
 }
 
 function renderCommunication() {
   $("#communication-metrics").innerHTML = compactMetrics([{ label: "Notices", value: String(state.notices.length) }, { label: "Published", value: String(state.notices.filter(item => item.status === "published").length) }, { label: "Batch", value: String(state.notices.filter(item => item.audience === "batch").length) }, { label: "Channels", value: String(new Set(state.notices.map(item => item.channel)).size) }]);
-  $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span><div class="cell-actions">${status(item.status)}${ownerEditButton("notice", item.id)}</div></div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch || item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
+  $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span><div class="cell-actions">${status(item.status)}${ownerEditButton("notice", item.id)}</div></div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch ? `${item.batch} · ${item.program}` : item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
 }
 
 function inventoryCategory(value) {
@@ -773,9 +805,9 @@ function renderInventory() {
   ]);
   $("#inventory-result-summary").textContent = `${rows.length} of ${(inventory.items || []).length} items`;
   const edit = item => isOwner() ? `<button class="button button-secondary button-small" type="button" data-inventory-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : "";
-  const quantity = item => item.quantityOnHand == null ? `<strong>Not supplied</strong><small>Awaiting client count</small>` : `<strong>${esc(item.quantityOnHand)} ${esc(item.unit)}</strong><small>Current balance</small>`;
+  const quantity = item => item.quantityOnHand == null ? `<strong>Quantity pending</strong><small>Enter current stock</small>` : `<strong>${esc(item.quantityOnHand)} ${esc(item.unit)}</strong><small>Current balance</small>`;
   $("#inventory-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.name, item.sourceNote || "ERP entry")}</td><td><strong>${esc(item.sku)}</strong></td><td>${esc(inventoryCategory(item.category))}</td><td>${esc(item.unit)}</td><td><span class="inventory-quantity">${quantity(item)}</span></td><td>${status(item.isActive ? item.quantityOnHand == null ? "quantity pending" : "active" : "inactive")}</td><td>${edit(item)}</td></tr>`).join("") : `<tr><td colspan="7">${emptyState("inventory", "No matching inventory items", "Clear a filter or add a new item.")}</td></tr>`;
-  $("#inventory-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(item.isActive ? item.quantityOnHand == null ? "quantity pending" : "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Not supplied" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Source</span><strong>${esc(item.sourceNote || "ERP entry")}</strong></div></div>${edit(item)}</article>`).join("") : emptyState("inventory", "No matching inventory items");
+  $("#inventory-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(item.isActive ? item.quantityOnHand == null ? "quantity pending" : "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Quantity pending" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Source</span><strong>${esc(item.sourceNote || "ERP entry")}</strong></div></div>${edit(item)}</article>`).join("") : emptyState("inventory", "No matching inventory items");
 }
 
 function renderReports() {
@@ -861,9 +893,11 @@ function masterRows(rows, map, editKind = "", idKey = "id") { return rows.length
 
 async function openStudent(studentId) {
   const drawer = $("#detail-drawer"), body = $("#detail-drawer-body");
+  if (!drawer.classList.contains("open")) detailReturnFocus = document.activeElement;
   drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false");
   syncBodyScrollLock();
   body.innerHTML = '<div class="skeleton-line"></div>';
+  setTimeout(() => $("#detail-close").focus(), 10);
   try {
     const student = await api(`/api/students/${encodeURIComponent(studentId)}`); $("#drawer-title").textContent = student.fullName;
     const issues = student.migration?.issues || [];
@@ -877,7 +911,16 @@ async function openStudent(studentId) {
   } catch (error) { body.innerHTML = emptyState("alert", "Could not open this record", error.message); }
 }
 function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
-function closeDetail() { $("#detail-drawer").classList.remove("open", "detail-drawer-wide"); $("#detail-overlay").classList.remove("open"); $("#detail-drawer").setAttribute("aria-hidden", "true"); syncBodyScrollLock(); }
+function closeDetail() {
+  const drawer = $("#detail-drawer");
+  const wasOpen = drawer.classList.contains("open");
+  drawer.classList.remove("open", "detail-drawer-wide");
+  $("#detail-overlay").classList.remove("open");
+  drawer.setAttribute("aria-hidden", "true");
+  syncBodyScrollLock();
+  if (wasOpen && detailReturnFocus?.isConnected) detailReturnFocus.focus();
+  detailReturnFocus = null;
+}
 
 function openStudentCreateForm() {
   if (!isOwner()) { toast("Owner access is required.", "error"); return; }
@@ -925,9 +968,7 @@ async function createStudent(event) {
 }
 
 function openLeadForm() {
-  const drawer = $("#detail-drawer"); drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false"); $("#drawer-title").textContent = "New enquiry";
-  syncBodyScrollLock();
-  $("#detail-drawer-body").innerHTML = `<form class="auth-form" id="lead-create-form"><label class="field"><span>Student name</span><input name="student" required></label><label class="field"><span>Mobile number</span><input name="mobile" inputmode="numeric" required></label><label class="field"><span>Program</span><input name="program" required></label><label class="field"><span>Parent / guardian</span><input name="parent" required></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(state.user?.fullName || "Admissions desk")}" required></label><label class="field"><span>Source</span><select name="source" required><option value="walk-in">Walk-in</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="website">Website</option><option value="referral">Referral</option><option value="campaign">Campaign</option><option value="seminar">Seminar</option><option value="social media">Social media</option></select></label><label class="field"><span>Next action</span><input name="nextAction" placeholder="Call, campus visit, counselling…" required></label><div class="auth-error hidden" id="lead-form-error" role="alert"></div><button class="button button-primary button-large" type="submit">${icon("plus")}Create enquiry</button></form>`;
+  openDrawer("New enquiry", `<form class="auth-form" id="lead-create-form"><label class="field"><span>Student name</span><input name="student" required></label><label class="field"><span>Mobile number</span><input name="mobile" inputmode="numeric" required></label><label class="field"><span>Program</span><input name="program" required></label><label class="field"><span>Parent / guardian</span><input name="parent" required></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(state.user?.fullName || "Admissions desk")}" required></label><label class="field"><span>Source</span><select name="source" required><option value="walk-in">Walk-in</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="website">Website</option><option value="referral">Referral</option><option value="campaign">Campaign</option><option value="seminar">Seminar</option><option value="social media">Social media</option></select></label><label class="field"><span>Next action</span><input name="nextAction" placeholder="Call, campus visit, counselling…" required></label><div class="auth-error hidden" id="lead-form-error" role="alert"></div><button class="button button-primary button-large" type="submit">${icon("plus")}Create enquiry</button></form>`);
   $("#lead-create-form").addEventListener("submit", createLead);
 }
 
@@ -939,7 +980,29 @@ async function createLead(event) {
 }
 
 function openDrawer(title, html, wide = false) {
-  const drawer = $("#detail-drawer"); drawer.classList.toggle("detail-drawer-wide", wide); drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false"); $("#drawer-title").textContent = title; $("#detail-drawer-body").innerHTML = html; syncBodyScrollLock();
+  const drawer = $("#detail-drawer");
+  if (!drawer.classList.contains("open")) detailReturnFocus = document.activeElement;
+  drawer.classList.toggle("detail-drawer-wide", wide);
+  drawer.classList.add("open");
+  $("#detail-overlay").classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  $("#drawer-title").textContent = title;
+  $("#detail-drawer-body").innerHTML = html;
+  syncBodyScrollLock();
+  setTimeout(() => {
+    const firstControl = $('#detail-drawer-body input:not([disabled]), #detail-drawer-body select:not([disabled]), #detail-drawer-body textarea:not([disabled]), #detail-drawer-body button:not([disabled])');
+    (firstControl || $("#detail-close")).focus();
+  }, 10);
+}
+
+function trapDrawerFocus(event) {
+  if (event.key !== "Tab" || !$("#detail-drawer").classList.contains("open")) return;
+  const focusable = $$('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', $("#detail-drawer"))
+    .filter(node => node.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 }
 
 const options = (rows, label) => rows.map(item => `<option value="${esc(item.id)}">${esc(label(item))}</option>`).join("");
@@ -954,7 +1017,7 @@ function openSessionForm() {
 
 async function submitSession(event) {
   event.preventDefault(); const form = new FormData(event.currentTarget), button = $("button[type=submit]", event.currentTarget); button.disabled = true;
-  const payload = { batchId: form.get("batchId"), subjectId: form.get("subjectId"), facultyId: form.get("facultyId"), roomId: form.get("roomId"), startsAt: new Date(form.get("startsAt")).toISOString(), endsAt: new Date(form.get("endsAt")).toISOString(), notes: String(form.get("notes") || "").trim(), allowOverride: form.get("allowOverride") === "on", overrideReason: String(form.get("overrideReason") || "").trim() || null };
+  const payload = { batchId: form.get("batchId"), subjectId: form.get("subjectId"), facultyId: form.get("facultyId"), roomId: form.get("roomId"), startsAt: indiaInputToISOString(form.get("startsAt")), endsAt: indiaInputToISOString(form.get("endsAt")), notes: String(form.get("notes") || "").trim(), allowOverride: form.get("allowOverride") === "on", overrideReason: String(form.get("overrideReason") || "").trim() || null };
   try { await api("/api/timetable/sessions", { method: "POST", body: JSON.stringify(payload) }); state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; state.attendanceSessions = await api("/api/attendance/sessions"); closeDetail(); renderTimetable(); renderAttendance(); toast("Class scheduled."); }
   catch (error) { showFormError("#session-form-error", error); button.disabled = false; }
 }
@@ -1103,13 +1166,13 @@ function openAssignmentForm() {
 
 async function submitAssignment(event) {
   event.preventDefault(); const form = new FormData(event.currentTarget), button = $("button[type=submit]", event.currentTarget); button.disabled = true;
-  const payload = { title: String(form.get("title")).trim(), batchId: form.get("batchId"), subjectId: form.get("subjectId"), dueAt: new Date(form.get("dueAt")).toISOString(), externalUrl: String(form.get("externalUrl")).trim(), instructions: String(form.get("instructions") || "").trim(), status: form.get("status") };
+  const payload = { title: String(form.get("title")).trim(), batchId: form.get("batchId"), subjectId: form.get("subjectId"), dueAt: indiaInputToISOString(form.get("dueAt")), externalUrl: String(form.get("externalUrl")).trim(), instructions: String(form.get("instructions") || "").trim(), status: form.get("status") };
   try { const row = await api("/api/academics/assignments", { method: "POST", body: JSON.stringify(payload) }); state.assignments.unshift(row); closeDetail(); renderAcademics(); toast(`Assignment published to ${row.recipientCount} students.`); }
   catch (error) { showFormError("#assignment-form-error", error); button.disabled = false; }
 }
 
 function examinationFormMarkup(item = null) {
-  const scheduledAt = item?.scheduledAt ? new Date(item.scheduledAt) : new Date(Date.now() + 172800000);
+  const scheduledAt = item?.scheduledAt || new Date(Date.now() + 172800000);
   const currentStatus = item?.status || "scheduled";
   return `<form class="auth-form" id="examination-form" data-examination-id="${esc(item?.id || "")}">
     <label class="field"><span>Examination name</span><input name="name" value="${esc(item?.name || "")}" placeholder="Unit Test 01" required></label>
@@ -1140,7 +1203,7 @@ async function submitExamination(event) {
     batchId: form.get("batchId"),
     subjectId: form.get("subjectId"),
     facultyId: form.get("facultyId"),
-    scheduledAt: new Date(String(form.get("scheduledAt"))).toISOString(),
+    scheduledAt: indiaInputToISOString(form.get("scheduledAt")),
     durationMinutes: Number(form.get("durationMinutes")),
     maxMarks: Number(form.get("maxMarks")),
     passMarks: Number(form.get("passMarks")),
@@ -1232,7 +1295,7 @@ async function saveExaminationMarks(publish) {
 }
 
 function openNoticeForm() {
-  openDrawer("New notice", `<form class="auth-form" id="notice-form"><label class="field"><span>Title</span><input name="title" required></label><label class="field"><span>Message</span><textarea name="body" rows="5" required></textarea></label><label class="field"><span>Audience</span><select name="audience"><option value="all">Everyone</option><option value="parents">Parents</option><option value="students">Students</option><option value="faculty">Faculty</option><option value="batch">Batch</option></select></label><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${options(state.timetable.batches || [], item => item.name)}</select></label><label class="field"><span>Channel</span><select name="channel"><option value="in_app">In app</option><option value="email">Email</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option></select></label><label class="field"><span>Status</span><select name="status"><option value="published">Published</option><option value="draft">Draft</option></select></label>${formError("notice-form-error")}<button class="button button-primary button-large" type="submit">${icon("message")}Publish notice</button></form>`);
+  openDrawer("New notice", `<form class="auth-form" id="notice-form"><label class="field"><span>Title</span><input name="title" required></label><label class="field"><span>Message</span><textarea name="body" rows="5" required></textarea></label><label class="field"><span>Audience</span><select name="audience"><option value="all">Everyone</option><option value="parents">Parents</option><option value="students">Students</option><option value="faculty">Faculty</option><option value="batch">Batch</option></select></label><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${options(state.timetable.batches || [], item => `${item.name} · ${item.program}`)}</select></label><label class="field"><span>Channel</span><select name="channel"><option value="in_app">In app</option><option value="email">Email</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option></select></label><label class="field"><span>Status</span><select name="status"><option value="published">Published</option><option value="draft">Draft</option></select></label>${formError("notice-form-error")}<button class="button button-primary button-large" type="submit">${icon("message")}Publish notice</button></form>`);
   $("#notice-form").addEventListener("submit", submitNotice);
 }
 
@@ -1247,7 +1310,7 @@ async function openAttendance(sessionId) {
   openDrawer("Attendance", '<div class="skeleton-line"></div>');
   try {
     const roster = await api(`/api/attendance/sessions/${encodeURIComponent(sessionId)}`), locked = roster.session.registerStatus === "submitted";
-    $("#drawer-title").textContent = `${roster.session.subject} · ${roster.session.batch}`;
+    $("#drawer-title").textContent = `${roster.session.subject} · ${roster.session.batch} · ${roster.session.program || ""}`;
     $("#detail-drawer-body").innerHTML = `<form class="attendance-form" id="attendance-form" data-session-id="${esc(sessionId)}" data-locked="${locked}"><div class="attendance-form-head">${status(roster.session.registerStatus)}<span>${roster.entries.length} students</span></div>${roster.entries.map(entry => `<label class="attendance-student"><span><strong>${esc(entry.fullName)}</strong><small>${esc(entry.admissionNumber)}</small></span><select name="${esc(entry.studentId)}" data-original="${esc(entry.status)}"><option value="present" ${entry.status === "present" ? "selected" : ""}>Present</option><option value="late" ${entry.status === "late" ? "selected" : ""}>Late</option><option value="absent" ${entry.status === "absent" ? "selected" : ""}>Absent</option><option value="excused" ${entry.status === "excused" ? "selected" : ""}>Excused</option></select></label>`).join("")}${locked ? `<label class="field"><span>Correction reason</span><textarea name="correctionReason" rows="3" required></textarea></label>` : ""}${formError("attendance-form-error")}<div class="drawer-actions">${locked ? `<button class="button button-primary" type="submit">Apply corrections</button>` : `<button class="button button-secondary" type="button" id="save-attendance">Save draft</button><button class="button button-primary" type="submit">Submit &amp; lock</button>`}</div></form>`;
     $("#attendance-form").addEventListener("submit", submitAttendance); $("#save-attendance")?.addEventListener("click", () => saveAttendance(false));
   } catch (error) { $("#detail-drawer-body").innerHTML = emptyState("alert", "Could not open register", error.message); }
@@ -1351,7 +1414,7 @@ async function openOwnerEdit(kind, id) {
       <div class="form-pair"><label class="field"><span>Source</span><select name="source">${ownerStatusOptions(["walk-in","website","phone","whatsapp","referral","campaign","seminar","social media"], item.source)}</select></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(item.counsellor)}" required></label></div>
       <div class="form-pair"><label class="field"><span>Stage</span><select name="stage">${state.stages.map(value => `<option${selected(value,item.stage)}>${esc(value)}</option>`).join("")}</select></label><label class="field"><span>Priority</span><select name="priority">${ownerStatusOptions(["low","medium","high","urgent"], item.priority)}</select></label></div>
       <label class="field"><span>Next action</span><input name="nextAction" value="${esc(item.nextAction)}" required></label>
-      <label class="field"><span>Next follow-up</span><input name="nextFollowUpAt" type="datetime-local" value="${item.nextFollowUpAt ? localInputValue(new Date(item.nextFollowUpAt)) : ""}"></label>
+      <label class="field"><span>Next follow-up</span><input name="nextFollowUpAt" type="datetime-local" value="${item.nextFollowUpAt ? localInputValue(item.nextFollowUpAt) : ""}"></label>
       <label class="field"><span>Summary</span><textarea name="summary">${esc(item.summary || "")}</textarea></label>`;
   } else if (kind === "agreement") {
     title = `Edit fee agreement · ${item.studentName}`;
@@ -1361,13 +1424,13 @@ async function openOwnerEdit(kind, id) {
     fields = `<div class="immutable-record-note">${icon("shield")}<span>${money(item.amount)} · ${formatDate(item.date)} · ${esc(item.method || "Unknown mode")}<small>Source amounts and dates remain immutable. Only the review classification can change.</small></span></div><label class="field"><span>Review classification</span><select name="reconciliationStatus">${ownerStatusOptions(["ready","review","do_not_import"], item.reconciliationStatus)}</select></label>`;
   } else if (kind === "session") {
     title = "Edit class";
-    fields = `<label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label><div class="form-pair"><label class="field"><span>Faculty</span><select name="facultyId">${state.timetable.faculty.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.facultyId)}>${esc(row.fullName)}</option>`).join("")}</select></label><label class="field"><span>Room</span><select name="roomId">${state.timetable.rooms.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.roomId)}>${esc(row.name)}</option>`).join("")}</select></label></div><div class="form-pair"><label class="field"><span>Starts</span><input name="startsAt" type="datetime-local" value="${localInputValue(new Date(item.startsAt))}" required></label><label class="field"><span>Ends</span><input name="endsAt" type="datetime-local" value="${localInputValue(new Date(item.endsAt))}" required></label></div><div class="form-pair"><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["scheduled","completed","cancelled"], item.status)}</select></label><label class="check-field"><input name="allowOverride" type="checkbox"><span>Allow schedule override</span></label></div><label class="field"><span>Notes</span><textarea name="notes">${esc(item.notes || "")}</textarea></label><label class="field"><span>Override reason</span><textarea name="overrideReason">${esc(item.overrideReason || "")}</textarea></label>`;
+    fields = `<label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label><div class="form-pair"><label class="field"><span>Faculty</span><select name="facultyId">${state.timetable.faculty.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.facultyId)}>${esc(row.fullName)}</option>`).join("")}</select></label><label class="field"><span>Room</span><select name="roomId">${state.timetable.rooms.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.roomId)}>${esc(row.name)}</option>`).join("")}</select></label></div><div class="form-pair"><label class="field"><span>Starts</span><input name="startsAt" type="datetime-local" value="${localInputValue(item.startsAt)}" required></label><label class="field"><span>Ends</span><input name="endsAt" type="datetime-local" value="${localInputValue(item.endsAt)}" required></label></div><div class="form-pair"><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["scheduled","completed","cancelled"], item.status)}</select></label><label class="check-field"><input name="allowOverride" type="checkbox"><span>Allow schedule override</span></label></div><label class="field"><span>Notes</span><textarea name="notes">${esc(item.notes || "")}</textarea></label><label class="field"><span>Override reason</span><textarea name="overrideReason">${esc(item.overrideReason || "")}</textarea></label>`;
   } else if (kind === "assignment") {
     title = "Edit assignment";
-    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><div class="form-pair"><label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label></div><label class="field"><span>Due</span><input name="dueAt" type="datetime-local" value="${localInputValue(new Date(item.dueAt))}" required></label><label class="field"><span>Material link</span><input name="externalUrl" type="url" value="${esc(item.externalUrl)}" required></label><label class="field"><span>Instructions</span><textarea name="instructions">${esc(item.instructions || "")}</textarea></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
+    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><div class="form-pair"><label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label></div><label class="field"><span>Due</span><input name="dueAt" type="datetime-local" value="${localInputValue(item.dueAt)}" required></label><label class="field"><span>Material link</span><input name="externalUrl" type="url" value="${esc(item.externalUrl)}" required></label><label class="field"><span>Instructions</span><textarea name="instructions">${esc(item.instructions || "")}</textarea></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
   } else if (kind === "notice") {
     title = "Edit notice";
-    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><label class="field"><span>Message</span><textarea name="body" required>${esc(item.body)}</textarea></label><div class="form-pair"><label class="field"><span>Audience</span><select name="audience">${ownerStatusOptions(["all","parents","students","faculty","batch"], item.audience)}</select></label><label class="field"><span>Channel</span><select name="channel">${ownerStatusOptions(["in_app","email","sms","whatsapp"], item.channel)}</select></label></div><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)}</option>`).join("")}</select></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
+    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><label class="field"><span>Message</span><textarea name="body" required>${esc(item.body)}</textarea></label><div class="form-pair"><label class="field"><span>Audience</span><select name="audience">${ownerStatusOptions(["all","parents","students","faculty","batch"], item.audience)}</select></label><label class="field"><span>Channel</span><select name="channel">${ownerStatusOptions(["in_app","email","sms","whatsapp"], item.channel)}</select></label></div><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
   } else if (kind === "user" || kind === "access-user") {
     title = "Edit user access";
     fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" value="${esc(item.mobile || "")}" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional contact only)</small></span><input name="email" type="email" autocomplete="email" value="${esc(item.email || "")}"></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","attendance_operator","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span><input name="password" type="password" minlength="10" autocomplete="new-password"><small>Leave blank to keep the existing password.</small></label>`;
@@ -1388,11 +1451,11 @@ async function submitOwnerEdit(event) {
   const button = $('button[type="submit"]', form); button.disabled = true;
   let endpoint = "", payload = { ...data };
   if (kind === "student") { endpoint = `/api/students/${id}`; payload.email ||= null; payload.mobile ||= null; payload.secondaryMobile ||= null; payload.previousSchool ||= null; payload.program ||= null; payload.batch ||= null; payload.enrollmentDate ||= null; }
-  else if (kind === "lead") { endpoint = `/api/admissions/leads/${id}`; payload.email ||= null; payload.parentMobile ||= null; payload.nextFollowUpAt = payload.nextFollowUpAt ? new Date(payload.nextFollowUpAt).toISOString() : null; }
+  else if (kind === "lead") { endpoint = `/api/admissions/leads/${id}`; payload.email ||= null; payload.parentMobile ||= null; payload.nextFollowUpAt = payload.nextFollowUpAt ? indiaInputToISOString(payload.nextFollowUpAt) : null; }
   else if (kind === "agreement") { endpoint = `/api/finance/agreements/${id}`; payload.agreedAmount = Number(payload.agreedAmount); payload.legacyRegistrationTotal = Number(payload.legacyRegistrationTotal); }
   else if (kind === "payment") endpoint = `/api/finance/staged-payments/${id}/review`;
-  else if (kind === "session") { endpoint = `/api/timetable/sessions/${id}`; payload.startsAt = new Date(payload.startsAt).toISOString(); payload.endsAt = new Date(payload.endsAt).toISOString(); payload.allowOverride = form.elements.allowOverride.checked; }
-  else if (kind === "assignment") { endpoint = `/api/academics/assignments/${id}`; payload.dueAt = new Date(payload.dueAt).toISOString(); }
+  else if (kind === "session") { endpoint = `/api/timetable/sessions/${id}`; payload.startsAt = indiaInputToISOString(payload.startsAt); payload.endsAt = indiaInputToISOString(payload.endsAt); payload.allowOverride = form.elements.allowOverride.checked; }
+  else if (kind === "assignment") { endpoint = `/api/academics/assignments/${id}`; payload.dueAt = indiaInputToISOString(payload.dueAt); }
   else if (kind === "notice") { endpoint = `/api/communication/notices/${id}`; payload.batchId ||= null; }
   else if (kind === "user" || kind === "access-user") { endpoint = `/api/settings/users/${id}`; payload.isActive = form.elements.isActive.checked; payload.password ||= null; }
   else { endpoint = `/api/settings/${{ batch: "batches", subject: "subjects", room: "rooms" }[kind]}/${id}`; payload.isActive = form.elements.isActive.checked; if (kind === "room") payload.capacity = Number(payload.capacity); }
@@ -1566,7 +1629,11 @@ function bindEvents() {
     const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
     activateFinanceTab(buttons[next].dataset.financeTab, true);
   });
-  document.addEventListener("keydown", event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); } if (event.key === "Escape") { closeStudentLedger(); closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); } });
+  document.addEventListener("keydown", event => {
+    trapDrawerFocus(event);
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); }
+    if (event.key === "Escape") { closeStudentLedger(); closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); }
+  });
 }
 
 initialize();

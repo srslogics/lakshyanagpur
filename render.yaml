@@ -14,6 +14,8 @@ services:
         sync: false
       - key: SEED_DEMO_DATA
         value: false
+      - key: ALLOW_LEGACY_EMAIL_LOGIN
+        value: false
       - key: APP_HOST
         value: 0.0.0.0
       - key: APP_PORT

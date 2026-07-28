@@ -108,8 +108,8 @@ def bootstrap(
             "subject": subject.name,
             "subjectCode": subject.code,
             "room": room.name,
-            "startsAt": session.starts_at,
-            "endsAt": session.ends_at,
+            "startsAt": _aware(session.starts_at),
+            "endsAt": _aware(session.ends_at),
             "status": session.status,
             "notes": session.notes,
             "studentCount": student_counts.get((batch.name, batch.program), 0),
@@ -130,11 +130,11 @@ def bootstrap(
         "batch": batch.name,
         "subjectId": subject.id,
         "subject": subject.name,
-        "dueAt": assignment.due_at,
+        "dueAt": _aware(assignment.due_at),
         "externalUrl": assignment.external_url,
         "status": assignment.status,
         "recipientCount": student_counts.get((batch.name, batch.program), 0),
-        "createdAt": assignment.created_at,
+        "createdAt": _aware(assignment.created_at),
     } for assignment, batch, subject in assignment_rows]
 
     assigned_batch_ids = {pair["batchId"] for pair in teaching_pairs.values()}
@@ -160,7 +160,7 @@ def bootstrap(
         "body": notice.body,
         "audience": notice.audience,
         "batch": batch.name if batch else None,
-        "publishedAt": notice.published_at or notice.created_at,
+        "publishedAt": _aware(notice.published_at or notice.created_at),
     } for notice, batch in notice_rows]
 
     today_sessions = [

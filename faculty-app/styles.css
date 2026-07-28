@@ -182,6 +182,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .assignment-actions button{color:#fff;background:var(--navy-900)}
 .faculty-exam-list{display:grid;gap:12px}
 .faculty-exam-card{display:grid;grid-template-columns:76px minmax(0,1fr) auto;align-items:center;gap:18px;padding:18px 20px;border:1px solid var(--line);border-radius:19px;background:var(--surface);box-shadow:var(--shadow-sm)}
+.faculty-exam-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .faculty-exam-date{min-height:72px;display:grid;place-items:center;align-content:center;border-radius:14px;color:var(--navy-800);background:var(--navy-50);text-align:center}
 .faculty-exam-date strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.2rem;line-height:1}
 .faculty-exam-date small{margin-top:5px;font-size:.66rem;font-weight:800;text-transform:uppercase}
@@ -331,7 +332,8 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .view-heading p:last-child{font-size:.82rem}
   .assignment-grid{grid-template-columns:1fr}
   .faculty-exam-card{grid-template-columns:70px minmax(0,1fr);gap:13px;padding:14px}
-  .faculty-exam-card>.session-action{grid-column:1/-1;width:100%}
+  .faculty-exam-actions{grid-column:1/-1;width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr))}
+  .faculty-exam-actions .session-action{width:100%}
   .with-back{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:13px}
   .back-button{display:grid}
   .bottom-nav{position:fixed;z-index:30;right:0;bottom:0;left:0;height:calc(68px + var(--safe-bottom));display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px var(--safe-bottom);border-top:1px solid rgba(230,225,214,.9);background:rgba(255,255,255,.96);backdrop-filter:blur(18px)}

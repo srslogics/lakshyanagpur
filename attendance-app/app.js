@@ -35,6 +35,11 @@ const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character =>
   "&":"&amp;", "<":"&lt;", ">":"&gt;", "'":"&#39;", '"':"&quot;"
 }[character]));
 const initials = name => String(name || "AO").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
+const asInstant = value => {
+  if (value instanceof Date) return value;
+  const text = String(value || "");
+  return new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text}Z`);
+};
 
 function localDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -47,13 +52,13 @@ function localDateKey(date = new Date()) {
 function dateLong(value) {
   return new Intl.DateTimeFormat("en-IN", {
     timeZone:"Asia/Kolkata", weekday:"short", day:"numeric", month:"short", year:"numeric"
-  }).format(new Date(value));
+  }).format(asInstant(value));
 }
 
 function timeText(value) {
   return new Intl.DateTimeFormat("en-IN", {
     timeZone:"Asia/Kolkata", hour:"2-digit", minute:"2-digit"
-  }).format(new Date(value));
+  }).format(asInstant(value));
 }
 
 function shiftDate(dateKey, amount) {
@@ -192,7 +197,7 @@ function metric(label, value, attention = false) {
 function sessionState(item) {
   if (item.status !== "scheduled") return "cancelled";
   if (item.registerStatus === "submitted") return "submitted";
-  if (new Date(item.startsAt).getTime() > Date.now()) return "upcoming";
+  if (asInstant(item.startsAt).getTime() > Date.now()) return "upcoming";
   return "action";
 }
 
@@ -294,7 +299,7 @@ function renderSessions() {
   const rows = state.data.sessions.filter(item => {
     const itemState = sessionState(item);
     const matchesFilter = state.filter === "all" || itemState === state.filter;
-    const searchable = `${item.batch} ${item.subject} ${item.faculty} ${item.room}`.toLowerCase();
+    const searchable = `${item.batch} ${item.program || ""} ${item.subject} ${item.faculty} ${item.room}`.toLowerCase();
     return matchesFilter && (!query || searchable.includes(query));
   });
   $("#class-count").textContent = `${rows.length} ${rows.length === 1 ? "class" : "classes"}`;
@@ -312,7 +317,7 @@ function sessionCard(item) {
     <article class="session-card">
       <div class="session-time"><strong>${timeText(item.startsAt)}</strong><small>${timeText(item.endsAt)}</small></div>
       <div class="session-main">
-        <h3>${esc(item.subject)} · ${esc(item.batch)}</h3>
+        <h3>${esc(item.subject)} · ${esc(item.batch)} · ${esc(item.program || "")}</h3>
         <p>${esc(item.faculty)} · ${esc(item.room)}</p>
         <div class="session-meta"><span class="tag">${item.studentCount} students</span><span class="status-pill ${itemState}">${esc(stateLabel(itemState, item))}</span></div>
       </div>
@@ -333,7 +338,7 @@ async function openRegister(sessionId, trigger) {
   state.rosterSearch = "";
   state.lastFocus = trigger;
   $("#roster-search").value = "";
-  $("#register-title").textContent = `${session.subject} · ${session.batch}`;
+  $("#register-title").textContent = `${session.subject} · ${session.batch} · ${session.program || session.stream || ""}`;
   $("#register-meta").textContent = `${dateLong(session.startsAt)} · ${timeText(session.startsAt)}–${timeText(session.endsAt)} · ${session.faculty} · ${session.room}`;
   $("#roster-list").innerHTML = empty("Loading class roster");
   $("#attendance-error").classList.add("hidden");
@@ -353,8 +358,8 @@ function applyRegister(result) {
   state.roster = result.entries.map(item => ({...item}));
   state.locked = result.session.registerStatus === "submitted";
   state.upcoming = result.session.registerKind !== "manual"
-    && new Date(result.session.startsAt).getTime() > Date.now();
-  $("#register-title").textContent = `${result.session.subject} · ${result.session.batch}`;
+    && asInstant(result.session.startsAt).getTime() > Date.now();
+  $("#register-title").textContent = `${result.session.subject} · ${result.session.batch} · ${result.session.program || result.session.stream || ""}`;
   $("#register-meta").textContent = result.session.registerKind === "manual"
     ? `${dateLong(result.session.startsAt)} · ${result.session.stream} · selected roster`
     : `${dateLong(result.session.startsAt)} · ${timeText(result.session.startsAt)}–${timeText(result.session.endsAt)} · ${result.session.faculty} · ${result.session.room}`;

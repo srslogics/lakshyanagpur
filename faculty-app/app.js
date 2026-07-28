@@ -34,6 +34,8 @@ const state = {
   scheduleDate: "all",
   activeExam: null,
   publishingAssignment: null,
+  editingAssignment: null,
+  editingExamination: null,
   lastFocus: null
 };
 const PORTAL_VIEWS = new Set(["dashboard", "assignments", "examinations", "schedule", "batches", "notices", "profile", "more"]);
@@ -47,7 +49,11 @@ const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character =>
 }[character]));
 const initials = name => String(name || "LF").split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase();
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-const asDate = value => new Date(value);
+const asDate = value => {
+  if (value instanceof Date) return value;
+  const text = String(value || "");
+  return new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text}Z`);
+};
 const dateParts = value => {
   const parts = new Intl.DateTimeFormat("en-IN", {
     timeZone:"Asia/Kolkata", year:"numeric", month:"2-digit", day:"2-digit"
@@ -70,9 +76,14 @@ const timeText = value => new Intl.DateTimeFormat("en-IN", {
 }).format(asDate(value));
 const todayKey = () => dateKey(new Date());
 const localInputValue = (date = new Date(Date.now() + 7 * 86400000)) => {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone:"Asia/Kolkata", year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit", hourCycle:"h23"
+  }).formatToParts(asDate(date));
+  const value = type => parts.find(part => part.type === type)?.value || "";
+  return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
 };
+const indiaInputToISOString = value => new Date(`${String(value)}:00+05:30`).toISOString();
 const safeExternalUrl = value => {
   try {
     const url = new URL(value);
@@ -288,7 +299,7 @@ function renderDashboard() {
     metric("Active batches", String(summary.activeBatches))
   ].join("");
 
-  const next = sessions.find(item => item.status === "scheduled" && new Date(item.endsAt).getTime() >= Date.now());
+  const next = sessions.find(item => item.status === "scheduled" && asDate(item.endsAt).getTime() >= Date.now());
   $("#next-class").innerHTML = next ? classCard(next) : empty("calendar", "No upcoming class", "Your next scheduled class will appear here.");
   $("#dashboard-assignments").innerHTML = assignments.slice(0, 3).map(item => `
     <div class="compact-row">
@@ -318,7 +329,7 @@ function classCard(item) {
 
 function assignmentState(item) {
   if (item.status === "draft") return "draft";
-  return new Date(item.dueAt).getTime() < Date.now() ? "overdue" : "active";
+  return asDate(item.dueAt).getTime() < Date.now() ? "overdue" : "active";
 }
 
 function renderAssignments() {
@@ -348,6 +359,7 @@ function renderAssignments() {
         <span><strong>${esc(item.batch)} · ${esc(item.subject)}</strong>Due ${dateLong(item.dueAt)} · ${item.recipientCount} students</span>
         <div class="assignment-actions">
           ${resourceUrl ? `<a href="${esc(resourceUrl)}" target="_blank" rel="noopener">Material ${icon("external")}</a>` : ""}
+          <button type="button" data-edit-assignment="${esc(item.id)}">Edit</button>
           ${item.status === "draft" ? `<button type="button" data-publish-assignment="${esc(item.id)}" ${publishing ? "disabled" : ""}>${publishing ? "Publishing…" : "Publish"}</button>` : ""}
         </div>
       </footer>
@@ -374,7 +386,7 @@ async function publishAssignment(assignmentId) {
 
 function examinationState(item) {
   if (item.status === "published" || item.status === "cancelled") return item.status;
-  if (item.status === "marks_entry" || new Date(item.scheduledAt).getTime() <= Date.now()) return "action";
+  if (item.status === "marks_entry" || asDate(item.scheduledAt).getTime() <= Date.now()) return "action";
   return "upcoming";
 }
 
@@ -406,7 +418,10 @@ function renderExaminations() {
         <p>${esc(item.batch)} · ${esc(item.subject)} · ${timeText(item.scheduledAt)} · ${item.durationMinutes} min</p>
         <div class="faculty-exam-progress"><span><i style="width:${progress}%"></i></span><small>${esc(resultCopy)}</small></div>
       </div>
-      <button class="session-action ${itemState === "action" ? "" : "secondary"}" type="button" data-open-examination-results="${esc(item.id)}">${item.status === "published" ? "View results" : item.marksEntered ? "Continue marks" : "Enter marks"}</button>
+      <div class="faculty-exam-actions">
+        ${item.status !== "published" && item.status !== "cancelled" && !item.marksEntered ? `<button class="session-action secondary" type="button" data-edit-examination="${esc(item.id)}">Edit</button>` : ""}
+        <button class="session-action ${itemState === "action" ? "" : "secondary"}" type="button" data-open-examination-results="${esc(item.id)}">${item.status === "published" ? "View results" : item.marksEntered ? "Continue marks" : "Enter marks"}</button>
+      </div>
     </article>`;
   }).join("") : empty("exam", state.examinationFilter === "action" ? "No marks pending" : "No examinations in this view");
 }
@@ -414,7 +429,7 @@ function renderExaminations() {
 function renderSchedule() {
   const rows = state.data.sessions.filter(item => item.status === "scheduled");
   const dates = [...new Set(rows.map(item => dateKey(item.startsAt)))];
-  const upcoming = rows.filter(item => new Date(item.startsAt).getTime() >= Date.now());
+  const upcoming = rows.filter(item => asDate(item.startsAt).getTime() >= Date.now());
   $("#schedule-metrics").innerHTML = [
     metric("Upcoming classes", String(upcoming.length)),
     metric("Scheduled days", String(new Set(upcoming.map(item => dateKey(item.startsAt))).size)),
@@ -462,7 +477,7 @@ function renderBatches() {
   ].join("");
   $("#batch-list").innerHTML = pairs.length ? pairs.map(item => {
     const matchingSessions = state.data.sessions.filter(session => session.status === "scheduled" && session.batchId === item.batchId && session.subjectId === item.subjectId);
-    const next = matchingSessions.find(session => new Date(session.startsAt).getTime() >= Date.now());
+    const next = matchingSessions.find(session => asDate(session.startsAt).getTime() >= Date.now());
     return `
       <article class="faculty-batch-card">
         <header><span class="subject-mark">${esc(item.subjectCode)}</span><span>${item.studentCount} students</span></header>
@@ -520,80 +535,117 @@ function openModal(id, trigger) {
 function closeModal(id) {
   $("#" + id).classList.add("hidden");
   document.body.style.overflow = "";
+  if (id === "assignment-modal") state.editingAssignment = null;
+  if (id === "examination-modal") state.editingExamination = null;
   state.lastFocus?.focus?.();
   state.lastFocus = null;
 }
 
-function openAssignmentModal(trigger) {
+function openAssignmentModal(trigger, item = null) {
   const pairs = state.data.teachingPairs;
   if (!pairs.length) {
     toast("Ask the owner to assign you a batch and subject.");
     return;
   }
+  if (item && !pairs.some(pair => pair.batchId === item.batchId && pair.subjectId === item.subjectId)) {
+    toast("This teaching assignment is no longer active.");
+    return;
+  }
+  const form = $("#assignment-form");
+  form.reset();
+  state.editingAssignment = item?.id || null;
   $("#assignment-pair").innerHTML = pairs.map(item => `
     <option value="${esc(item.batchId)}|${esc(item.subjectId)}">${esc(item.batch)} · ${esc(item.subject)}</option>
   `).join("");
+  $("#assignment-modal-title").textContent = item ? "Edit assignment" : "New assignment";
+  $("#assignment-submit").textContent = item ? "Save changes" : "Create assignment";
   $("#assignment-error").classList.add("hidden");
-  $("#assignment-due").value = localInputValue();
+  $("#assignment-due").value = item ? localInputValue(asDate(item.dueAt)) : localInputValue();
+  if (item) {
+    form.elements.pair.value = `${item.batchId}|${item.subjectId}`;
+    form.elements.title.value = item.title;
+    form.elements.instructions.value = item.instructions || "";
+    form.elements.status.value = item.status;
+    form.elements.externalUrl.value = item.externalUrl || "";
+  }
   openModal("assignment-modal", trigger);
 }
 
-async function createAssignment(event) {
+async function saveAssignment(event) {
   event.preventDefault();
   const form = event.currentTarget;
   if (!form.reportValidity()) return;
   const button = $("#assignment-submit");
   const data = new FormData(form);
   const [batchId, subjectId] = String(data.get("pair")).split("|");
+  const assignmentId = state.editingAssignment;
   button.disabled = true;
-  button.textContent = "Creating…";
+  button.textContent = assignmentId ? "Saving…" : "Creating…";
   $("#assignment-error").classList.add("hidden");
   try {
-    await api("/api/academics/assignments", {
-      method:"POST",
+    await api(assignmentId ? `/api/academics/assignments/${encodeURIComponent(assignmentId)}` : "/api/academics/assignments", {
+      method:assignmentId ? "PATCH" : "POST",
       body:JSON.stringify({
         batchId,
         subjectId,
         title:String(data.get("title")).trim(),
         instructions:String(data.get("instructions")).trim(),
-        dueAt:new Date(String(data.get("dueAt"))).toISOString(),
+        dueAt:indiaInputToISOString(data.get("dueAt")),
         externalUrl:String(data.get("externalUrl")).trim(),
         status:String(data.get("status"))
       })
     });
     form.reset();
     closeModal("assignment-modal");
-    await refreshPortal("Assignment created.");
+    await refreshPortal(assignmentId ? "Assignment updated." : "Assignment created.");
   } catch (error) {
     $("#assignment-error").textContent = error.message;
     $("#assignment-error").classList.remove("hidden");
   } finally {
     button.disabled = false;
-    button.textContent = "Create assignment";
+    button.textContent = state.editingAssignment ? "Save changes" : "Create assignment";
   }
 }
 
-function openExaminationModal(trigger) {
+function openExaminationModal(trigger, item = null) {
   const pairs = state.data.teachingPairs;
   if (!pairs.length) {
     toast("Ask the owner to assign you a batch and subject.");
     return;
   }
+  if (item && !pairs.some(pair => pair.batchId === item.batchId && pair.subjectId === item.subjectId)) {
+    toast("This teaching assignment is no longer active.");
+    return;
+  }
+  state.editingExamination = item?.id || null;
   $("#examination-pair").innerHTML = pairs.map(item => `
     <option value="${esc(item.batchId)}|${esc(item.subjectId)}">${esc(item.batch)} · ${esc(item.subject)}</option>
   `).join("");
-  $("#examination-form").reset();
-  $("#examination-date").value = localInputValue(new Date(Date.now() + 2 * 86400000));
+  const form = $("#examination-form");
+  form.reset();
+  $("#examination-modal-title").textContent = item ? "Edit examination" : "New examination";
+  $("#examination-submit").textContent = item ? "Save changes" : "Create examination";
+  $("#examination-date").value = item ? localInputValue(asDate(item.scheduledAt)) : localInputValue(new Date(Date.now() + 2 * 86400000));
+  if (item) {
+    form.elements.pair.value = `${item.batchId}|${item.subjectId}`;
+    form.elements.name.value = item.name;
+    form.elements.durationMinutes.value = item.durationMinutes;
+    form.elements.maxMarks.value = item.maxMarks;
+    form.elements.passMarks.value = item.passMarks;
+    form.elements.instructions.value = item.instructions || "";
+    form.elements.status.value = item.status === "draft" ? "draft" : "scheduled";
+  }
   $("#examination-error").classList.add("hidden");
   openModal("examination-modal", trigger);
 }
 
-async function createExamination(event) {
+async function saveExamination(event) {
   event.preventDefault();
   const form = event.currentTarget;
   if (!form.reportValidity()) return;
   const data = new FormData(form);
   const [batchId, subjectId] = String(data.get("pair")).split("|");
+  const examinationId = state.editingExamination;
   const maxMarks = Number(data.get("maxMarks"));
   const passMarks = Number(data.get("passMarks"));
   if (passMarks > maxMarks) {
@@ -603,33 +655,33 @@ async function createExamination(event) {
   }
   const button = $("#examination-submit");
   button.disabled = true;
-  button.textContent = "Creating…";
+  button.textContent = examinationId ? "Saving…" : "Creating…";
   $("#examination-error").classList.add("hidden");
   try {
-    await api("/api/examinations", {
-      method:"POST",
+    await api(examinationId ? `/api/examinations/${encodeURIComponent(examinationId)}` : "/api/examinations", {
+      method:examinationId ? "PATCH" : "POST",
       body:JSON.stringify({
         batchId,
         subjectId,
         facultyId:state.data.profile.id,
         name:String(data.get("name")).trim(),
-        scheduledAt:new Date(String(data.get("scheduledAt"))).toISOString(),
+        scheduledAt:indiaInputToISOString(data.get("scheduledAt")),
         durationMinutes:Number(data.get("durationMinutes")),
         maxMarks,
         passMarks,
         instructions:String(data.get("instructions") || "").trim(),
-        status:"scheduled"
+        status:String(data.get("status") || "scheduled")
       })
     });
     form.reset();
     closeModal("examination-modal");
-    await refreshPortal("Examination scheduled.");
+    await refreshPortal(examinationId ? "Examination updated." : "Examination scheduled.");
   } catch (error) {
     $("#examination-error").textContent = error.message;
     $("#examination-error").classList.remove("hidden");
   } finally {
     button.disabled = false;
-    button.textContent = "Create examination";
+    button.textContent = state.editingExamination ? "Save changes" : "Create examination";
   }
 }
 
@@ -748,8 +800,8 @@ function bindEvents() {
   $("#signout-button").addEventListener("click", logout);
   $("#sidebar-signout").addEventListener("click", logout);
   $("#profile-button").addEventListener("click", () => showView("profile"));
-  $("#assignment-form").addEventListener("submit", createAssignment);
-  $("#examination-form").addEventListener("submit", createExamination);
+  $("#assignment-form").addEventListener("submit", saveAssignment);
+  $("#examination-form").addEventListener("submit", saveExamination);
   $("#examination-results-form").addEventListener("submit", event => {
     event.preventDefault();
     saveExaminationResults(true);
@@ -769,9 +821,19 @@ function bindEvents() {
 
     const assignmentTrigger = event.target.closest("[data-open-assignment]");
     if (assignmentTrigger) openAssignmentModal(assignmentTrigger);
+    const assignmentEdit = event.target.closest("[data-edit-assignment]");
+    if (assignmentEdit) {
+      const item = state.data.assignments.find(row => row.id === assignmentEdit.dataset.editAssignment);
+      if (item) openAssignmentModal(assignmentEdit, item);
+    }
 
     const examinationTrigger = event.target.closest("[data-open-examination]");
     if (examinationTrigger) openExaminationModal(examinationTrigger);
+    const examinationEdit = event.target.closest("[data-edit-examination]");
+    if (examinationEdit) {
+      const item = (state.data.examinations || []).find(row => row.id === examinationEdit.dataset.editExamination);
+      if (item) openExaminationModal(examinationEdit, item);
+    }
 
     const examinationResultsTrigger = event.target.closest("[data-open-examination-results]");
     if (examinationResultsTrigger) openExaminationResults(examinationResultsTrigger.dataset.openExaminationResults, examinationResultsTrigger);

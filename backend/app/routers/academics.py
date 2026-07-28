@@ -43,7 +43,7 @@ def _assignments(db: Session):
 
 
 def _serialize(row, batch, subject, recipients):
-    return {"id": row.id, "title": row.title, "instructions": row.instructions, "batchId": batch.id, "batch": batch.name, "subjectId": subject.id, "subject": subject.name, "dueAt": row.due_at, "externalUrl": row.external_url, "status": row.status, "recipientCount": recipients, "createdAt": row.created_at}
+    return {"id": row.id, "title": row.title, "instructions": row.instructions, "batchId": batch.id, "batch": batch.name, "program": batch.program, "subjectId": subject.id, "subject": subject.name, "dueAt": row.due_at, "externalUrl": row.external_url, "status": row.status, "recipientCount": recipients, "createdAt": row.created_at}
 
 
 @router.get("/assignments")
@@ -133,13 +133,32 @@ def publish_assignment(
 
 
 @router.patch("/assignments/{assignment_id}")
-def update_assignment(assignment_id: str, payload: AssignmentUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+def update_assignment(
+    assignment_id: str,
+    payload: AssignmentUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*ROLES)),
+):
     row = db.get(Assignment, assignment_id)
     if not row:
         raise HTTPException(404, "Assignment not found")
+    if actor.role == "faculty" and row.created_by != actor.id:
+        raise HTTPException(403, "Faculty can edit only their own assignments")
     batch, subject = db.get(Batch, payload.batch_id), db.get(Subject, payload.subject_id)
     if not batch or not subject:
         raise HTTPException(404, "Batch or subject not found")
+    if actor.role == "faculty":
+        assigned = db.query(FacultyTeachingAssignment).filter_by(
+            batch_id=batch.id,
+            subject_id=subject.id,
+            faculty_id=actor.id,
+            is_active=True,
+        ).first()
+        if not assigned:
+            raise HTTPException(
+                403,
+                "Faculty can edit assignments only for assigned batches and subjects",
+            )
     before = _serialize(row, db.get(Batch, row.batch_id), db.get(Subject, row.subject_id), 0)
     row.batch_id = batch.id
     row.subject_id = subject.id

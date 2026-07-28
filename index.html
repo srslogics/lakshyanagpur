@@ -140,7 +140,7 @@
           <div><h1 id="page-title">Overview</h1></div>
         </div>
         <div class="topbar-actions">
-          <button class="search-trigger" id="search-trigger" type="button"><span data-icon="search"></span><span>Search students, leads…</span><kbd>⌘ K</kbd></button>
+          <button class="search-trigger" id="search-trigger" type="button" aria-label="Search students and enquiries"><span data-icon="search"></span><span>Search students, leads…</span><kbd>⌘ K</kbd></button>
           <button class="icon-button" id="theme-toggle" type="button" aria-label="Switch appearance" data-icon="moon"></button>
           <button class="topbar-profile" id="topbar-profile-button" type="button" aria-label="Open account menu" aria-haspopup="menu" aria-controls="account-menu" aria-expanded="false"><span class="user-avatar" id="topbar-avatar">LI</span></button>
         </div>
@@ -280,7 +280,7 @@
         </section>
 
         <section class="app-view" id="inventory" aria-labelledby="inventory-heading">
-          <div class="page-heading"><div><h2 id="inventory-heading">Inventory</h2><p class="page-heading-copy">Client-approved books, bags and apparel.</p></div><button class="button button-primary" id="new-inventory-item" type="button"><span data-icon="plus"></span>Add item</button></div>
+          <div class="page-heading"><div><h2 id="inventory-heading">Inventory</h2><p class="page-heading-copy">Manage books, bags, apparel and institute stock.</p></div><button class="button button-primary" id="new-inventory-item" type="button"><span data-icon="plus"></span>Add item</button></div>
           <div class="compact-metrics" id="inventory-metrics"></div>
           <article class="surface table-surface">
             <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="inventory-search" type="search" placeholder="Search item or SKU" aria-label="Search inventory"></label><select id="inventory-category-filter" aria-label="Filter inventory by category"><option value="">All categories</option><option value="book">Books</option><option value="bag">Bags</option><option value="apparel">Apparel</option><option value="other">Other</option></select></div>
@@ -305,7 +305,7 @@
     </main>
   </div>
 
-  <aside class="detail-drawer" id="detail-drawer" aria-hidden="true" aria-labelledby="drawer-title">
+  <aside class="detail-drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="drawer-title">
     <div class="detail-drawer-head"><h2 id="drawer-title">Record</h2><button class="icon-button" id="detail-close" type="button" aria-label="Close details" data-icon="x"></button></div>
     <div class="detail-drawer-body" id="detail-drawer-body"></div>
   </aside>
@@ -328,6 +328,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=44" defer></script>
+  <script src="./app.js?v=49" defer></script>
 </body>
 </html>

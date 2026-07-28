@@ -61,7 +61,29 @@ app.include_router(portal.parent_router)
 async def request_context(request: Request, call_next):
     request_id = request.headers.get("x-request-id", str(uuid4()))
     response = await call_next(request)
-    response.headers.update({"x-request-id": request_id, "x-content-type-options": "nosniff", "x-frame-options": "DENY"})
+    response.headers.update({
+        "x-request-id": request_id,
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()",
+        "content-security-policy": (
+            "default-src 'self'; "
+            "base-uri 'self'; "
+            "connect-src 'self'; "
+            "font-src 'self'; "
+            "form-action 'self'; "
+            "frame-ancestors 'none'; "
+            "img-src 'self' data:; "
+            "manifest-src 'self'; "
+            "object-src 'none'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "worker-src 'self'"
+        ),
+    })
+    if request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").lower() == "https":
+        response.headers["strict-transport-security"] = "max-age=31536000; includeSubDomains"
     if request.url.path.startswith("/api/"):
         response.headers["cache-control"] = "no-store"
     elif request.url.path.endswith("/sw.js"):

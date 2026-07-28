@@ -7,7 +7,7 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
 
     assert client.get("/api/auth/bootstrap-status").json() == {
         "setupRequired": True,
-        "allowLegacyEmailLogin": True,
+        "allowLegacyEmailLogin": False,
     }
     created = client.post(
         "/api/auth/bootstrap",
@@ -24,7 +24,7 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
     }
     assert client.get("/api/auth/bootstrap-status").json() == {
         "setupRequired": False,
-        "allowLegacyEmailLogin": True,
+        "allowLegacyEmailLogin": False,
     }
 
     duplicate = client.post(
@@ -57,6 +57,22 @@ def test_frontend_shell_is_served(client):
     assert versioned_asset.status_code == 200
     assert "immutable" in versioned_asset.headers["cache-control"]
     assert client.get("/student-app/sw.js").headers["cache-control"] == "no-cache"
+
+
+def test_frontend_and_api_responses_include_launch_security_headers(client):
+    for path in ("/", "/student-app/", "/api/health"):
+        response = client.get(path)
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["x-frame-options"] == "DENY"
+        assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+        assert response.headers["permissions-policy"] == "camera=(), microphone=(), geolocation=()"
+        policy = response.headers["content-security-policy"]
+        assert "script-src 'self'" in policy
+        assert "frame-ancestors 'none'" in policy
+        assert "object-src 'none'" in policy
+
+    secure = client.get("/", headers={"x-forwarded-proto": "https"})
+    assert secure.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
 
 
 def test_unknown_and_sensitive_frontend_paths_return_not_found(client):
@@ -152,7 +168,11 @@ def test_login_logout_revokes_the_active_token(client):
     assert rejected.json()["detail"] == "Session has been signed out"
 
 
-def test_legacy_email_login_remains_available_during_mobile_migration(client):
+def test_legacy_email_login_can_be_enabled_during_mobile_migration(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.routers.auth.settings.allow_legacy_email_login",
+        True,
+    )
     logged_in = client.post(
         "/api/auth/login",
         json={"email": "owner@example.com", "password": "Password123!"},
@@ -180,3 +200,14 @@ def test_invalid_mobile_is_rejected_without_account_lookup(client):
         json={"mobile": "12345", "password": "Password123!"},
     )
     assert response.status_code == 422
+
+
+def test_repeated_failed_logins_are_temporarily_rate_limited(client):
+    payload = {"mobile": "9888888888", "password": "WrongPassword123!"}
+    for _ in range(8):
+        assert client.post("/api/auth/login", json=payload).status_code == 401
+
+    limited = client.post("/api/auth/login", json=payload)
+    assert limited.status_code == 429
+    assert int(limited.headers["retry-after"]) > 0
+    assert limited.json()["detail"] == "Too many sign-in attempts. Please wait before trying again."

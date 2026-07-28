@@ -2,11 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <script>
-    if (window.location.protocol === "file:") {
-      window.location.replace("http://127.0.0.1:8000/faculty-app/" + window.location.search + window.location.hash);
-    }
-  </script>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171a4b">
   <meta name="description" content="Lakshya Faculty portal for classes, assignments, examinations, batches and institute notices.">
@@ -216,6 +211,7 @@
           <label><span>Pass marks</span><input name="passMarks" type="number" min="0" max="10000" step="0.01" value="40" required></label>
         </div>
         <label><span>Instructions</span><textarea name="instructions" rows="3" maxlength="5000" placeholder="Reporting time or permitted materials"></textarea></label>
+        <label><span>Status</span><select name="status"><option value="scheduled">Schedule now</option><option value="draft">Save draft</option></select></label>
         <div class="modal-error hidden" id="examination-error" role="alert"></div>
         <footer><button class="secondary-button" type="button" data-close-modal="examination-modal">Cancel</button><button class="primary-button" id="examination-submit" type="submit">Create examination</button></footer>
       </form>
@@ -235,6 +231,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=6" defer></script>
+  <script src="./app.js?v=9" defer></script>
 </body>
 </html>

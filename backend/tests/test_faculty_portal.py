@@ -207,6 +207,35 @@ def test_faculty_can_publish_only_their_own_draft_assignment(client, database):
         headers=other_headers,
     )
     assert denied.status_code == 403
+    denied_edit = client.patch(
+        f"/api/academics/assignments/{assignment_id}",
+        headers=other_headers,
+        json={
+            "batchId": batch.id,
+            "subjectId": subject.id,
+            "title": "Unauthorised change",
+            "instructions": "This must not be saved.",
+            "dueAt": (datetime.now(timezone.utc) + timedelta(days=6)).isoformat(),
+            "externalUrl": "https://example.com/other.pdf",
+            "status": "draft",
+        },
+    )
+    assert denied_edit.status_code == 403
+    edited = client.patch(
+        f"/api/academics/assignments/{assignment_id}",
+        headers=faculty_headers,
+        json={
+            "batchId": batch.id,
+            "subjectId": subject.id,
+            "title": "Quadratic equations review",
+            "instructions": "Complete questions 1–15.",
+            "dueAt": (datetime.now(timezone.utc) + timedelta(days=6)).isoformat(),
+            "externalUrl": "https://example.com/quadratics-review.pdf",
+            "status": "draft",
+        },
+    )
+    assert edited.status_code == 200
+    assert edited.json()["title"] == "Quadratic equations review"
     published = client.post(
         f"/api/academics/assignments/{assignment_id}/publish",
         headers=faculty_headers,

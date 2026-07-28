@@ -48,7 +48,18 @@ def _get_session(db: Session, session_id: str, user: User):
 
 
 def _eligible_students(db: Session, batch: Batch):
-    return db.query(Student).join(Enrollment, Enrollment.student_id == Student.id).filter(Enrollment.is_active.is_(True), Enrollment.batch == batch.name).order_by(Student.full_name).all()
+    return (
+        db.query(Student)
+        .join(Enrollment, Enrollment.student_id == Student.id)
+        .filter(
+            Student.status == "active",
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == batch.name,
+            Enrollment.program == batch.program,
+        )
+        .order_by(Student.full_name)
+        .all()
+    )
 
 
 def _eligible_manual_students(
@@ -169,24 +180,44 @@ def _attendance_catalog(db: Session):
 
 def _session_summary(db: Session, row):
     session, batch, subject, faculty, room, register = row
-    students = db.query(func.count(func.distinct(Enrollment.student_id))).filter(Enrollment.is_active.is_(True), Enrollment.batch == batch.name).scalar() or 0
+    students = (
+        db.query(func.count(func.distinct(Enrollment.student_id)))
+        .join(Student, Student.id == Enrollment.student_id)
+        .filter(
+            Student.status == "active",
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == batch.name,
+            Enrollment.program == batch.program,
+        )
+        .scalar()
+        or 0
+    )
     marked = db.query(AttendanceEntry).filter_by(register_id=register.id).count() if register else 0
-    return {"id": session.id, "batch": batch.name, "subject": subject.name, "faculty": faculty.full_name, "room": room.name, "startsAt": _aware(session.starts_at), "endsAt": _aware(session.ends_at), "status": session.status, "registerStatus": register.status if register else "not_started", "studentCount": students, "markedCount": marked}
+    return {"id": session.id, "batch": batch.name, "program": batch.program, "subject": subject.name, "faculty": faculty.full_name, "room": room.name, "startsAt": _aware(session.starts_at), "endsAt": _aware(session.ends_at), "status": session.status, "registerStatus": register.status if register else "not_started", "studentCount": students, "markedCount": marked}
 
 
 def _session_summaries(db: Session, rows):
     if not rows:
         return []
-    batch_names = {row[1].name for row in rows}
+    batch_keys = {(row[1].name, row[1].program) for row in rows}
+    batch_names = {name for name, _ in batch_keys}
+    programs = {program for _, program in batch_keys}
     student_counts = {
-        batch_name: count
-        for batch_name, count in (
-            db.query(Enrollment.batch, func.count(func.distinct(Enrollment.student_id)))
+        (batch_name, program): count
+        for batch_name, program, count in (
+            db.query(
+                Enrollment.batch,
+                Enrollment.program,
+                func.count(func.distinct(Enrollment.student_id)),
+            )
+            .join(Student, Student.id == Enrollment.student_id)
             .filter(
+                Student.status == "active",
                 Enrollment.is_active.is_(True),
                 Enrollment.batch.in_(batch_names),
+                Enrollment.program.in_(programs),
             )
-            .group_by(Enrollment.batch)
+            .group_by(Enrollment.batch, Enrollment.program)
             .all()
         )
     }
@@ -203,6 +234,7 @@ def _session_summaries(db: Session, rows):
     return [{
         "id": session.id,
         "batch": batch.name,
+        "program": batch.program,
         "subject": subject.name,
         "faculty": faculty.full_name,
         "room": room.name,
@@ -210,7 +242,7 @@ def _session_summaries(db: Session, rows):
         "endsAt": _aware(session.ends_at),
         "status": session.status,
         "registerStatus": register.status if register else "not_started",
-        "studentCount": student_counts.get(batch.name, 0),
+        "studentCount": student_counts.get((batch.name, batch.program), 0),
         "markedCount": marked_counts.get(register.id, 0) if register else 0,
     } for session, batch, subject, faculty, room, register in rows]
 

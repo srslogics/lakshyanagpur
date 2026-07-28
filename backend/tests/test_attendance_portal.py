@@ -179,6 +179,33 @@ def test_faculty_cannot_access_or_write_attendance(client, database):
     ).status_code == 403
 
 
+def test_class_roster_is_isolated_by_batch_and_program(client, database):
+    operator, _, student, started, _ = setup_attendance_day(database)
+    same_name_other_program = Batch(name="JEE 2027 A", program="NEET")
+    other_student = Student(
+        admission_number="LI-2026-10003",
+        full_name="NEET Student In Same Group",
+        mobile="9000000003",
+        status="active",
+    )
+    database.add_all([same_name_other_program, other_student])
+    database.flush()
+    database.add(Enrollment(
+        student_id=other_student.id,
+        program="NEET",
+        batch="JEE 2027 A",
+        status="active",
+    ))
+    database.commit()
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+
+    roster = client.get(f"/api/attendance/sessions/{started.id}", headers=headers)
+    assert roster.status_code == 200
+    assert roster.json()["session"]["studentCount"] == 1
+    assert roster.json()["session"]["program"] == "JEE"
+    assert [item["studentId"] for item in roster.json()["entries"]] == [student.id]
+
+
 def setup_manual_attendance_catalog(database):
     operator = User(
         mobile="9000000094",

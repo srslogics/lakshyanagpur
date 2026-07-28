@@ -137,6 +137,48 @@ def test_student_portal_returns_only_the_linked_student(client, database, owner_
     assert client.get("/api/portal/bootstrap", headers=owner_headers).status_code == 403
 
 
+def test_student_schedule_is_isolated_by_batch_and_program(
+    client,
+    database,
+    owner_headers,
+    parent_headers,
+):
+    faculty, batch, subject, room, _, student, _ = operational_setup(database)
+    batch.name = "Tatva"
+    database.query(Enrollment).filter_by(student_id=student.id).one().batch = "Tatva"
+    other_batch = Batch(name="Tatva", program="NEET")
+    other_subject = Subject(name="Biology", code="BIO", program="NEET")
+    database.add_all([other_batch, other_subject])
+    parent = database.query(User).filter_by(role="parent_student").one()
+    database.add(StudentAccount(user_id=parent.id, student_id=student.id))
+    database.commit()
+
+    own_session = client.post(
+        "/api/timetable/sessions",
+        json=session_payload(faculty, batch, subject, room),
+        headers=owner_headers,
+    )
+    other_session = client.post(
+        "/api/timetable/sessions",
+        json=session_payload(
+            faculty,
+            other_batch,
+            other_subject,
+            room,
+            datetime.now(timezone.utc) + timedelta(days=2),
+        ),
+        headers=owner_headers,
+    )
+    assert own_session.status_code == 201
+    assert other_session.status_code == 201
+
+    portal = client.get("/api/portal/bootstrap", headers=parent_headers)
+    assert portal.status_code == 200
+    assert [item["id"] for item in portal.json()["schedule"]] == [
+        own_session.json()["id"],
+    ]
+
+
 def test_student_added_to_batch_after_publication_sees_assignment_without_backfill(client, database, owner_headers):
     _, batch, subject, *_ = operational_setup(database)
     assignment = client.post(

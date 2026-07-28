@@ -63,7 +63,11 @@ def schedule_rows(db: Session, enrollment: Enrollment | None):
         .join(Subject, Subject.id == ClassSession.subject_id)
         .join(User, User.id == ClassSession.faculty_id)
         .join(Room, Room.id == ClassSession.room_id)
-        .filter(Batch.name == enrollment.batch, ClassSession.status == "scheduled")
+        .filter(
+            Batch.name == enrollment.batch,
+            Batch.program == enrollment.program,
+            ClassSession.status == "scheduled",
+        )
         .order_by(ClassSession.starts_at)
         .all()
     )
@@ -73,8 +77,8 @@ def schedule_rows(db: Session, enrollment: Enrollment | None):
         "subjectCode": subject.code,
         "faculty": faculty.full_name,
         "room": room.name,
-        "startsAt": session.starts_at,
-        "endsAt": session.ends_at,
+        "startsAt": _aware(session.starts_at),
+        "endsAt": _aware(session.ends_at),
     } for session, _, subject, faculty, room in rows]
 
 
@@ -110,7 +114,7 @@ def assignment_rows(
         "instructions": assignment.instructions,
         "subject": subject.name,
         "batch": batch.name,
-        "dueAt": assignment.due_at,
+        "dueAt": _aware(assignment.due_at),
         "externalUrl": assignment.external_url,
         "status": recipient.status if recipient else "published",
     } for assignment, batch, subject, recipient in rows]
@@ -132,7 +136,7 @@ def attendance_rows(db: Session, student: Student):
     class_rows = [{
         "sessionId": session.id,
         "subject": subject.name,
-        "startsAt": session.starts_at,
+        "startsAt": _aware(session.starts_at),
         "dateLabel": None,
         "status": entry.status,
         "rawStatus": None,
@@ -235,13 +239,13 @@ def examination_rows(
             "subject": subject.name,
             "subjectCode": subject.code,
             "faculty": faculty.full_name,
-            "scheduledAt": exam.scheduled_at,
+            "scheduledAt": _aware(exam.scheduled_at),
             "durationMinutes": exam.duration_minutes,
             "maxMarks": float(exam.max_marks),
             "passMarks": float(exam.pass_marks),
             "instructions": exam.instructions,
             "status": exam.status,
-            "publishedAt": exam.published_at,
+            "publishedAt": _aware(exam.published_at) if exam.published_at else None,
             "resultStatus": (
                 result.result_status
                 if published and result
@@ -269,7 +273,11 @@ def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
     if enrollment and enrollment.batch:
         query = query.filter(or_(
             Notice.audience.in_(direct_audiences),
-            and_(Notice.audience == "batch", Batch.name == enrollment.batch),
+            and_(
+                Notice.audience == "batch",
+                Batch.name == enrollment.batch,
+                Batch.program == enrollment.program,
+            ),
         ))
     else:
         query = query.filter(Notice.audience.in_(direct_audiences))
@@ -283,7 +291,7 @@ def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
         "body": notice.body,
         "channel": notice.channel,
         "batch": batch.name if batch else None,
-        "publishedAt": notice.published_at or notice.created_at,
+        "publishedAt": _aware(notice.published_at or notice.created_at),
     } for notice, batch in rows]
 
 

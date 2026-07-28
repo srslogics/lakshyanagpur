@@ -13,7 +13,7 @@ ROLES = ("owner", "admissions_manager", "academic_coordinator", "front_desk")
 
 
 def _serialize(row: Notice, batch: Batch | None):
-    return {"id": row.id, "title": row.title, "body": row.body, "audience": row.audience, "channel": row.channel, "batchId": row.batch_id, "batch": batch.name if batch else None, "status": row.status, "publishedAt": row.published_at, "createdAt": row.created_at}
+    return {"id": row.id, "title": row.title, "body": row.body, "audience": row.audience, "channel": row.channel, "batchId": row.batch_id, "batch": batch.name if batch else None, "program": batch.program if batch else None, "status": row.status, "publishedAt": row.published_at, "createdAt": row.created_at}
 
 
 @router.get("/notices")

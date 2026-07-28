@@ -61,16 +61,32 @@ const initials = (name) => String(name || "LS")
   .map((part) => part[0])
   .join("")
   .toUpperCase();
-const validDate = (value) => value && !Number.isNaN(new Date(value).getTime());
-const dateKey = (value) => (validDate(value) ? new Date(value).toISOString().slice(0, 10) : "");
+const asInstant = (value) => {
+  if (value instanceof Date) return value;
+  const text = String(value || "");
+  return new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(text) || /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : `${text}Z`);
+};
+const validDate = (value) => value && !Number.isNaN(asInstant(value).getTime());
+const indiaDateParts = (value) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(asInstant(value));
+  const get = type => parts.find(part => part.type === type)?.value || "";
+  return { year: get("year"), month: get("month"), day: get("day") };
+};
+const dateKey = (value) => {
+  if (!validDate(value)) return "";
+  const { year, month, day } = indiaDateParts(value);
+  return `${year}-${month}-${day}`;
+};
 const dateText = (value, fallback = "Date pending") => validDate(value)
-  ? new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value))
+  ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }).format(asInstant(value))
   : fallback;
 const dateLong = (value, fallback = "Date pending") => validDate(value)
-  ? new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short" }).format(new Date(value))
+  ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" }).format(asInstant(value))
   : fallback;
 const timeText = (value) => validDate(value)
-  ? new Intl.DateTimeFormat("en-IN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value))
+  ? new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" }).format(asInstant(value))
   : "Time pending";
 const titleCase = (value) => String(value || "Not recorded").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const displayValue = (value) => (value === null || value === undefined || String(value).trim() === "" ? "Not recorded" : String(value));
@@ -249,7 +265,7 @@ function moduleMetric(label, value, attention = false) {
 
 function assignmentState(item) {
   if (item.status === "completed") return "completed";
-  return validDate(item.dueAt) && new Date(item.dueAt).getTime() < Date.now() ? "overdue" : "open";
+  return validDate(item.dueAt) && asInstant(item.dueAt).getTime() < Date.now() ? "overdue" : "open";
 }
 
 function classCard(item) {
@@ -299,7 +315,7 @@ function renderHome() {
     summaryCard("Open assignments", String(openAssignments.length), openAssignments.length > 0, "assignments"),
     summaryCard("Upcoming exams", String(summary.upcomingExams ?? examinations.filter((item) => item.status === "scheduled").length), false, "examinations"),
   ].join("");
-  const next = schedule.find((item) => validDate(item.startsAt) && new Date(item.startsAt) >= new Date());
+  const next = schedule.find((item) => validDate(item.startsAt) && asInstant(item.startsAt) >= new Date());
   $("#next-class").innerHTML = next
     ? classCard(next)
     : empty("calendar", "Timetable not published", "Your next class will appear when the institute publishes the timetable.");
@@ -318,8 +334,8 @@ function renderHome() {
 }
 
 function renderSchedule() {
-  const rows = [...state.data.schedule].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
-  const upcoming = rows.filter((item) => validDate(item.startsAt) && new Date(item.startsAt) >= new Date());
+  const rows = [...state.data.schedule].sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
+  const upcoming = rows.filter((item) => validDate(item.startsAt) && asInstant(item.startsAt) >= new Date());
   const dateKeys = [...new Set(upcoming.map((item) => dateKey(item.startsAt)).filter(Boolean))];
   const subjects = new Set(upcoming.map((item) => item.subject).filter(Boolean));
   $("#schedule-metrics").innerHTML = [
@@ -416,10 +432,10 @@ async function updateAssignmentStatus(assignmentId, status) {
 }
 
 function renderExaminations() {
-  const all = [...(state.data.examinations || [])].sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+  const all = [...(state.data.examinations || [])].sort((a, b) => asInstant(b.scheduledAt) - asInstant(a.scheduledAt));
   const now = Date.now();
-  const upcoming = all.filter((item) => item.status === "scheduled" && new Date(item.scheduledAt).getTime() >= now);
-  const awaiting = all.filter((item) => item.status === "marks_entry" || (item.status === "scheduled" && new Date(item.scheduledAt).getTime() < now));
+  const upcoming = all.filter((item) => item.status === "scheduled" && asInstant(item.scheduledAt).getTime() >= now);
+  const awaiting = all.filter((item) => item.status === "marks_entry" || (item.status === "scheduled" && asInstant(item.scheduledAt).getTime() < now));
   const results = all.filter((item) => item.status === "published");
   $("#examination-metrics").innerHTML = [
     moduleMetric("Upcoming", String(upcoming.length)),
@@ -439,7 +455,7 @@ function renderExaminations() {
         ? `${item.marksObtained} / ${item.maxMarks}`
         : published
           ? titleCase(item.resultStatus)
-          : item.status === "marks_entry" || new Date(item.scheduledAt).getTime() < now
+          : item.status === "marks_entry" || asInstant(item.scheduledAt).getTime() < now
             ? "Evaluation underway"
             : "Scheduled";
       const resultClass = graded ? (item.qualified ? "qualified" : "review") : item.resultStatus === "absent" ? "review" : "neutral";
@@ -540,7 +556,7 @@ function renderProfile() {
 
 function renderMore() {
   const { profile, examinations, notices } = state.data;
-  const upcomingExams = (examinations || []).filter((item) => item.status === "scheduled" && new Date(item.scheduledAt).getTime() >= Date.now()).length;
+  const upcomingExams = (examinations || []).filter((item) => item.status === "scheduled" && asInstant(item.scheduledAt).getTime() >= Date.now()).length;
   $("#more-examination-copy").textContent = upcomingExams ? `${upcomingExams} upcoming examination${upcomingExams === 1 ? "" : "s"}` : `${(examinations || []).filter((item) => item.status === "published").length} published results`;
   $("#more-notice-copy").textContent = notices.length ? `${notices.length} published notice${notices.length === 1 ? "" : "s"}` : "No published notices";
   $("#more-profile-copy").textContent = [profile.admissionNumber, profile.batch].filter(Boolean).join(" · ") || "Student and login details";
