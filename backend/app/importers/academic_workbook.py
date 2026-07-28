@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from ..client_master import sync_client_master_data
 from ..database import SessionLocal
 from ..models import (
     AcademicImportBatch,
@@ -188,7 +189,9 @@ def import_manifest(db: Session, manifest: dict, actor_id: str | None = None) ->
         .one_or_none()
     )
     if previous:
-        return reconciliation(db, previous.id, idempotent=True)
+        result = reconciliation(db, previous.id, idempotent=True)
+        sync_client_master_data(db)
+        return result
 
     expected = manifest["expected"]
     batch = AcademicImportBatch(
@@ -324,7 +327,9 @@ def import_manifest(db: Session, manifest: dict, actor_id: str | None = None) ->
     except Exception:
         db.rollback()
         raise
-    return reconciliation(db, batch.id)
+    result = reconciliation(db, batch.id)
+    sync_client_master_data(db)
+    return result
 
 
 def reconciliation(db: Session, batch_id: str, idempotent: bool = False) -> dict:

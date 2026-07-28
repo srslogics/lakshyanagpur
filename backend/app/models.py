@@ -348,7 +348,25 @@ class FacultyTeachingAssignment(TimestampMixin, Base):
     batch_id: Mapped[str] = mapped_column(ForeignKey("batches.id"), index=True)
     subject_id: Mapped[str] = mapped_column(ForeignKey("subjects.id"), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class InventoryItem(TimestampMixin, Base):
+    __tablename__ = "inventory_items"
+    id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        default=lambda: new_id("inv"),
+    )
+    sku: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), index=True)
+    category: Mapped[str] = mapped_column(String(40), index=True)
+    unit: Mapped[str] = mapped_column(String(40), default="piece")
+    quantity_on_hand: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    source_note: Mapped[str | None] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
 
 
 class ClassSession(TimestampMixin, Base):

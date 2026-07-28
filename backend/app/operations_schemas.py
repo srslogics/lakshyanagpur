@@ -156,6 +156,27 @@ class FacultyTeachingAssignmentUpdate(FacultyTeachingAssignmentCreate):
     is_active: bool = Field(alias="isActive")
 
 
+InventoryCategory = Literal["book", "bag", "apparel", "other"]
+
+
+class InventoryItemCreate(BaseModel):
+    sku: str = Field(min_length=2, max_length=40)
+    name: str = Field(min_length=2, max_length=255)
+    category: InventoryCategory
+    unit: str = Field(default="piece", min_length=1, max_length=40)
+    quantityOnHand: int | None = Field(default=None, ge=0)
+    notes: str = Field(default="", max_length=2000)
+
+
+class InventoryItemUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=255)
+    category: InventoryCategory
+    unit: str = Field(min_length=1, max_length=40)
+    quantityOnHand: int | None = Field(default=None, ge=0)
+    notes: str = Field(default="", max_length=2000)
+    isActive: bool
+
+
 class AssignmentCreate(BaseModel):
     batch_id: str = Field(alias="batchId")
     subject_id: str = Field(alias="subjectId")

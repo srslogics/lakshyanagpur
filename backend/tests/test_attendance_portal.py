@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.models import (
     AcademicImportBatch,
@@ -94,15 +95,26 @@ def test_attendance_operator_sees_all_classes_and_submits_register(client, datab
     database.commit()
     headers = {"Authorization": f"Bearer {create_token(operator)}"}
 
-    bootstrap = client.get("/api/attendance/bootstrap", headers=headers)
+    india_tz = ZoneInfo("Asia/Kolkata")
+    selected_day = started.starts_at.astimezone(india_tz).date()
+    bootstrap = client.get(
+        f"/api/attendance/bootstrap?day={selected_day.isoformat()}",
+        headers=headers,
+    )
     assert bootstrap.status_code == 200
     body = bootstrap.json()
     assert body["profile"]["role"] == "attendance_operator"
-    assert {item["id"] for item in body["sessions"]} == {started.id, upcoming.id}
+    expected_sessions = {started.id}
+    upcoming_in_selected_day = (
+        upcoming.starts_at.astimezone(india_tz).date() == selected_day
+    )
+    if upcoming_in_selected_day:
+        expected_sessions.add(upcoming.id)
+    assert {item["id"] for item in body["sessions"]} == expected_sessions
     assert body["summary"] == {
-        "scheduled": 2,
+        "scheduled": len(expected_sessions),
         "pending": 1,
-        "upcoming": 1,
+        "upcoming": int(upcoming_in_selected_day),
         "submitted": 0,
     }
 

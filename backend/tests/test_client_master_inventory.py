@@ -1,0 +1,150 @@
+import json
+from pathlib import Path
+
+from app.client_master import sync_client_master_data
+from app.importers.academic_workbook import import_manifest as import_academics
+from app.importers.legacy_admissions import import_manifest as import_admissions
+from app.models import (
+    Batch,
+    FacultyTeachingAssignment,
+    InventoryItem,
+    Subject,
+    User,
+)
+
+
+DATA_DIR = Path(__file__).parents[1] / "data" / "imports"
+
+
+def _manifest(name):
+    return json.loads((DATA_DIR / name).read_text())
+
+
+def test_client_faculty_allocations_match_confirmed_scopes(database):
+    import_admissions(database, _manifest("admission_2026_27.json"))
+    import_academics(database, _manifest("demo_attendance_2026.json"))
+
+    faculties = database.query(User).filter_by(role="faculty").all()
+    assert {row.full_name for row in faculties} == {
+        "Meet Sir",
+        "Jitendra Sir",
+        "Anita Ma'am",
+        "Kanchan Ma'am",
+        "Kajal Ma'am",
+    }
+    assert all(row.mobile is None for row in faculties)
+    assert all(row.password_hash == "unprovisioned" for row in faculties)
+
+    counts = {
+        faculty.full_name: (
+            database.query(FacultyTeachingAssignment)
+            .filter_by(faculty_id=faculty.id, is_active=True)
+            .count()
+        )
+        for faculty in faculties
+    }
+    assert counts == {
+        "Meet Sir": 2,
+        "Kajal Ma'am": 2,
+        "Jitendra Sir": 4,
+        "Anita Ma'am": 4,
+        "Kanchan Ma'am": 4,
+    }
+
+    meet = next(row for row in faculties if row.full_name == "Meet Sir")
+    meet_scopes = {
+        (batch.name, batch.program, subject.name)
+        for _, batch, subject in (
+            database.query(FacultyTeachingAssignment, Batch, Subject)
+            .join(Batch, Batch.id == FacultyTeachingAssignment.batch_id)
+            .join(Subject, Subject.id == FacultyTeachingAssignment.subject_id)
+            .filter(FacultyTeachingAssignment.faculty_id == meet.id)
+            .all()
+        )
+    }
+    assert meet_scopes == {
+        ("Tatva", "JEE", "Physics"),
+        ("Tatva", "NEET", "Physics"),
+    }
+
+    kajal = next(row for row in faculties if row.full_name == "Kajal Ma'am")
+    kajal_scopes = {
+        (batch.name, batch.program, subject.name)
+        for _, batch, subject in (
+            database.query(FacultyTeachingAssignment, Batch, Subject)
+            .join(Batch, Batch.id == FacultyTeachingAssignment.batch_id)
+            .join(Subject, Subject.id == FacultyTeachingAssignment.subject_id)
+            .filter(FacultyTeachingAssignment.faculty_id == kajal.id)
+            .all()
+        )
+    }
+    assert kajal_scopes == {
+        ("Essential", "MHT-CET", "Physics"),
+        ("Essential", "Boards 11th & 12th Tuition", "Physics"),
+    }
+
+
+def test_client_inventory_is_idempotent_and_quantities_remain_unknown(database):
+    first = sync_client_master_data(database)
+    second = sync_client_master_data(database)
+
+    assert first["inventory"] == 6
+    assert second == {
+        "faculty": 0,
+        "subjects": 0,
+        "assignments": 0,
+        "inventory": 0,
+    }
+    rows = database.query(InventoryItem).order_by(InventoryItem.sku).all()
+    assert len(rows) == 6
+    assert all(row.quantity_on_hand is None for row in rows)
+    assert {row.name for row in rows} == {
+        "Essential Math Booklet 1",
+        "Essential Chemistry Booklet 1",
+        "Essential Physics Booklet 1",
+        "Essential Biology Booklet 1",
+        "Bag",
+        "T-shirt",
+    }
+
+
+def test_owner_can_record_inventory_quantity_without_changing_source_name(
+    client,
+    database,
+    owner_headers,
+):
+    sync_client_master_data(database)
+    bootstrap = client.get("/api/inventory/bootstrap", headers=owner_headers)
+    assert bootstrap.status_code == 200
+    assert bootstrap.json()["summary"] == {
+        "activeItems": 6,
+        "knownQuantities": 0,
+        "quantityPending": 6,
+        "categories": 3,
+    }
+    item = next(
+        row for row in bootstrap.json()["items"]
+        if row["sku"] == "ESS-PHYS-B1"
+    )
+    updated = client.patch(
+        f"/api/inventory/items/{item['id']}",
+        headers=owner_headers,
+        json={
+            "name": item["name"],
+            "category": item["category"],
+            "unit": "booklet",
+            "quantityOnHand": 25,
+            "notes": "Count verified by owner.",
+            "isActive": True,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["quantityOnHand"] == 25
+    assert updated.json()["sku"] == "ESS-PHYS-B1"
+
+
+def test_non_inventory_role_cannot_read_inventory(client, parent_headers):
+    assert client.get(
+        "/api/inventory/bootstrap",
+        headers=parent_headers,
+    ).status_code == 403

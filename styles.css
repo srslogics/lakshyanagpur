@@ -195,6 +195,9 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .welcome-row h2, .page-heading h2 { margin: 0; font: 800 clamp(1.65rem,3vw,2.25rem)/1.15 "Manrope",sans-serif; letter-spacing: -.045em; }
 .welcome-row h2 span { color: var(--forest-700); }
 .welcome-row > div > p:last-child, .page-heading > div > p:last-child { margin: 9px 0 0; color: var(--ink-600); line-height: 1.55; }
+.inventory-quantity { display: grid; gap: 3px; }
+.inventory-quantity strong { color: var(--ink-900); font-size: .84rem; }
+.inventory-quantity small { color: var(--ink-500); font-size: .68rem; }
 .metric-grid { display: grid; grid-template-columns: 1.25fr repeat(3, 1fr); gap: 14px; margin-bottom: 18px; }
 .metric-card { min-height: 126px; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-xs); }
 .metric-card-featured { color: #fff; border-color: transparent; background: var(--forest-900); }

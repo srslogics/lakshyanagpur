@@ -15,6 +15,7 @@ const icons = {
   exam: '<path d="M8 3h8m-7 0v3h6V3"/><rect x="5" y="5" width="14" height="17" rx="2"/><path d="M9 11h6m-6 4h4m-4 4h6"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   message: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/><path d="M8 9h8M8 13h5"/>',
+  inventory: '<path d="m4 7 8-4 8 4-8 4-8-4Z"/><path d="m4 7v10l8 4 8-4V7M12 11v10"/>',
   chart: '<path d="M4 20V10m6 10V4m6 16v-7m6 7H2"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/>',
   x: '<path d="m6 6 12 12M18 6 6 18"/>', more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
@@ -34,7 +35,7 @@ const cachedUser = (() => {
   try { return JSON.parse(sessionStorage.getItem("lakshya_user") || "null"); }
   catch { return null; }
 })();
-const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
@@ -170,7 +171,7 @@ function clearSession() {
   state.token = null;
   state.user = null;
   state.view = "dashboard";
-  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
+  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
   sessionStorage.removeItem("lakshya_user");
 }
@@ -281,10 +282,10 @@ async function loadInitialWorkspace() {
 }
 
 async function loadSecondaryWorkspace() {
-  const [timetable, assignments, examinations, attendanceSessions, notices, report, masters, auditRows] = await Promise.all([
-    optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/examinations"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }), optional(() => api("/api/settings/audit"), [])
+  const [timetable, assignments, examinations, attendanceSessions, notices, inventory, report, masters, auditRows] = await Promise.all([
+    optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/examinations"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/inventory/bootstrap"), { items: [], summary: {} }), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }), optional(() => api("/api/settings/audit"), [])
   ]);
-  Object.assign(state, { sessions: timetable.sessions || [], timetable, assignments, examinations, attendanceSessions, notices, report, masters, audit: auditRows });
+  Object.assign(state, { sessions: timetable.sessions || [], timetable, assignments, examinations, attendanceSessions, notices, inventory, report, masters, audit: auditRows });
   renderAll();
 }
 
@@ -292,11 +293,12 @@ function renderAll() {
   $("#nav-students-count").textContent = state.students.length;
   $("#nav-leads-count").textContent = state.leads.length;
   $("#nav-examinations-count").textContent = state.examinations.length;
+  $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
   const reviewCount = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
   $("#nav-finance-count").textContent = state.payments.length;
   $("#payment-review-count").textContent = reviewCount ? `${reviewCount} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !reviewCount);
-  renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderReports(); renderSettings(); renderCommandResults(); injectIcons();
+  renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings(); renderCommandResults(); injectIcons();
 }
 
 function metricCard(label, value, iconName, featured = false) {
@@ -731,6 +733,33 @@ function renderCommunication() {
   $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span><div class="cell-actions">${status(item.status)}${ownerEditButton("notice", item.id)}</div></div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch || item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
 }
 
+function inventoryCategory(value) {
+  return ({ book: "Book", bag: "Bag", apparel: "Apparel", other: "Other" })[value] || value;
+}
+
+function renderInventory() {
+  const inventory = state.inventory || { items: [], summary: {} };
+  const summary = inventory.summary || {};
+  const search = $("#inventory-search").value.trim().toLowerCase();
+  const category = $("#inventory-category-filter").value;
+  const rows = (inventory.items || []).filter(item =>
+    (!search || [item.name, item.sku, item.category].some(value => String(value || "").toLowerCase().includes(search)))
+    && (!category || item.category === category)
+  );
+  $("#new-inventory-item").classList.toggle("hidden", !isOwner());
+  $("#inventory-metrics").innerHTML = compactMetrics([
+    { label: "Active items", value: String(summary.activeItems || 0) },
+    { label: "Books", value: String((inventory.items || []).filter(item => item.isActive && item.category === "book").length) },
+    { label: "Stock recorded", value: String(summary.knownQuantities || 0) },
+    { label: "Quantity pending", value: String(summary.quantityPending || 0) }
+  ]);
+  $("#inventory-result-summary").textContent = `${rows.length} of ${(inventory.items || []).length} items`;
+  const edit = item => isOwner() ? `<button class="button button-secondary button-small" type="button" data-inventory-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : "";
+  const quantity = item => item.quantityOnHand == null ? `<strong>Not supplied</strong><small>Awaiting client count</small>` : `<strong>${esc(item.quantityOnHand)} ${esc(item.unit)}</strong><small>Current balance</small>`;
+  $("#inventory-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.name, item.sourceNote || "ERP entry")}</td><td><strong>${esc(item.sku)}</strong></td><td>${esc(inventoryCategory(item.category))}</td><td>${esc(item.unit)}</td><td><span class="inventory-quantity">${quantity(item)}</span></td><td>${status(item.isActive ? item.quantityOnHand == null ? "quantity pending" : "active" : "inactive")}</td><td>${edit(item)}</td></tr>`).join("") : `<tr><td colspan="7">${emptyState("inventory", "No matching inventory items", "Clear a filter or add a new item.")}</td></tr>`;
+  $("#inventory-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(item.isActive ? item.quantityOnHand == null ? "quantity pending" : "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Not supplied" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Source</span><strong>${esc(item.sourceNote || "ERP entry")}</strong></div></div>${edit(item)}</article>`).join("") : emptyState("inventory", "No matching inventory items");
+}
+
 function renderReports() {
   const report = state.report;
   if (!report) { $("#report-metrics").innerHTML = metricCard("Access", "Owner only", "shield", true); $("#report-leads").innerHTML = emptyState("shield", "Reports are restricted"); $("#report-attendance").innerHTML = ""; $("#report-audit").innerHTML = ""; return; }
@@ -901,6 +930,51 @@ async function submitTeachingAssignment(event) {
     toast(assignmentId ? "Teaching assignment updated." : "Faculty assigned.");
   } catch (error) {
     showFormError("#teaching-assignment-form-error", error);
+    button.disabled = false;
+  }
+}
+
+function openInventoryItemForm(item = null) {
+  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  openDrawer(item ? "Edit inventory item" : "New inventory item", `<form class="auth-form" id="inventory-item-form" data-item-id="${esc(item?.id || "")}">
+    <label class="field"><span>Item name</span><input name="name" value="${esc(item?.name || "")}" required></label>
+    <div class="form-pair"><label class="field"><span>SKU</span><input name="sku" value="${esc(item?.sku || "")}" placeholder="ITEM-CODE" ${item ? "readonly" : "required"}></label><label class="field"><span>Category</span><select name="category" required><option value="book"${selected("book", item?.category)}>Book</option><option value="bag"${selected("bag", item?.category)}>Bag</option><option value="apparel"${selected("apparel", item?.category)}>Apparel</option><option value="other"${selected("other", item?.category)}>Other</option></select></label></div>
+    <div class="form-pair"><label class="field"><span>Unit</span><input name="unit" value="${esc(item?.unit || "piece")}" required></label><label class="field"><span>Quantity on hand <small>(optional)</small></span><input name="quantityOnHand" type="number" min="0" value="${item?.quantityOnHand ?? ""}" placeholder="Not supplied"></label></div>
+    <label class="field"><span>Notes</span><textarea name="notes" rows="4">${esc(item?.notes || "")}</textarea></label>
+    ${item ? `<label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Inventory item active</span></label>` : ""}
+    ${formError("inventory-item-error")}
+    <button class="button button-primary button-large" type="submit">${icon(item ? "edit" : "plus")}${item ? "Save item" : "Add item"}</button>
+  </form>`);
+  $("#inventory-item-form").addEventListener("submit", submitInventoryItem);
+}
+
+async function submitInventoryItem(event) {
+  event.preventDefault();
+  const form = event.currentTarget, itemId = form.dataset.itemId, data = new FormData(form);
+  const button = $('button[type="submit"]', form); button.disabled = true;
+  const quantity = String(data.get("quantityOnHand") || "").trim();
+  const payload = {
+    ...(itemId ? {} : { sku: String(data.get("sku") || "").trim() }),
+    name: String(data.get("name") || "").trim(),
+    category: data.get("category"),
+    unit: String(data.get("unit") || "").trim(),
+    quantityOnHand: quantity === "" ? null : Number(quantity),
+    notes: String(data.get("notes") || "").trim(),
+    ...(itemId ? { isActive: form.elements.isActive.checked } : {}),
+  };
+  try {
+    await api(itemId ? `/api/inventory/items/${encodeURIComponent(itemId)}` : "/api/inventory/items", {
+      method: itemId ? "PATCH" : "POST",
+      body: JSON.stringify(payload),
+    });
+    state.inventory = await api("/api/inventory/bootstrap");
+    closeDetail();
+    renderInventory();
+    $("#nav-inventory-count").textContent = state.inventory.items.length;
+    injectIcons($("#inventory"));
+    toast(itemId ? "Inventory item updated." : "Inventory item added.");
+  } catch (error) {
+    showFormError("#inventory-item-error", error);
     button.disabled = false;
   }
 }
@@ -1219,7 +1293,7 @@ async function submitOwnerEdit(event) {
   } catch (error) { showFormError("#owner-edit-error", error); button.disabled = false; }
 }
 
-const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", reports: "Reports", settings: "Settings & audit" };
+const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", inventory: "Inventory", reports: "Reports", settings: "Settings & audit" };
 function showView(view) {
   if (!$("#" + view)) return; state.view = view;
   if (view === "finance") closeStudentLedger(false);
@@ -1323,6 +1397,11 @@ function bindEvents() {
       const item = (state.timetable.teachingAssignments || []).find(row => row.id === teachingAssignmentEdit.dataset.teachingAssignmentEdit);
       if (item) openTeachingAssignmentForm(item);
     }
+    const inventoryEdit = event.target.closest("[data-inventory-edit]");
+    if (inventoryEdit) {
+      const item = (state.inventory.items || []).find(row => row.id === inventoryEdit.dataset.inventoryEdit);
+      if (item) openInventoryItemForm(item);
+    }
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
@@ -1345,6 +1424,9 @@ function bindEvents() {
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
   $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", () => openUserForm()); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-faculty-access").addEventListener("click", () => openUserForm("faculty")); $("#new-attendance-access").addEventListener("click", () => openUserForm("attendance_operator")); $("#new-master").addEventListener("click", openMasterForm);
+  $("#new-inventory-item").addEventListener("click", () => openInventoryItemForm());
+  $("#inventory-search").addEventListener("input", renderInventory);
+  $("#inventory-category-filter").addEventListener("change", renderInventory);
   $("#new-examination").addEventListener("click", () => openExaminationForm());
   $("#examination-search").addEventListener("input", renderExaminations);
   $("#examination-status-filter").addEventListener("change", renderExaminations);
