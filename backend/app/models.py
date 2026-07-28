@@ -290,6 +290,19 @@ class PaymentTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
 
 
+class FeeInstallment(TimestampMixin, Base):
+    __tablename__ = "fee_installments"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("ins"))
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id"), index=True)
+    fee_agreement_id: Mapped[str] = mapped_column(ForeignKey("fee_agreements.id"), index=True)
+    due_date: Mapped[date] = mapped_column(Date, index=True)
+    amount: Mapped[int] = mapped_column(Integer)
+    expected_method: Mapped[str] = mapped_column(String(24), default="not_decided")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(24), default="scheduled", index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
 @event.listens_for(PaymentTransaction, "before_update")
 def payment_transaction_updates_are_restricted(mapper, connection, target):
     changed = {attribute.key for attribute in inspect(target).attrs if attribute.history.has_changes()}

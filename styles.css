@@ -133,7 +133,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 /* Buttons and icons */
 .icon-button { position: relative; display: inline-grid; width: 44px; height: 44px; place-items: center; border: 0; border-radius: 11px; background: transparent; cursor: pointer; transition: background var(--motion-fast), color var(--motion-fast); }
 .icon-button:hover { background: var(--surface-muted); }
-.icon-button svg, [data-icon] svg, .metric-icon svg, .attention-item svg, .icon-tile svg, .empty-icon svg, .module-ready-icon svg, .command-item svg, .issue-list svg { width: 20px; height: 20px; display: block; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.icon-button svg, .button svg, [data-icon] svg, .metric-icon svg, .attention-item svg, .icon-tile svg, .empty-icon svg, .module-ready-icon svg, .command-item svg, .issue-list svg, .immutable-record-note > svg { width: 20px; height: 20px; display: block; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 0 16px; border: 1px solid transparent; border-radius: 11px; font-weight: 700; font-size: .84rem; cursor: pointer; white-space: nowrap; transition: background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast); }
 .button svg { width: 18px; height: 18px; }
 .button-primary { color: #fff; background: var(--forest-800); box-shadow: 0 8px 18px rgba(17,19,61,.16); }
@@ -278,7 +278,7 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .status { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 999px; font-size: .65rem; font-weight: 800; text-transform: capitalize; white-space: nowrap; }
 .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .status-ready, .status-active, .status-converted, .status-submitted, .status-published, .status-scheduled, .status-present { color: var(--success); background: var(--success-bg); }
-.status-review, .status-follow-up-scheduled, .status-interested, .status-documents-pending, .status-draft, .status-not-started, .status-late, .status-excused { color: var(--warning); background: var(--warning-bg); }
+.status-review, .status-follow-up-scheduled, .status-interested, .status-documents-pending, .status-draft, .status-not-started, .status-late, .status-excused, .status-overdue { color: var(--warning); background: var(--warning-bg); }
 .status-blocked, .status-lost, .status-not-interested, .status-inactive, .status-absent { color: var(--danger); background: var(--danger-bg); }
 .status-neutral, .status-new-enquiry, .status-contacted { color: var(--info); background: var(--info-bg); }
 .currency { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }

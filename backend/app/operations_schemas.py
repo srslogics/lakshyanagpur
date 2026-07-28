@@ -65,6 +65,33 @@ class PaymentReviewUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+PaymentMethod = Literal[
+    "not_decided",
+    "cash",
+    "upi",
+    "bank_transfer",
+    "cheque",
+    "card",
+    "other",
+]
+
+
+class FeeInstallmentCreate(BaseModel):
+    studentId: str
+    dueDate: date
+    amount: int = Field(gt=0)
+    expectedMethod: PaymentMethod = "not_decided"
+    notes: str = Field(default="", max_length=1000)
+
+
+class FeeInstallmentUpdate(BaseModel):
+    dueDate: date
+    amount: int = Field(gt=0)
+    expectedMethod: PaymentMethod = "not_decided"
+    notes: str = Field(default="", max_length=1000)
+    status: Literal["scheduled", "cancelled"] = "scheduled"
+
+
 class UserCreate(MobileIdentityMixin):
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr | None = None

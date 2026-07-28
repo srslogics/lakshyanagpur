@@ -35,7 +35,7 @@ const cachedUser = (() => {
   try { return JSON.parse(sessionStorage.getItem("lakshya_user") || "null"); }
   catch { return null; }
 })();
-const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
@@ -60,6 +60,7 @@ const shortMoney = value => Number(value || 0) >= 100000 ? `₹${(Number(value) 
 const formatDate = value => value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value}T00:00:00`)) : "—";
 const formatDateTime = value => value ? new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
 const localInputValue = (date = new Date(Date.now() + 86400000)) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const dateInputValue = (date = new Date()) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 const status = value => `<span class="status status-${normalize(value) || "neutral"}">${esc(String(value || "Unknown").replaceAll("_", " "))}</span>`;
 
 function injectIcons(root = document) {
@@ -171,7 +172,7 @@ function clearSession() {
   state.token = null;
   state.user = null;
   state.view = "dashboard";
-  Object.assign(state, { students: [], agreements: [], payments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
+  Object.assign(state, { students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
   sessionStorage.removeItem("lakshya_user");
 }
@@ -270,14 +271,15 @@ async function optional(load, fallback) {
 }
 
 async function loadInitialWorkspace() {
-  const [students, agreements, payments, leads, admissionMeta] = await Promise.all([
+  const [students, agreements, payments, installments, leads, admissionMeta] = await Promise.all([
     optional(() => fetchAll("/api/students"), []),
     optional(() => fetchAll("/api/finance/agreements"), []),
     optional(() => fetchAll("/api/finance/staged-payments"), []),
+    optional(() => fetchAll("/api/finance/installments"), []),
     optional(() => fetchAll("/api/admissions/leads"), []),
     optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
   ]);
-  Object.assign(state, { students, agreements, payments, leads, stages: admissionMeta.stageOrder || [] });
+  Object.assign(state, { students, agreements, payments, installments, leads, stages: admissionMeta.stageOrder || [] });
   renderAll();
 }
 
@@ -295,7 +297,7 @@ function renderAll() {
   $("#nav-examinations-count").textContent = state.examinations.length;
   $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
   const reviewCount = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
-  $("#nav-finance-count").textContent = state.payments.length;
+  $("#nav-finance-count").textContent = state.payments.length + state.installments.filter(item => item.status !== "cancelled").length;
   $("#payment-review-count").textContent = reviewCount ? `${reviewCount} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !reviewCount);
   renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings(); renderCommandResults(); injectIcons();
@@ -497,15 +499,17 @@ function renderFinance() {
   const agreed = accounts.reduce((sum, item) => sum + item.agreed, 0);
   const paymentTotal = accounts.reduce((sum, item) => sum + item.paid, 0);
   const outstanding = accounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
-  const reconcileCount = accounts.filter(item => item.needsReconciliation).length;
+  const scheduledCount = state.installments.filter(item => item.status === "scheduled").length;
   const review = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
-  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Recorded payments", value: shortMoney(paymentTotal) }, { label: "Outstanding", value: shortMoney(outstanding) }, { label: "Reconcile", value: String(reconcileCount) }]);
+  const registerCount = state.payments.length + state.installments.length;
+  $("#new-future-payment").classList.toggle("hidden", !isOwner());
+  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Recorded payments", value: shortMoney(paymentTotal) }, { label: "Outstanding", value: shortMoney(outstanding) }, { label: "Future payments", value: String(scheduledCount) }]);
   $("#fee-agreement-count").textContent = accounts.length;
-  $("#payment-total-count").textContent = state.payments.length;
+  $("#payment-total-count").textContent = registerCount;
   $("#payment-review-count").textContent = review ? `${review} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !review);
   $("#finance-agreements-tab").setAttribute("aria-label", `Receivables, ${accounts.length} student accounts`);
-  $("#finance-payments-tab").setAttribute("aria-label", `Payment register, ${state.payments.length} entries${review ? `, ${review} need review` : ""}`);
+  $("#finance-payments-tab").setAttribute("aria-label", `Payment register, ${registerCount} entries${review ? `, ${review} need review` : ""}`);
   renderAgreementRows(); renderPaymentRows();
   if (ledgerCurrentStudentId) renderStudentLedger(ledgerCurrentStudentId);
 }
@@ -530,23 +534,36 @@ function renderAgreementRows() {
 function renderPaymentRows() {
   const filter = $("#payment-status-filter").value;
   const search = $("#payment-search").value.trim().toLowerCase();
-  const rows = state.payments.filter(item => {
+  const today = dateInputValue();
+  const installmentState = item => item.status === "cancelled" ? "cancelled" : item.date < today ? "overdue" : "scheduled";
+  const entryState = item => item.type === "scheduled_payment" ? installmentState(item) : item.reconciliationStatus;
+  const register = [...state.payments, ...state.installments].sort((a, b) =>
+    String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31"))
+    || String(a.studentName || "").localeCompare(String(b.studentName || ""))
+  );
+  const rows = register.filter(item => {
     const matchesStudent = !financeStudentFilter || item.studentId === financeStudentFilter;
-    const matchesStatus = !filter || item.reconciliationStatus === filter;
+    const matchesStatus = !filter || entryState(item) === filter;
     const matchesSearch = !search || [item.studentName, item.method, item.sourceNote, item.date, item.amount, item.type].some(value => String(value || "").toLowerCase().includes(search));
     return matchesStudent && matchesStatus && matchesSearch;
   });
   const student = financeStudentFilter
-    ? state.payments.find(item => item.studentId === financeStudentFilter) || state.agreements.find(item => item.studentId === financeStudentFilter)
+    ? register.find(item => item.studentId === financeStudentFilter) || state.agreements.find(item => item.studentId === financeStudentFilter)
     : null;
   $("#payment-student-filter").classList.toggle("hidden", !student);
   $("#payment-student-filter-name").textContent = student?.studentName || "";
   const paymentRows = rows.filter(item => item.type === "payment");
+  const installmentRows = rows.filter(item => item.type === "scheduled_payment");
   const total = paymentRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${paymentRows.length} ${paymentRows.length === 1 ? "payment" : "payments"} · ${money(total)}`;
-  const typeLabel = item => item.type === "payment" ? "Payment" : "Incentive";
-  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${item.type === "payment" ? money(item.amount) : "—"}</td><td>${esc(item.method || "Not captured")}</td><td title="${esc(item.sourceNote || "")}">${esc((item.sourceNote || "—").slice(0, 42))}</td><td><div class="cell-actions">${status(item.reconciliationStatus)}${ownerEditButton("payment", item.id, "Review")}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payment entries", "Clear a filter to see the complete ledger.")}</td></tr>`;
-  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(item.reconciliationStatus)}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${item.type === "payment" ? money(item.amount) : "—"}</strong></div><div><span>Mode</span><strong>${esc(item.method || "Not captured")}</strong></div><div><span>Source</span><strong>${esc((item.sourceNote || "—").slice(0, 30))}</strong></div></div>${ownerEditButton("payment", item.id, "Review")}</article>`).join("") : emptyState("search", "No matching payment entries", "Clear a filter to see the complete ledger.");
+  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${paymentRows.length} received · ${installmentRows.length} future · ${money(total)} received`;
+  const typeLabel = item => item.type === "payment" ? "Payment received" : item.type === "scheduled_payment" ? "Future payment" : "Incentive";
+  const amountLabel = item => item.type === "payment" || item.type === "scheduled_payment" ? money(item.amount) : "—";
+  const sourceLabel = item => item.sourceNote || (item.type === "scheduled_payment" ? "Client schedule" : "—");
+  const action = item => item.type === "scheduled_payment"
+    ? isOwner() ? `<button class="button button-secondary button-small" type="button" data-installment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : ""
+    : ownerEditButton("payment", item.id, "Review");
+  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.type === "scheduled_payment" ? item.admissionNumber : `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc(sourceLabel(item))}">${esc(sourceLabel(item).slice(0, 42))}</td><td><div class="cell-actions">${status(entryState(item))}${action(item)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.")}</td></tr>`;
+  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(entryState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Source</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") : emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.");
 }
 
 function activateFinanceTab(name, focus = false) {
@@ -979,6 +996,60 @@ async function submitInventoryItem(event) {
   }
 }
 
+function openFuturePaymentForm(item = null) {
+  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  if (!item && !state.agreements.length) {
+    toast("Create a fee agreement before scheduling a payment.", "error");
+    return;
+  }
+  const preferredStudent = financeStudentFilter && state.agreements.some(row => row.studentId === financeStudentFilter)
+    ? financeStudentFilter
+    : "";
+  const studentField = item
+    ? `<div class="immutable-record-note">${icon("user")}<span>${esc(item.studentName)}<small>${esc(item.admissionNumber || "Student fee account")}</small></span></div>`
+    : `<label class="field"><span>Student</span><select name="studentId" required><option value="">Select student account</option>${state.agreements.map(row => `<option value="${esc(row.studentId)}"${selected(row.studentId, preferredStudent)}>${esc(row.studentName)} · ${esc(row.admissionNumber)}</option>`).join("")}</select></label>`;
+  const dueDate = item?.date || dateInputValue(new Date(Date.now() + 30 * 86400000));
+  openDrawer(item ? "Edit future payment" : "Schedule future payment", `<form class="auth-form" id="future-payment-form" data-installment-id="${esc(item?.id || "")}">
+    ${studentField}
+    <div class="form-pair"><label class="field"><span>Expected date</span><input name="dueDate" type="date"${item ? "" : ` min="${dateInputValue()}"`} value="${esc(dueDate)}" required></label><label class="field"><span>Amount</span><input name="amount" type="number" min="1" step="1" value="${item?.amount ?? ""}" inputmode="numeric" required></label></div>
+    <label class="field"><span>Expected payment mode</span><select name="expectedMethod"><option value="not_decided"${selected("not_decided", item?.method)}>Not decided</option><option value="cash"${selected("cash", item?.method)}>Cash</option><option value="upi"${selected("upi", item?.method)}>UPI</option><option value="bank_transfer"${selected("bank_transfer", item?.method)}>Bank transfer</option><option value="cheque"${selected("cheque", item?.method)}>Cheque</option><option value="card"${selected("card", item?.method)}>Card</option><option value="other"${selected("other", item?.method)}>Other</option></select></label>
+    <label class="field"><span>Note <small>(optional)</small></span><textarea name="notes" rows="4" placeholder="Installment reference or commitment details">${esc(item?.sourceNote || "")}</textarea></label>
+    ${item ? `<label class="field"><span>Status</span><select name="status"><option value="scheduled"${selected("scheduled", item.status)}>Scheduled</option><option value="cancelled"${selected("cancelled", item.status)}>Cancelled</option></select></label>` : ""}
+    <div class="immutable-record-note">${icon("info")}<span>This is a payment schedule only.<small>It will not reduce the student's outstanding balance until an actual payment is recorded.</small></span></div>
+    ${formError("future-payment-error")}
+    <button class="button button-primary button-large" type="submit">${icon(item ? "edit" : "calendar-check")}${item ? "Save future payment" : "Schedule payment"}</button>
+  </form>`);
+  $("#future-payment-form").addEventListener("submit", submitFuturePayment);
+}
+
+async function submitFuturePayment(event) {
+  event.preventDefault();
+  const form = event.currentTarget, installmentId = form.dataset.installmentId, data = new FormData(form);
+  const button = $('button[type="submit"]', form); button.disabled = true;
+  const payload = {
+    ...(installmentId ? {} : { studentId: data.get("studentId") }),
+    dueDate: data.get("dueDate"),
+    amount: Number(data.get("amount")),
+    expectedMethod: data.get("expectedMethod"),
+    notes: String(data.get("notes") || "").trim(),
+    ...(installmentId ? { status: data.get("status") } : {}),
+  };
+  try {
+    await api(installmentId ? `/api/finance/installments/${encodeURIComponent(installmentId)}` : "/api/finance/installments", {
+      method: installmentId ? "PATCH" : "POST",
+      body: JSON.stringify(payload),
+    });
+    state.installments = await fetchAll("/api/finance/installments");
+    closeDetail();
+    renderAll();
+    activateFinanceTab("payments");
+    toast(installmentId ? "Future payment updated." : "Future payment scheduled.");
+  } catch (error) {
+    showFormError("#future-payment-error", error);
+    button.disabled = false;
+  }
+}
+
 function openAssignmentForm() {
   openDrawer("New assignment", `<form class="auth-form" id="assignment-form"><label class="field"><span>Title</span><input name="title" required></label><label class="field"><span>Batch</span><select name="batchId" required><option value="">Select batch</option>${options(state.timetable.batches || [], item => `${item.name} · ${item.program}`)}</select></label><label class="field"><span>Subject</span><select name="subjectId" required><option value="">Select subject</option>${options(state.timetable.subjects || [], item => `${item.name} · ${item.code}`)}</select></label><label class="field"><span>Due</span><input name="dueAt" type="datetime-local" value="${localInputValue(new Date(Date.now() + 604800000))}" required></label><label class="field"><span>Material link</span><input name="externalUrl" type="url" placeholder="https://" required></label><label class="field"><span>Instructions</span><textarea name="instructions" rows="4"></textarea></label><label class="field"><span>Status</span><select name="status"><option value="published">Published</option><option value="draft">Draft</option></select></label>${formError("assignment-form-error")}<button class="button button-primary button-large" type="submit">${icon("book")}Publish assignment</button></form>`);
   $("#assignment-form").addEventListener("submit", submitAssignment);
@@ -1402,6 +1473,11 @@ function bindEvents() {
       const item = (state.inventory.items || []).find(row => row.id === inventoryEdit.dataset.inventoryEdit);
       if (item) openInventoryItemForm(item);
     }
+    const installmentEdit = event.target.closest("[data-installment-edit]");
+    if (installmentEdit) {
+      const item = state.installments.find(row => row.id === installmentEdit.dataset.installmentEdit);
+      if (item) openFuturePaymentForm(item);
+    }
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
@@ -1425,6 +1501,7 @@ function bindEvents() {
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
   $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", () => openUserForm()); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-faculty-access").addEventListener("click", () => openUserForm("faculty")); $("#new-attendance-access").addEventListener("click", () => openUserForm("attendance_operator")); $("#new-master").addEventListener("click", openMasterForm);
   $("#new-inventory-item").addEventListener("click", () => openInventoryItemForm());
+  $("#new-future-payment").addEventListener("click", () => openFuturePaymentForm());
   $("#inventory-search").addEventListener("input", renderInventory);
   $("#inventory-category-filter").addEventListener("change", renderInventory);
   $("#new-examination").addEventListener("click", () => openExaminationForm());

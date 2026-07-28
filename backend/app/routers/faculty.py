@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
@@ -96,6 +96,8 @@ def bootstrap(
     }
     now = datetime.now(timezone.utc)
     today = now.astimezone(INDIA_TZ).date()
+    today_start = datetime.combine(today, time.min, tzinfo=INDIA_TZ).astimezone(timezone.utc)
+    tomorrow_start = today_start + timedelta(days=1)
     for session, batch, subject, room in session_rows:
         sessions.append({
             "id": session.id,
@@ -165,7 +167,8 @@ def bootstrap(
         row for row in sessions
         if (
             row["status"] == "scheduled"
-            and _aware(row["startsAt"]).astimezone(INDIA_TZ).date() == today
+            and _aware(row["startsAt"]) < tomorrow_start
+            and _aware(row["endsAt"]) >= today_start
         )
     ]
     open_assignments = [
