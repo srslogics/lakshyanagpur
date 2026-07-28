@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
 
@@ -20,9 +21,20 @@ def audit(db: Session, actor: User, action: str, entity_type: str, entity_id: st
 
 
 def admission_number(db: Session) -> str:
-    year = datetime.now(timezone.utc).year
-    count = db.query(Student).filter(Student.admission_number.like(f"LI-{year}-%")).count()
-    return f"LI-{year}-{count + 1:05d}"
+    year = datetime.now(ZoneInfo("Asia/Kolkata")).year
+    prefix = f"LI-{year}-"
+    existing = db.query(Student.admission_number).filter(
+        Student.admission_number.like(f"{prefix}%")
+    ).all()
+    highest = max(
+        (
+            int(value.removeprefix(prefix))
+            for value, in existing
+            if value.removeprefix(prefix).isdigit()
+        ),
+        default=0,
+    )
+    return f"{prefix}{highest + 1:05d}"
 
 
 def convert_lead(db: Session, lead: Lead, payload: ConversionRequest, actor: User):

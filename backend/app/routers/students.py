@@ -14,8 +14,8 @@ from ..models import (
     User,
 )
 from ..security import require_roles
-from ..operations_schemas import StudentUpdate
-from ..services import audit
+from ..operations_schemas import StudentCreate, StudentUpdate
+from ..services import admission_number, audit
 
 READ_ROLES = ("owner", "admissions_manager", "front_desk", "accounts", "academic_coordinator")
 router = APIRouter(prefix="/api/students", tags=["students"])
@@ -65,6 +65,69 @@ def list_students(
         "page": page,
         "pageSize": page_size,
     }
+
+
+@router.post("", status_code=201)
+def create_student(
+    payload: StudentCreate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("owner")),
+):
+    contacts = [value for value in (payload.mobile, payload.secondaryMobile) if value]
+    if contacts:
+        duplicate = db.query(Student).filter(
+            or_(
+                Student.mobile.in_(contacts),
+                Student.secondary_mobile.in_(contacts),
+            )
+        ).first()
+        if duplicate:
+            raise HTTPException(
+                409,
+                f"Mobile number is already assigned to {duplicate.full_name}",
+            )
+
+    student = Student(
+        admission_number=admission_number(db),
+        full_name=payload.fullName.strip(),
+        mobile=payload.mobile,
+        secondary_mobile=payload.secondaryMobile,
+        email=str(payload.email).lower() if payload.email else None,
+        previous_school=(payload.previousSchool or "").strip() or None,
+        status=payload.status,
+        data_quality_status="ready",
+    )
+    db.add(student)
+    db.flush()
+    enrollment = Enrollment(
+        student_id=student.id,
+        program=payload.program,
+        batch=payload.batch,
+        enrollment_date=payload.enrollmentDate,
+        source_type="owner_entry",
+        status=payload.status,
+        is_active=payload.status == "active",
+    )
+    db.add(enrollment)
+    db.flush()
+    result = _list_item(student, enrollment)
+    audit(
+        db,
+        actor,
+        "students.create",
+        "student",
+        student.id,
+        after=result,
+    )
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(
+            409,
+            "Admission number or enrollment conflicts with an existing record",
+        ) from error
+    return result
 
 
 @router.get("/{student_id}")

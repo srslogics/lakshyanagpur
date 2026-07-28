@@ -189,7 +189,7 @@
         </section>
 
         <section class="app-view" id="students" aria-labelledby="students-heading">
-          <div class="page-heading"><h2 id="students-heading">Students</h2><button class="button button-secondary" id="export-students" type="button"><span data-icon="download"></span>Export</button></div>
+          <div class="page-heading"><h2 id="students-heading">Students</h2><div class="heading-actions"><button class="button button-secondary" id="export-students" type="button"><span data-icon="download"></span>Export</button><button class="button button-primary" id="new-student" type="button"><span data-icon="plus"></span>Add student</button></div></div>
           <div class="compact-metrics" id="student-metrics"></div>
           <article class="surface table-surface">
             <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="student-search" type="search" placeholder="Search name, mobile or admission number" aria-label="Search student directory"></label><select id="student-program-filter" aria-label="Filter by program"><option value="">All programs</option></select><select id="student-quality-filter" aria-label="Filter by data quality"><option value="">All quality states</option><option value="ready">Ready</option><option value="review">Review</option><option value="blocked">Blocked</option></select></div>
@@ -328,6 +328,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=43" defer></script>
+  <script src="./app.js?v=44" defer></script>
 </body>
 </html>

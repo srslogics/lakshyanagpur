@@ -52,6 +52,39 @@ class StudentUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class StudentCreate(BaseModel):
+    fullName: str = Field(min_length=2, max_length=255)
+    mobile: str | None = None
+    secondaryMobile: str | None = None
+    email: EmailStr | None = None
+    previousSchool: str | None = Field(default=None, max_length=255)
+    program: Literal["JEE", "NEET", "MHT-CET", "Boards"]
+    batch: Literal["Essential", "Tatva"]
+    enrollmentDate: date
+    status: Literal["active", "draft"] = "active"
+
+    @field_validator("fullName")
+    @classmethod
+    def valid_name(cls, value):
+        value = value.strip()
+        if len(value) < 2:
+            raise ValueError("Enter the student's full name")
+        return value
+
+    @field_validator("mobile", "secondaryMobile", mode="before")
+    @classmethod
+    def optional_mobile(cls, value):
+        if value is None or not str(value).strip():
+            return None
+        return normalize_mobile(str(value))
+
+    @model_validator(mode="after")
+    def contacts_are_distinct(self):
+        if self.mobile and self.secondaryMobile == self.mobile:
+            raise ValueError("Primary and secondary mobile numbers must be different")
+        return self
+
+
 class FeeAgreementUpdate(BaseModel):
     agreed_amount: int = Field(alias="agreedAmount", ge=0)
     legacy_registration_total: int = Field(alias="legacyRegistrationTotal", ge=0)

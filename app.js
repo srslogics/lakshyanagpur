@@ -368,6 +368,7 @@ function filteredStudents() {
 function renderStudents() {
   const programFilter = $("#student-program-filter"); const current = programFilter.value;
   programFilter.innerHTML = `<option value="">All programs</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${program}">${program}</option>`).join("")}`; programFilter.value = current;
+  $("#new-student").classList.toggle("hidden", !isOwner());
   const essential = state.students.filter(item => studentBatchKey(item.batch) === "Essential").length;
   const tatva = state.students.filter(item => studentBatchKey(item.batch) === "Tatva").length;
   const review = state.students.length - essential - tatva;
@@ -877,6 +878,51 @@ async function openStudent(studentId) {
 }
 function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
 function closeDetail() { $("#detail-drawer").classList.remove("open", "detail-drawer-wide"); $("#detail-overlay").classList.remove("open"); $("#detail-drawer").setAttribute("aria-hidden", "true"); syncBodyScrollLock(); }
+
+function openStudentCreateForm() {
+  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  openDrawer("Add student", `<form class="auth-form" id="student-create-form">
+    <label class="field"><span>Student name</span><input name="fullName" autocomplete="name" required></label>
+    <div class="form-pair"><label class="field"><span>Primary mobile <small>(optional)</small></span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16"></label><label class="field"><span>Secondary mobile <small>(optional)</small></span><input name="secondaryMobile" type="tel" inputmode="tel" placeholder="10-digit mobile number" maxlength="16"></label></div>
+    <div class="form-pair"><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label><label class="field"><span>Previous school <small>(optional)</small></span><input name="previousSchool"></label></div>
+    <div class="form-pair"><label class="field"><span>Program</span><select name="program" required><option value="">Select program</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${esc(program)}">${esc(program)}</option>`).join("")}</select></label><label class="field"><span>Batch</span><select name="batch" required><option value="">Select batch</option>${STUDENT_BATCH_ORDER.map(batch => `<option value="${esc(batch)}">${esc(batch)}</option>`).join("")}</select></label></div>
+    <div class="form-pair"><label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${dateInputValue()}" required></label><label class="field"><span>Student status</span><select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label></div>
+    <div class="immutable-record-note">${icon("shield")}<span>Admission number generated automatically.<small>Fee agreement and portal access remain separate owner actions.</small></span></div>
+    ${formError("student-create-error")}
+    <button class="button button-primary button-large" type="submit">${icon("plus")}Add student</button>
+  </form>`);
+  $("#student-create-form").addEventListener("submit", createStudent);
+}
+
+async function createStudent(event) {
+  event.preventDefault();
+  const form = event.currentTarget, data = Object.fromEntries(new FormData(form).entries());
+  const button = $('button[type="submit"]', form); button.disabled = true;
+  const payload = {
+    ...data,
+    fullName: String(data.fullName || "").trim(),
+    mobile: String(data.mobile || "").trim() || null,
+    secondaryMobile: String(data.secondaryMobile || "").trim() || null,
+    email: String(data.email || "").trim() || null,
+    previousSchool: String(data.previousSchool || "").trim() || null,
+  };
+  try {
+    const student = await api("/api/students", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    state.students = await fetchAll("/api/students");
+    state.report = await optional(() => api("/api/reports/overview"), state.report);
+    studentHierarchyState.open.add(`batch:${student.batch}`);
+    studentHierarchyState.open.add(`program:${student.batch}:${student.program}`);
+    closeDetail();
+    renderAll();
+    toast(`Student added · ${student.admissionNumber}`);
+  } catch (error) {
+    showFormError("#student-create-error", error);
+    button.disabled = false;
+  }
+}
 
 function openLeadForm() {
   const drawer = $("#detail-drawer"); drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false"); $("#drawer-title").textContent = "New enquiry";
@@ -1498,7 +1544,7 @@ function bindEvents() {
   $("#ledger-payment-register").addEventListener("click", () => { const studentId = ledgerCurrentStudentId; if (studentId) showStudentPayments(studentId); });
   $("#print-student-ledger").addEventListener("click", () => window.print());
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
-  $("#new-lead-button").addEventListener("click", openLeadForm); $("#export-students").addEventListener("click", exportStudents);
+  $("#new-lead-button").addEventListener("click", openLeadForm); $("#new-student").addEventListener("click", openStudentCreateForm); $("#export-students").addEventListener("click", exportStudents);
   $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", () => openUserForm()); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-faculty-access").addEventListener("click", () => openUserForm("faculty")); $("#new-attendance-access").addEventListener("click", () => openUserForm("attendance_operator")); $("#new-master").addEventListener("click", openMasterForm);
   $("#new-inventory-item").addEventListener("click", () => openInventoryItemForm());
   $("#new-future-payment").addEventListener("click", () => openFuturePaymentForm());
