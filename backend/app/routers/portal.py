@@ -16,6 +16,7 @@ from ..models import (
     DailyAttendanceEntry,
     Enrollment,
     Examination,
+    ExaminationParticipant,
     ExaminationResult,
     FeeAgreement,
     Notice,
@@ -28,6 +29,7 @@ from ..models import (
     User,
 )
 from ..security import require_roles
+from ..services import payment_effect
 from ..services import audit
 
 router = APIRouter(prefix="/api/portal", tags=["student portal"])
@@ -211,9 +213,14 @@ def examination_rows(
                 ExaminationResult.student_id == student.id,
             ),
         )
+        .join(
+            ExaminationParticipant,
+            and_(
+                ExaminationParticipant.exam_id == Examination.id,
+                ExaminationParticipant.student_id == student.id,
+            ),
+        )
         .filter(
-            Batch.name == enrollment.batch,
-            Batch.program == enrollment.program,
             Examination.status.in_(("scheduled", "marks_entry", "published")),
         )
         .order_by(Examination.scheduled_at.desc())
@@ -319,20 +326,11 @@ def fee_summary(db: Session, student: Student):
         )
         .all()
     )
-    paid = sum(
-        item.amount
-        for item in transactions
-        if item.transaction_type == "payment" and item.status != "void"
-    )
-    adjustments = sum(
-        item.amount
-        for item in transactions
-        if item.transaction_type in ("adjustment", "reversal") and item.status != "void"
-    )
+    paid = sum(payment_effect(item) for item in transactions)
     return {
         "agreedAmount": agreement.agreed_amount,
-        "paidAmount": max(0, paid + adjustments),
-        "outstandingAmount": max(0, agreement.agreed_amount - paid - adjustments),
+        "paidAmount": max(0, paid),
+        "outstandingAmount": max(0, agreement.agreed_amount - paid),
         "currency": agreement.currency,
         "payments": [{
             "id": item.id,
@@ -460,14 +458,14 @@ def update_student_assignment_status(
             "studentId": student.id,
             "status": payload.status,
         }
-    if payload.status == "completed":
+    if payload.status in {"viewed", "submitted", "completed"}:
         if recipient:
-            recipient.status = "completed"
+            recipient.status = payload.status
         else:
             recipient = AssignmentRecipient(
                 assignment_id=assignment_id,
                 student_id=student.id,
-                status="completed",
+                status=payload.status,
             )
             db.add(recipient)
     elif recipient:

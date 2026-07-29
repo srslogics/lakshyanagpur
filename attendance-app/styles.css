@@ -113,7 +113,7 @@ svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-li
 .search-field input,.roster-search input{width:100%;height:42px;padding:0;border:0;outline:0;color:var(--ink);background:transparent;font-size:.82rem}
 .filter-pills{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
 .filter-pills::-webkit-scrollbar{display:none}
-.filter-pills button{min-height:40px;flex:0 0 auto;padding:0 14px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:#fff;font-size:.72rem;font-weight:800}
+.filter-pills button{min-height:44px;flex:0 0 auto;padding:0 14px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:#fff;font-size:.72rem;font-weight:800}
 .filter-pills button.active{color:#fff;border-color:var(--navy-900);background:var(--navy-900)}
 .session-list{display:grid}
 .session-card{display:grid;grid-template-columns:102px minmax(220px,1fr) minmax(180px,.55fr) auto;align-items:center;gap:20px;padding:18px 24px;border-bottom:1px solid var(--line)}
@@ -156,7 +156,7 @@ svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-li
 .register-progress span{color:var(--muted);font-size:.67rem;font-weight:700}
 .register-progress strong{margin-top:3px;font-size:.78rem}
 .roster-search{padding:0 12px;border:1px solid var(--line);border-radius:11px;background:#fff}
-.register-toolbar>button{min-height:42px;display:flex;align-items:center;gap:8px;padding:0 13px;border:0;border-radius:11px;color:var(--navy-800);background:var(--navy-100);font-size:.72rem;font-weight:900}
+.register-toolbar>button{min-height:44px;display:flex;align-items:center;gap:8px;padding:0 13px;border:0;border-radius:11px;color:var(--navy-800);background:var(--navy-100);font-size:.72rem;font-weight:900}
 .register-toolbar>button svg{width:17px;height:17px}
 .register-note{padding:10px 24px;color:var(--muted);background:var(--navy-50);font-size:.71rem;font-weight:700}
 .register-note.warning{color:var(--orange);background:var(--orange-soft)}
@@ -168,7 +168,7 @@ svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-li
 .student-copy{min-width:0;display:grid}
 .student-copy strong{overflow:hidden;font-size:.79rem;text-overflow:ellipsis;white-space:nowrap}
 .student-copy small{margin-top:3px;color:var(--muted);font-size:.64rem}
-.status-option{min-height:38px;padding:0 7px;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:#fff;font-size:.66rem;font-weight:900}
+.status-option{min-height:44px;padding:0 9px;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:#fff;font-size:.68rem;font-weight:900}
 .status-option.active[data-status="present"]{color:var(--green);border-color:rgba(23,115,90,.3);background:var(--green-soft)}
 .status-option.active[data-status="late"]{color:var(--orange);border-color:rgba(155,101,18,.3);background:var(--orange-soft)}
 .status-option.active[data-status="absent"]{color:var(--red);border-color:rgba(189,48,75,.3);background:var(--red-soft)}

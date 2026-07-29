@@ -4,6 +4,7 @@ from app.models import (
     AuditLog,
     Batch,
     Enrollment,
+    ExaminationParticipant,
     ExaminationResult,
     FacultyTeachingAssignment,
     Student,
@@ -266,3 +267,48 @@ def test_faculty_can_schedule_from_explicit_assignment_without_a_class(
         },
     )
     assert denied.status_code == 403
+
+
+def test_examination_roster_is_fixed_at_creation(
+    client,
+    database,
+    owner_headers,
+):
+    faculty, _, _, batch, subject, _, _ = examination_setup(database)
+    created = client.post(
+        "/api/examinations",
+        json=exam_payload(faculty, batch, subject),
+        headers=owner_headers,
+    )
+    exam_id = created.json()["id"]
+    assert database.query(ExaminationParticipant).filter_by(
+        exam_id=exam_id,
+    ).count() == 2
+
+    late_student = Student(
+        admission_number="LI-2026-00103",
+        full_name="Late Admission",
+        status="active",
+    )
+    database.add(late_student)
+    database.flush()
+    database.add(
+        Enrollment(
+            student_id=late_student.id,
+            program=batch.program,
+            batch=batch.name,
+            status="active",
+            is_active=True,
+        )
+    )
+    database.commit()
+
+    detail = client.get(
+        f"/api/examinations/{exam_id}",
+        headers=owner_headers,
+    )
+    assert detail.status_code == 200
+    assert detail.json()["participantCount"] == 2
+    assert "Late Admission" not in {
+        student["fullName"] for student in detail.json()["students"]
+    }

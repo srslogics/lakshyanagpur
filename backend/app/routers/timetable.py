@@ -218,7 +218,7 @@ def update_teaching_assignment(
     assignment_id: str,
     payload: FacultyTeachingAssignmentUpdate,
     db: Session = Depends(get_db),
-    actor: User = Depends(require_roles("owner")),
+    actor: User = Depends(require_roles("owner", "academic_coordinator")),
 ):
     row = db.get(FacultyTeachingAssignment, assignment_id)
     if not row:
@@ -321,7 +321,7 @@ def create_session(payload: ClassSessionCreate, db: Session = Depends(get_db), a
 
 
 @router.patch("/sessions/{session_id}")
-def update_session(session_id: str, payload: ClassSessionUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+def update_session(session_id: str, payload: ClassSessionUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner", "academic_coordinator"))):
     row = db.get(ClassSession, session_id)
     if not row:
         raise HTTPException(404, "Class session not found")

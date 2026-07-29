@@ -50,6 +50,7 @@ def activate_mobile(
     faculty_user.mobile = payload.mobile
     faculty_user.password_hash = hash_password(payload.new_password)
     faculty_user.must_change_password = False
+    faculty_user.token_version += 1
     token = decode_token(credentials.credentials)
     expires_at = datetime.fromtimestamp(token["exp"], timezone.utc)
     db.add(RevokedToken(id=token["jti"], user_id=faculty_user.id, expires_at=expires_at))

@@ -60,6 +60,7 @@ def reset_portal_passwords(
         for user in pending:
             user.password_hash = hash_password(temporary_password)
             user.must_change_password = True
+            user.token_version += 1
             audit(
                 db,
                 actor,

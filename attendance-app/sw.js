@@ -1,9 +1,9 @@
-const CACHE = "lakshya-attendance-v6";
+const CACHE = "lakshya-attendance-v7";
 const ASSETS = [
   "./",
-  "./styles.css?v=2",
-  "../auth-shared.css?v=6",
-  "./app.js?v=6",
+  "./styles.css?v=3",
+  "../auth-shared.css?v=7",
+  "./app.js?v=7",
   "./manifest.webmanifest",
   "../lakshya-logo-576.png",
   "../pwa-icon-192.png"
@@ -29,7 +29,7 @@ self.addEventListener("fetch", event => {
     event.respondWith(fetch(event.request, {cache:"no-cache"}).then(response => {
       if (response.ok && response.type === "basic") caches.open(CACHE).then(cache => cache.put(event.request, response.clone()));
       return response;
-    }).catch(() => caches.match(event.request).then(match => match || caches.match("./"))));
+    }).catch(() => url.pathname.startsWith("/attendance-app/") ? caches.match("./") : Response.error()));
     return;
   }
   event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {

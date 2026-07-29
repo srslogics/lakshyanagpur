@@ -25,7 +25,9 @@ const state = {
   locked: false,
   upcoming: false,
   lastFocus: null,
-  confirmTimer: null
+  confirmTimer: null,
+  identity: null,
+  online: navigator.onLine
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -71,10 +73,53 @@ function injectIcons(root = document) {
   $$("[data-icon]", root).forEach(node => { node.innerHTML = icon(node.dataset.icon); });
 }
 
+function setConnectionState(online) {
+  const changed = state.online !== online;
+  state.online = online;
+  document.documentElement.classList.toggle("is-offline", !online);
+  let banner = $("#connection-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "connection-banner";
+    banner.className = "connection-banner";
+    banner.setAttribute("role", "status");
+    banner.setAttribute("aria-live", "polite");
+    document.body.append(banner);
+  }
+  banner.textContent = online ? "Connection restored." : "You are offline. Saved sign-in remains available.";
+  banner.classList.toggle("visible", !online || changed);
+  if (online && changed) setTimeout(() => banner.classList.remove("visible"), 2200);
+}
+
+async function resilientFetch(path, options = {}) {
+  const attempts = String(options.method || "GET").toUpperCase() === "GET" ? 2 : 1;
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(path, {cache:"no-store", ...options, signal:controller.signal});
+      clearTimeout(timer);
+      setConnectionState(true);
+      if (response.status >= 500 && attempt + 1 < attempts) continue;
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+      setConnectionState(navigator.onLine);
+      if (attempt + 1 < attempts) continue;
+    }
+  }
+  const error = new Error(lastError?.name === "AbortError" ? "The server took too long to respond. Try again." : "Unable to reach the server. Check your connection and retry.");
+  error.status = 0;
+  error.transient = true;
+  throw error;
+}
+
 async function api(path, options = {}) {
   const headers = {"Content-Type":"application/json", ...(options.headers || {})};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch(path, {cache:"no-store", ...options, headers});
+  const response = await resilientFetch(path, {...options, headers});
   let body = {};
   try { body = await response.json(); } catch {}
   if (response.status === 401) {
@@ -83,25 +128,59 @@ async function api(path, options = {}) {
   }
   if (!response.ok) {
     const detail = body?.detail;
-    throw new Error(typeof detail === "string" ? detail : detail?.message || body?.error?.message || "Unable to complete this request.");
+    const error = new Error(typeof detail === "string" ? detail : detail?.message || body?.error?.message || (response.status >= 500 ? "The service is temporarily unavailable. Try again." : "Unable to complete this request."));
+    error.status = response.status;
+    error.transient = response.status >= 500;
+    throw error;
   }
   return body;
 }
 
 function clearSession() {
   state.token = null;
+  state.identity = null;
   state.data = null;
   localStorage.removeItem("lakshya_attendance_token");
 }
 
 function showLogin(message = "") {
   $("#boot-screen").classList.add("hidden");
+  $("#password-change-screen").classList.add("hidden");
   $("#attendance-shell").classList.add("hidden");
   $("#login-screen").classList.remove("hidden");
   $("#login-password").value = "";
   $("#login-error").textContent = message;
   $("#login-error").classList.toggle("hidden", !message);
   requestAnimationFrame(() => $("#login-mobile").focus());
+}
+
+function showPasswordChange(identity) {
+  state.identity = identity;
+  $("#boot-screen").classList.add("hidden");
+  $("#login-screen").classList.add("hidden");
+  $("#attendance-shell").classList.add("hidden");
+  $("#password-change-screen").classList.remove("hidden");
+  $("#password-change-form").reset();
+  $("#password-change-error").classList.add("hidden");
+  requestAnimationFrame(() => $("[name=currentPassword]", $("#password-change-form")).focus());
+}
+
+function showStartupError(error) {
+  $("#login-screen").classList.add("hidden");
+  $("#password-change-screen").classList.add("hidden");
+  $("#attendance-shell").classList.add("hidden");
+  const boot = $("#boot-screen");
+  boot.classList.remove("hidden");
+  let panel = $("#startup-error");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "startup-error";
+    panel.className = "startup-error";
+    panel.innerHTML = '<strong>Attendance Desk is temporarily unavailable</strong><p></p><button type="button">Retry</button>';
+    boot.append(panel);
+    $("button", panel).addEventListener("click", () => location.reload());
+  }
+  $("p", panel).textContent = error.message;
 }
 
 function toast(message) {
@@ -119,14 +198,27 @@ function empty(title, copy = "") {
 async function initialize() {
   injectIcons();
   bindEvents();
+  setConnectionState(navigator.onLine);
   $("#working-date").value = state.selectedDate;
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
   if (!state.token) return showLogin();
   try {
+    const identity = await api("/api/auth/me");
+    if (identity.role !== "attendance_operator") {
+      const error = new Error("This account is not assigned to the Attendance Desk.");
+      error.status = 403;
+      throw error;
+    }
+    state.identity = identity;
+    if (identity.mustChangePassword) return showPasswordChange(identity);
     await loadDesk();
   } catch (error) {
-    clearSession();
-    showLogin(error.message);
+    if (error.status === 403) {
+      clearSession();
+      showLogin(error.message);
+    } else if (error.status !== 401) {
+      showStartupError(error);
+    }
   }
 }
 
@@ -151,14 +243,62 @@ async function login(event) {
       throw new Error("This account is not assigned to the Attendance Desk.");
     }
     state.token = result.access_token;
+    state.identity = result.user;
     localStorage.setItem("lakshya_attendance_token", state.token);
+    if (result.user.mustChangePassword) {
+      showPasswordChange(result.user);
+      return;
+    }
     await loadDesk();
   } catch (error) {
-    clearSession();
-    showLogin(error.message);
+    if (state.token && error.status !== 401 && (error.transient || error.status === 0)) {
+      showStartupError(error);
+    } else {
+      clearSession();
+      showLogin(error.message);
+    }
   } finally {
     button.disabled = false;
     label.textContent = "Sign in";
+  }
+}
+
+async function changePassword(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const data = new FormData(form);
+  const currentPassword = String(data.get("currentPassword"));
+  const newPassword = String(data.get("newPassword"));
+  const error = $("#password-change-error");
+  if (newPassword !== String(data.get("confirmPassword"))) {
+    error.textContent = "The new passwords do not match.";
+    error.classList.remove("hidden");
+    return;
+  }
+  if (newPassword === currentPassword) {
+    error.textContent = "Choose a personal password different from the temporary password.";
+    error.classList.remove("hidden");
+    return;
+  }
+  const button = $("#password-change-button");
+  const idle = button.innerHTML;
+  button.disabled = true;
+  button.textContent = "Saving…";
+  error.classList.add("hidden");
+  try {
+    const mobile = state.identity?.mobile || "";
+    await api("/api/auth/change-password", {method:"POST", body:JSON.stringify({currentPassword, newPassword})});
+    clearSession();
+    showLogin("Personal password saved. Sign in again.");
+    $("#login-mobile").value = mobile;
+  } catch (requestError) {
+    error.textContent = requestError.message;
+    error.classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+    button.innerHTML = idle;
+    injectIcons(button);
   }
 }
 
@@ -546,6 +686,7 @@ function setDate(date) {
 
 function bindEvents() {
   $("#login-form").addEventListener("submit", login);
+  $("#password-change-form").addEventListener("submit", changePassword);
   $("#password-toggle").addEventListener("click", togglePassword);
   $("#account-button").addEventListener("click", event => { event.stopPropagation(); toggleAccountMenu(); });
   $("#signout-button").addEventListener("click", logout);
@@ -557,6 +698,8 @@ function bindEvents() {
   $("#manual-batch").addEventListener("change", () => populateManualStreams());
   $("#manual-stream").addEventListener("change", () => populateManualSubjects());
   $("#manual-subject").addEventListener("change", updateManualSummary);
+  window.addEventListener("online", () => setConnectionState(true));
+  window.addEventListener("offline", () => setConnectionState(false));
   $("#class-search").addEventListener("input", event => { state.search = event.target.value; renderSessions(); });
   $("#roster-search").addEventListener("input", event => { syncVisibleReasons(); state.rosterSearch = event.target.value; renderRoster(); });
   $("#close-register").addEventListener("click", closeRegister);

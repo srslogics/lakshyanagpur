@@ -126,6 +126,7 @@ def test_owner_can_record_inventory_quantity_without_changing_source_name(
         "activeItems": 6,
         "knownQuantities": 0,
         "quantityPending": 6,
+        "lowStock": 0,
         "categories": 3,
     }
     item = next(
@@ -147,6 +148,70 @@ def test_owner_can_record_inventory_quantity_without_changing_source_name(
     assert updated.status_code == 200
     assert updated.json()["quantityOnHand"] == 25
     assert updated.json()["sku"] == "ESS-PHYS-B1"
+    movements = client.get(
+        f"/api/inventory/movements?item_id={item['id']}",
+        headers=owner_headers,
+    )
+    assert movements.status_code == 200
+    assert movements.json()[0]["movementType"] == "opening"
+    assert movements.json()[0]["balanceAfter"] == 25
+
+
+def test_inventory_issue_return_and_negative_stock_control(
+    client,
+    database,
+    owner_headers,
+):
+    sync_client_master_data(database)
+    item = client.get(
+        "/api/inventory/bootstrap",
+        headers=owner_headers,
+    ).json()["items"][0]
+    opened = client.patch(
+        f"/api/inventory/items/{item['id']}",
+        headers=owner_headers,
+        json={
+            "name": item["name"],
+            "category": item["category"],
+            "unit": item["unit"],
+            "quantityOnHand": 10,
+            "reorderLevel": 2,
+            "vendorReference": "Local supplier",
+            "notes": "Opening count",
+            "isActive": True,
+        },
+    )
+    assert opened.status_code == 200
+    issue = client.post(
+        f"/api/inventory/items/{item['id']}/movements",
+        headers=owner_headers,
+        json={
+            "movementType": "issue",
+            "quantity": 3,
+            "occurredOn": "2026-07-29",
+            "targetType": "batch",
+            "targetReference": "Essential",
+            "reference": "ISS-001",
+            "reason": "Issued for classroom distribution",
+        },
+    )
+    assert issue.status_code == 201
+    assert issue.json()["quantityDelta"] == -3
+    assert issue.json()["balanceAfter"] == 7
+    blocked = client.post(
+        f"/api/inventory/items/{item['id']}/movements",
+        headers=owner_headers,
+        json={
+            "movementType": "issue",
+            "quantity": 8,
+            "occurredOn": "2026-07-29",
+            "targetType": "batch",
+            "targetReference": "Tatva",
+            "reason": "Should be blocked",
+        },
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "INSUFFICIENT_STOCK"
 
 
 def test_non_inventory_role_cannot_read_inventory(client, parent_headers):

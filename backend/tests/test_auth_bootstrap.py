@@ -37,6 +37,23 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
     assert database.query(User).count() == 1
 
 
+def test_preloaded_non_owner_records_do_not_block_owner_setup(client, database):
+    database.query(User).filter(User.role == "owner").delete()
+    database.commit()
+    assert database.query(User).count() > 0
+    assert client.get("/api/auth/bootstrap-status").json()["setupRequired"] is True
+    created = client.post(
+        "/api/auth/bootstrap",
+        json={
+            "fullName": "Lakshya Director",
+            "mobile": "9876543210",
+            "password": "SecurePass123!",
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["user"]["role"] == "owner"
+
+
 def test_frontend_shell_is_served(client):
     response = client.get("/")
     assert response.status_code == 200

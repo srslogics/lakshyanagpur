@@ -12,6 +12,14 @@ WRITE_ROLES = ("owner", "admissions_manager", "counsellor", "front_desk")
 router = APIRouter(prefix="/api/admissions", tags=["admissions"])
 
 
+def _lead_for_mutation(db: Session, lead_id: str, actor: User) -> Lead:
+    lead = db.get(Lead, lead_id)
+    if not lead or (actor.role == "counsellor" and lead.owner_id != actor.id):
+        # Do not disclose the existence of another counsellor's enquiry.
+        raise HTTPException(404, "Lead not found")
+    return lead
+
+
 @router.get("/bootstrap")
 def bootstrap(user: User = Depends(require_roles(*WRITE_ROLES))):
     return {"stageOrder": list(LEAD_STAGES), "sources": ["walk-in", "website", "phone", "whatsapp", "referral", "campaign", "seminar", "social media"]}
@@ -40,8 +48,7 @@ def create_lead(payload: LeadCreate, db: Session = Depends(get_db), user: User =
 
 @router.patch("/leads/{lead_id}/stage", response_model=LeadRead)
 def update_stage(lead_id: str, payload: LeadStageUpdate, db: Session = Depends(get_db), user: User = Depends(require_roles(*WRITE_ROLES))):
-    lead = db.get(Lead, lead_id)
-    if not lead: raise HTTPException(404, "Lead not found")
+    lead = _lead_for_mutation(db, lead_id, user)
     if payload.stage == "Converted": raise HTTPException(409, "Use the conversion endpoint so downstream records are created")
     before = lead.stage; lead.stage = payload.stage; audit(db, user, "admissions.stage.change", "lead", lead.id, {"stage": before}, {"stage": lead.stage}); db.commit(); db.refresh(lead)
     return lead
@@ -66,8 +73,7 @@ def update_lead(lead_id: str, payload: LeadUpdate, db: Session = Depends(get_db)
 
 @router.post("/leads/{lead_id}/activity", response_model=LeadRead)
 def add_activity(lead_id: str, payload: LeadActivityUpdate, db: Session = Depends(get_db), user: User = Depends(require_roles(*WRITE_ROLES))):
-    lead = db.get(Lead, lead_id)
-    if not lead: raise HTTPException(404, "Lead not found")
+    lead = _lead_for_mutation(db, lead_id, user)
     db.add(LeadActivity(lead_id=lead.id, kind=payload.kind, note=payload.note, actor_id=user.id))
     if payload.next_action: lead.next_action = payload.next_action
     if payload.next_follow_up_at: lead.next_follow_up_at = payload.next_follow_up_at

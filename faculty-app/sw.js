@@ -1,9 +1,9 @@
-const CACHE = "lakshya-faculty-v14";
+const CACHE = "lakshya-faculty-v16";
 const ASSETS = [
   "./",
-  "./styles.css?v=7",
-  "../auth-shared.css?v=6",
-  "./app.js?v=11",
+  "./styles.css?v=9",
+  "../auth-shared.css?v=7",
+  "./app.js?v=13",
   "./manifest.webmanifest",
   "../lakshya-logo-576.png",
   "../pwa-icon-192.png"
@@ -34,7 +34,7 @@ self.addEventListener("fetch", event => {
           caches.open(CACHE).then(cache => cache.put(event.request, response.clone()));
         }
         return response;
-      }).catch(() => caches.match(event.request).then(match => match || caches.match("./")))
+      }).catch(() => url.pathname.startsWith("/faculty-app/") ? caches.match("./") : Response.error())
     );
     return;
   }

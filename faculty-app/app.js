@@ -38,7 +38,8 @@ const state = {
   publishingAssignment: null,
   editingAssignment: null,
   editingExamination: null,
-  lastFocus: null
+  lastFocus: null,
+  online: navigator.onLine
 };
 const PORTAL_VIEWS = new Set(["dashboard", "assignments", "examinations", "schedule", "batches", "notices", "profile", "more"]);
 const OVERFLOW_VIEWS = new Set(["batches", "notices", "profile", "more"]);
@@ -102,10 +103,53 @@ function injectIcons(root = document) {
   });
 }
 
+function setConnectionState(online) {
+  const changed = state.online !== online;
+  state.online = online;
+  document.documentElement.classList.toggle("is-offline", !online);
+  let banner = $("#connection-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "connection-banner";
+    banner.className = "connection-banner";
+    banner.setAttribute("role", "status");
+    banner.setAttribute("aria-live", "polite");
+    document.body.append(banner);
+  }
+  banner.textContent = online ? "Connection restored." : "You are offline. Saved sign-in remains available.";
+  banner.classList.toggle("visible", !online || changed);
+  if (online && changed) setTimeout(() => banner.classList.remove("visible"), 2200);
+}
+
+async function resilientFetch(path, options = {}) {
+  const attempts = String(options.method || "GET").toUpperCase() === "GET" ? 2 : 1;
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(path, {cache:"no-store", ...options, signal:controller.signal});
+      clearTimeout(timer);
+      setConnectionState(true);
+      if (response.status >= 500 && attempt + 1 < attempts) continue;
+      return response;
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+      setConnectionState(navigator.onLine);
+      if (attempt + 1 < attempts) continue;
+    }
+  }
+  const error = new Error(lastError?.name === "AbortError" ? "The server took too long to respond. Try again." : "Unable to reach the server. Check your connection and retry.");
+  error.status = 0;
+  error.transient = true;
+  throw error;
+}
+
 async function api(path, options = {}) {
   const headers = {"Content-Type":"application/json", ...(options.headers || {})};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
-  const response = await fetch(path, {...options, headers});
+  const response = await resilientFetch(path, {...options, headers});
   let body = {};
   try { body = await response.json(); } catch {}
   if (response.status === 401) {
@@ -114,11 +158,14 @@ async function api(path, options = {}) {
   }
   if (!response.ok) {
     const detail = body?.detail;
-    throw new Error(
+    const error = new Error(
       typeof detail === "string"
         ? detail
-        : detail?.message || body?.error?.message || "Unable to complete this request."
+        : detail?.message || body?.error?.message || (response.status >= 500 ? "The service is temporarily unavailable. Try again." : "Unable to complete this request.")
     );
+    error.status = response.status;
+    error.transient = response.status >= 500;
+    throw error;
   }
   return body;
 }
@@ -193,6 +240,25 @@ function toast(message) {
   setTimeout(() => node.remove(), 3200);
 }
 
+function showStartupError(error) {
+  $("#login-screen").classList.add("hidden");
+  $("#mobile-setup-screen").classList.add("hidden");
+  $("#faculty-password-change-screen").classList.add("hidden");
+  $("#faculty-shell").classList.add("hidden");
+  const boot = $("#startup-screen");
+  boot.classList.remove("hidden");
+  let panel = $("#startup-error");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "startup-error";
+    panel.className = "startup-error";
+    panel.innerHTML = '<strong>Faculty portal is temporarily unavailable</strong><p></p><button type="button">Retry</button>';
+    boot.append(panel);
+    $("button", panel).addEventListener("click", () => location.reload());
+  }
+  $("p", panel).textContent = error.message;
+}
+
 function empty(name, title, copy = "") {
   return `<div class="empty"><div><span>${icon(name)}</span><strong>${esc(title)}</strong>${copy ? `<p>${esc(copy)}</p>` : ""}</div></div>`;
 }
@@ -200,6 +266,7 @@ function empty(name, title, copy = "") {
 async function initialize() {
   injectIcons();
   bindEvents();
+  setConnectionState(navigator.onLine);
   $("#assignment-due").value = localInputValue();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
   if (!state.token) {
@@ -208,7 +275,11 @@ async function initialize() {
   }
   try {
     const identity = await api("/api/auth/me");
-    if (identity.role !== "faculty") throw new Error("This account does not have Faculty access.");
+    if (identity.role !== "faculty") {
+      const error = new Error("This account does not have Faculty access.");
+      error.status = 403;
+      throw error;
+    }
     state.identity = identity;
     if (!identity.mobile) {
       showMobileSetup(identity);
@@ -220,8 +291,12 @@ async function initialize() {
     }
     await loadPortal();
   } catch (error) {
-    clearSession();
-    showLogin(error.message);
+    if (error.status === 403) {
+      clearSession();
+      showLogin(error.message);
+    } else if (error.status !== 401) {
+      showStartupError(error);
+    }
   }
 }
 
@@ -258,8 +333,12 @@ async function login(event) {
     }
     await loadPortal();
   } catch (error) {
-    clearSession();
-    showLogin(error.message.includes("permission") ? "This account does not have Faculty access." : error.message);
+    if (state.token && error.status !== 401 && (error.transient || error.status === 0)) {
+      showStartupError(error);
+    } else {
+      clearSession();
+      showLogin(error.message.includes("permission") ? "This account does not have Faculty access." : error.message);
+    }
   } finally {
     button.disabled = false;
     label.textContent = "Sign in";
@@ -501,6 +580,12 @@ function renderAssignments() {
       </header>
       <h3>${esc(item.title)}</h3>
       <p>${esc(item.instructions || "No additional instructions.")}</p>
+      <div class="assignment-progress" aria-label="Assignment progress">
+        <span>${item.progress?.notStarted ?? item.recipientCount} not started</span>
+        <span>${item.progress?.viewed || 0} viewed</span>
+        <span>${item.progress?.submitted || 0} submitted</span>
+        <span>${item.progress?.completed || 0} reviewed</span>
+      </div>
       <footer>
         <span><strong>${esc(item.batch)} · ${esc(item.subject)}</strong>Due ${dateLong(item.dueAt)} · ${item.recipientCount} students</span>
         <div class="assignment-actions">
@@ -674,12 +759,15 @@ function openModal(id, trigger) {
   state.lastFocus = trigger || document.activeElement;
   const modal = $("#" + id);
   modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
   requestAnimationFrame(() => $("input,select,button", modal)?.focus());
 }
 
 function closeModal(id) {
-  $("#" + id).classList.add("hidden");
+  const modal = $("#" + id);
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
   document.body.style.overflow = "";
   if (id === "assignment-modal") state.editingAssignment = null;
   if (id === "examination-modal") state.editingExamination = null;
@@ -960,6 +1048,8 @@ function bindEvents() {
     saveExaminationResults(true);
   });
   $("#save-examination-results").addEventListener("click", () => saveExaminationResults(false));
+  window.addEventListener("online", () => setConnectionState(true));
+  window.addEventListener("offline", () => setConnectionState(false));
   $("#examination-results-form").addEventListener("change", event => {
     if (!event.target.matches("[data-result-status]")) return;
     const row = event.target.closest("[data-exam-student]");
@@ -1029,9 +1119,26 @@ function bindEvents() {
     if (backdrop) closeModal(backdrop.id);
   });
   document.addEventListener("keydown", event => {
-    if (event.key !== "Escape") return;
     const open = $$(".modal-backdrop:not(.hidden)").at(-1);
-    if (open) closeModal(open.id);
+    if (!open) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeModal(open.id);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = $$('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', open)
+      .filter(node => !node.closest(".hidden") && node.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   });
   window.addEventListener("popstate", () => {
     const view = location.hash.slice(1);

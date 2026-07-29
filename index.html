@@ -28,8 +28,8 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=41">
-  <link rel="stylesheet" href="./auth-shared.css?v=6">
+  <link rel="stylesheet" href="./styles.css?v=42">
+  <link rel="stylesheet" href="./auth-shared.css?v=7">
 </head>
 <body>
   <div class="boot-screen" id="boot-screen" role="status" aria-live="polite">
@@ -200,7 +200,7 @@
 
         <section class="app-view" id="finance" aria-labelledby="finance-heading">
           <div id="finance-workspace">
-            <div class="page-heading"><h2 id="finance-heading">Finance</h2><button class="button button-primary" id="new-future-payment" type="button"><span data-icon="plus"></span>Schedule payment</button></div>
+            <div class="page-heading"><h2 id="finance-heading">Finance</h2><div class="heading-actions"><button class="button button-secondary" id="new-fee-agreement" type="button"><span data-icon="plus"></span>Fee agreement</button><button class="button button-secondary" id="new-future-payment" type="button"><span data-icon="calendar-check"></span>Schedule</button><button class="button button-primary" id="new-payment" type="button"><span data-icon="receipt"></span>Record payment</button></div></div>
             <div class="compact-metrics" id="finance-metrics"></div>
             <nav class="segmented-control" role="tablist" aria-label="Finance views"><button class="active" id="finance-agreements-tab" type="button" role="tab" aria-label="Receivables" aria-selected="true" aria-controls="finance-agreements-panel" data-finance-tab="agreements">Receivables <span class="tab-count" id="fee-agreement-count" aria-hidden="true">0</span></button><button id="finance-payments-tab" type="button" role="tab" aria-label="Payment register" aria-selected="false" aria-controls="finance-payments-panel" tabindex="-1" data-finance-tab="payments">Payment register <span class="tab-count" id="payment-total-count" aria-hidden="true">0</span><span class="tab-review-count hidden" id="payment-review-count" aria-hidden="true"></span></button></nav>
             <article class="surface table-surface finance-tab active" id="finance-agreements-panel" role="tabpanel" aria-labelledby="finance-agreements-tab">
@@ -210,10 +210,10 @@
               <div class="mobile-records" id="agreements-mobile-list"></div>
             </article>
             <article class="surface table-surface finance-tab" id="finance-payments-panel" role="tabpanel" aria-labelledby="finance-payments-tab" hidden>
-              <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, mode or source note" aria-label="Search payment entries"></label><select id="payment-status-filter" aria-label="Filter payment entry status"><option value="">All entry states</option><option value="ready">Ready</option><option value="review">Review</option><option value="scheduled">Scheduled</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option><option value="do_not_import">Do not import</option></select></div>
+              <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, receipt or reference" aria-label="Search payment entries"></label><select id="payment-status-filter" aria-label="Filter payment entry status"><option value="">All entry states</option><option value="payment">Payments</option><option value="refund">Refunds</option><option value="reversal">Reversals</option><option value="void">Voids</option><option value="ready">Imported · ready</option><option value="review">Imported · review</option><option value="scheduled">Scheduled</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option><option value="do_not_import">Do not import</option></select></div>
               <div class="payment-student-filter hidden" id="payment-student-filter"><span>Entries for <strong id="payment-student-filter-name"></strong></span><button class="button button-secondary button-small" id="clear-payment-student-filter" type="button">Show all entries</button></div>
               <div class="table-meta"><span id="payment-result-summary">Loading payments…</span></div>
-              <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Type</th><th>Date</th><th>Amount</th><th>Mode</th><th>Source note</th><th>Entry state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
+              <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Type</th><th>Date</th><th>Amount</th><th>Mode</th><th>Receipt / reference</th><th>Entry state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
               <div class="mobile-records" id="payments-mobile-list"></div>
             </article>
           </div>
@@ -288,10 +288,11 @@
             <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Item</th><th>SKU</th><th>Category</th><th>Unit</th><th>Available</th><th>Status</th><th aria-label="Actions"></th></tr></thead><tbody id="inventory-table-body"></tbody></table></div>
             <div class="mobile-records" id="inventory-mobile-list"></div>
           </article>
+          <article class="surface inventory-movement-surface"><div class="surface-head"><div><h3>Recent stock movements</h3><p>Immutable inward, issue, return, write-off and adjustment history.</p></div></div><div class="audit-list" id="inventory-movement-list"></div></article>
         </section>
 
         <section class="app-view" id="reports" aria-labelledby="reports-heading">
-          <div class="page-heading"><h2 id="reports-heading">Reports</h2><button class="button button-secondary" id="refresh-reports" type="button"><span data-icon="refresh"></span>Refresh</button></div>
+          <div class="page-heading"><h2 id="reports-heading">Reports</h2><div class="heading-actions"><button class="button button-secondary" data-report-export="students" type="button"><span data-icon="download"></span>Students</button><button class="button button-secondary" data-report-export="fees" type="button"><span data-icon="download"></span>Fees</button><button class="button button-secondary" data-report-export="attendance" type="button"><span data-icon="download"></span>Attendance</button><button class="button button-secondary" data-report-export="audit" type="button"><span data-icon="download"></span>Audit</button><button class="button button-secondary" id="refresh-reports" type="button"><span data-icon="refresh"></span>Refresh</button></div></div>
           <div class="metric-grid" id="report-metrics"></div>
           <div class="dashboard-grid reports-grid"><article class="surface"><div class="surface-head"><h3>Admissions funnel</h3></div><div class="program-chart" id="report-leads"></div></article><article class="surface"><div class="surface-head"><h3>Attendance</h3></div><div class="program-chart" id="report-attendance"></div></article><article class="surface surface-wide"><div class="surface-head"><h3>Recent activity</h3></div><div class="audit-list" id="report-audit"></div></article></div>
         </section>
@@ -311,7 +312,7 @@
   </aside>
   <div class="drawer-overlay" id="detail-overlay"></div>
 
-  <div class="command-overlay hidden" id="command-overlay" role="dialog" aria-modal="true" aria-labelledby="command-title">
+  <div class="command-overlay hidden" id="command-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="command-title">
     <div class="command-palette">
       <label><span data-icon="search"></span><input id="global-search" type="search" placeholder="Search students or navigate…" autocomplete="off" aria-label="Global search"></label>
       <div class="command-results" id="command-results"><p id="command-title">Quick navigation</p></div>
@@ -328,6 +329,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=49" defer></script>
+  <script src="./app.js?v=51" defer></script>
 </body>
 </html>

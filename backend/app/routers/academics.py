@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import (
     Assignment,
+    AssignmentRecipient,
     Batch,
     Enrollment,
     FacultyTeachingAssignment,
+    Student,
     Subject,
     User,
 )
@@ -42,15 +44,43 @@ def _assignments(db: Session):
     )
 
 
-def _serialize(row, batch, subject, recipients):
-    return {"id": row.id, "title": row.title, "instructions": row.instructions, "batchId": batch.id, "batch": batch.name, "program": batch.program, "subjectId": subject.id, "subject": subject.name, "dueAt": row.due_at, "externalUrl": row.external_url, "status": row.status, "recipientCount": recipients, "createdAt": row.created_at}
+def _progress_counts(db: Session, assignment_ids: list[str]):
+    if not assignment_ids:
+        return {}
+    rows = (
+        db.query(
+            AssignmentRecipient.assignment_id,
+            AssignmentRecipient.status,
+            func.count(AssignmentRecipient.student_id),
+        )
+        .filter(AssignmentRecipient.assignment_id.in_(assignment_ids))
+        .group_by(
+            AssignmentRecipient.assignment_id,
+            AssignmentRecipient.status,
+        )
+        .all()
+    )
+    counts: dict[str, dict[str, int]] = {}
+    for assignment_id, status, count in rows:
+        counts.setdefault(assignment_id, {})[status] = count
+    return counts
+
+
+def _serialize(row, batch, subject, recipients, progress=None):
+    progress = progress or {}
+    return {"id": row.id, "title": row.title, "instructions": row.instructions, "batchId": batch.id, "batch": batch.name, "program": batch.program, "subjectId": subject.id, "subject": subject.name, "dueAt": row.due_at, "externalUrl": row.external_url, "status": row.status, "recipientCount": recipients, "progress": {"notStarted": max(0, int(recipients) - sum(progress.values())), "viewed": progress.get("viewed", 0), "submitted": progress.get("submitted", 0), "completed": progress.get("completed", 0)}, "createdAt": row.created_at}
 
 
 @router.get("/assignments")
 def list_assignments(db: Session = Depends(get_db), user: User = Depends(require_roles(*ROLES))):
     query = _assignments(db)
     if user.role == "faculty": query = query.filter(Assignment.created_by == user.id)
-    return [_serialize(*row) for row in query.order_by(Assignment.due_at.desc()).all()]
+    rows = query.order_by(Assignment.due_at.desc()).all()
+    progress = _progress_counts(db, [row.id for row, *_ in rows])
+    return [
+        _serialize(*row, progress.get(row[0].id, {}))
+        for row in rows
+    ]
 
 
 @router.post("/assignments", status_code=201)
@@ -90,6 +120,62 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
     audit(db, actor, "academics.assignment.create", "assignment", row.id, after={"batch_id": batch.id, "subject_id": subject.id, "recipients": recipient_count, "status": payload.status})
     db.commit()
     return _serialize(row, batch, subject, recipient_count)
+
+
+@router.get("/assignments/{assignment_id}/progress")
+def assignment_progress(
+    assignment_id: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*ROLES)),
+):
+    assignment = db.get(Assignment, assignment_id)
+    if not assignment:
+        raise HTTPException(404, "Assignment not found")
+    if actor.role == "faculty" and assignment.created_by != actor.id:
+        raise HTTPException(403, "Faculty can view only their own assignments")
+    batch = db.get(Batch, assignment.batch_id)
+    if not batch:
+        raise HTTPException(409, "Assignment batch is no longer available")
+    recipients = {
+        row.student_id: row
+        for row in db.query(AssignmentRecipient)
+        .filter_by(assignment_id=assignment.id)
+        .all()
+    }
+    students = (
+        db.query(Student)
+        .join(Enrollment, Enrollment.student_id == Student.id)
+        .filter(
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == batch.name,
+            Enrollment.program == batch.program,
+            Student.status == "active",
+        )
+        .order_by(Student.full_name)
+        .all()
+    )
+    return {
+        "assignmentId": assignment.id,
+        "recipientCount": len(students),
+        "students": [
+            {
+                "studentId": student.id,
+                "admissionNumber": student.admission_number,
+                "fullName": student.full_name,
+                "status": (
+                    recipients[student.id].status
+                    if student.id in recipients
+                    else "not_started"
+                ),
+                "updatedAt": (
+                    recipients[student.id].updated_at
+                    if student.id in recipients
+                    else None
+                ),
+            }
+            for student in students
+        ],
+    }
 
 
 @router.post("/assignments/{assignment_id}/publish")

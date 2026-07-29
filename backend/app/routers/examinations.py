@@ -10,6 +10,7 @@ from ..models import (
     Batch,
     Enrollment,
     Examination,
+    ExaminationParticipant,
     ExaminationResult,
     FacultyTeachingAssignment,
     Student,
@@ -39,6 +40,31 @@ def _active_roster(db: Session, batch: Batch):
             Student.status == "active",
         )
         .order_by(Student.full_name)
+        .all()
+    )
+
+
+def _snapshot_roster(
+    db: Session,
+    exam: Examination,
+    students: list[Student],
+):
+    for student in students:
+        db.add(
+            ExaminationParticipant(
+                exam_id=exam.id,
+                student_id=student.id,
+                admission_number=student.admission_number,
+                full_name=student.full_name,
+            )
+        )
+
+
+def _exam_roster(db: Session, exam: Examination):
+    return (
+        db.query(ExaminationParticipant)
+        .filter_by(exam_id=exam.id)
+        .order_by(ExaminationParticipant.full_name)
         .all()
     )
 
@@ -111,19 +137,24 @@ def _serialize(exam, batch, subject, faculty, participant_count, stats):
 def _serialize_many(db: Session, rows):
     exam_ids = [exam.id for exam, *_ in rows]
     stats = _result_stats(db, exam_ids)
-    roster_counts = {}
+    roster_counts = dict(
+        db.query(
+            ExaminationParticipant.exam_id,
+            func.count(ExaminationParticipant.student_id),
+        )
+        .filter(ExaminationParticipant.exam_id.in_(exam_ids))
+        .group_by(ExaminationParticipant.exam_id)
+        .all()
+    ) if exam_ids else {}
     payload = []
     for exam, batch, subject, faculty in rows:
-        key = (batch.name, batch.program)
-        if key not in roster_counts:
-            roster_counts[key] = len(_active_roster(db, batch))
         payload.append(
             _serialize(
                 exam,
                 batch,
                 subject,
                 faculty,
-                roster_counts[key],
+                roster_counts.get(exam.id, 0),
                 stats.get(exam.id, {}),
             )
         )
@@ -199,6 +230,8 @@ def create_examination(
     )
     db.add(exam)
     db.flush()
+    roster = _active_roster(db, batch)
+    _snapshot_roster(db, exam, roster)
     audit(
         db,
         actor,
@@ -218,7 +251,7 @@ def create_examination(
         batch,
         subject,
         faculty,
-        len(_active_roster(db, batch)),
+        len(roster),
         {},
     )
 
@@ -232,7 +265,7 @@ def examination_detail(
     exam, batch, subject, faculty = _get_exam_row(db, exam_id)
     if not _can_manage(actor, exam):
         raise HTTPException(403, "You do not have access to this examination")
-    roster = _active_roster(db, batch)
+    roster = _exam_roster(db, exam)
     results = {
         row.student_id: row
         for row in db.query(ExaminationResult).filter_by(exam_id=exam.id).all()
@@ -240,16 +273,16 @@ def examination_detail(
     stats = _result_stats(db, [exam.id]).get(exam.id, {})
     payload = _serialize(exam, batch, subject, faculty, len(roster), stats)
     payload["students"] = [{
-        "studentId": student.id,
+        "studentId": student.student_id,
         "admissionNumber": student.admission_number,
         "fullName": student.full_name,
-        "resultStatus": results[student.id].result_status if student.id in results else "pending",
+        "resultStatus": results[student.student_id].result_status if student.student_id in results else "pending",
         "marksObtained": (
-            float(results[student.id].marks_obtained)
-            if student.id in results and results[student.id].marks_obtained is not None
+            float(results[student.student_id].marks_obtained)
+            if student.student_id in results and results[student.student_id].marks_obtained is not None
             else None
         ),
-        "remarks": results[student.id].remarks if student.id in results else "",
+        "remarks": results[student.student_id].remarks if student.student_id in results else "",
     } for student in roster]
     return payload
 
@@ -267,6 +300,14 @@ def update_examination(
     if exam.status == "published":
         raise HTTPException(409, "Published examinations cannot be edited")
     batch, subject, faculty = _validate_references(db, payload, actor)
+    scope_changed = batch.id != exam.batch_id
+    if scope_changed and db.query(ExaminationResult).filter_by(
+        exam_id=exam.id,
+    ).count():
+        raise HTTPException(
+            409,
+            "The batch cannot change after marks entry has started",
+        )
     before = _serialize(exam, old_batch, old_subject, old_faculty, 0, {})
     exam.name = payload.name.strip()
     exam.batch_id = batch.id
@@ -278,6 +319,11 @@ def update_examination(
     exam.pass_marks = payload.pass_marks
     exam.instructions = payload.instructions.strip()
     exam.status = payload.status
+    if scope_changed:
+        db.query(ExaminationParticipant).filter_by(exam_id=exam.id).delete(
+            synchronize_session=False,
+        )
+        _snapshot_roster(db, exam, _active_roster(db, batch))
     audit(
         db,
         actor,
@@ -294,7 +340,7 @@ def update_examination(
         batch,
         subject,
         faculty,
-        len(_active_roster(db, batch)),
+        len(_exam_roster(db, exam)),
         stats,
     )
 
@@ -311,7 +357,10 @@ def save_marks(
         raise HTTPException(403, "You do not have access to this examination")
     if exam.status in ("published", "cancelled"):
         raise HTTPException(409, "Marks cannot be changed for this examination")
-    roster_ids = {student.id for student in _active_roster(db, batch)}
+    roster_ids = {
+        participant.student_id
+        for participant in _exam_roster(db, exam)
+    }
     submitted_ids = [entry.student_id for entry in payload.entries]
     if len(submitted_ids) != len(set(submitted_ids)):
         raise HTTPException(422, "Each student can appear only once")
@@ -365,7 +414,10 @@ def publish_results(
         raise HTTPException(409, "Cancelled examinations cannot be published")
     if exam.status == "published":
         return _serialize_many(db, [(exam, batch, subject, faculty)])[0]
-    roster_ids = {student.id for student in _active_roster(db, batch)}
+    roster_ids = {
+        participant.student_id
+        for participant in _exam_roster(db, exam)
+    }
     result_ids = {
         student_id
         for student_id, in db.query(ExaminationResult.student_id)

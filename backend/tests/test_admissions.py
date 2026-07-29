@@ -1,4 +1,15 @@
-from app.models import AuditLog, Enrollment, FinanceHandoff, Guardian, Lead, Student, StudentGuardian
+from app.models import (
+    AuditLog,
+    Enrollment,
+    FeeAgreement,
+    FinanceHandoff,
+    Guardian,
+    Lead,
+    Student,
+    StudentAcademicProfile,
+    StudentGuardian,
+    StudentSubjectSelection,
+)
 
 def payload(mobile="9876543210"):
     return {"student": "Aarav Thakre", "mobile": mobile, "parent": "Mr Thakre", "parentMobile": "9876543211", "program": "JEE 11th", "source": "website", "counsellor": "Priya Kulkarni", "nextAction": "Book counselling"}
@@ -15,8 +26,9 @@ def test_parent_cannot_access_admissions(client, parent_headers):
 def test_conversion_creates_connected_records_once(client, owner_headers, database):
     created = client.post("/api/admissions/leads", json=payload(), headers=owner_headers).json()
     client.patch(f"/api/admissions/leads/{created['id']}/stage", json={"stage": "Admission Confirmed"}, headers=owner_headers)
-    first = client.post(f"/api/admissions/leads/{created['id']}/convert", json={"batch": "JEE-11-A"}, headers=owner_headers)
-    second = client.post(f"/api/admissions/leads/{created['id']}/convert", json={"batch": "JEE-11-A"}, headers=owner_headers)
+    conversion = {"batch": "Tatva", "enrollmentDate": "2026-07-29", "subjects": ["Physics", "Chemistry", "Mathematics"], "agreedAmount": 80000}
+    first = client.post(f"/api/admissions/leads/{created['id']}/convert", json=conversion, headers=owner_headers)
+    second = client.post(f"/api/admissions/leads/{created['id']}/convert", json=conversion, headers=owner_headers)
     assert first.status_code == second.status_code == 200
     assert first.json() == second.json()
     assert database.query(Student).count() == 1
@@ -24,6 +36,9 @@ def test_conversion_creates_connected_records_once(client, owner_headers, databa
     assert database.query(StudentGuardian).count() == 1
     assert database.query(Enrollment).count() == 1
     assert database.query(FinanceHandoff).count() == 1
+    assert database.query(FeeAgreement).one().agreed_amount == 80000
+    assert database.query(StudentAcademicProfile).one().batch_name == "Tatva"
+    assert database.query(StudentSubjectSelection).count() == 3
     assert database.query(AuditLog).filter_by(action="admissions.convert").count() == 1
     assert database.get(Lead, created["id"]).stage == "Converted"
 

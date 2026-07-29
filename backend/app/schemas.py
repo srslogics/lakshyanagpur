@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -160,7 +160,10 @@ class LeadActivityUpdate(BaseModel):
 
 
 class ConversionRequest(BaseModel):
-    batch: str | None = Field(None, max_length=255)
+    batch: str = Field(min_length=2, max_length=255)
+    enrollment_date: date = Field(alias="enrollmentDate")
+    subjects: list[str] = Field(min_length=1, max_length=8)
+    agreed_amount: int = Field(alias="agreedAmount", ge=0)
     guardian_relationship: Annotated[str, Field(alias="guardianRelationship", max_length=32)] = "guardian"
     concession_requested: Annotated[bool, Field(alias="concessionRequested")] = False
     model_config = ConfigDict(populate_by_name=True)

@@ -13,7 +13,57 @@ ROLES = ("owner", "admissions_manager", "academic_coordinator", "front_desk")
 
 
 def _serialize(row: Notice, batch: Batch | None):
-    return {"id": row.id, "title": row.title, "body": row.body, "audience": row.audience, "channel": row.channel, "batchId": row.batch_id, "batch": batch.name if batch else None, "program": batch.program if batch else None, "status": row.status, "publishedAt": row.published_at, "createdAt": row.created_at}
+    delivery_status = (
+        "delivered"
+        if row.status == "published" and row.channel == "in_app"
+        else "draft"
+        if row.status == "draft"
+        else "provider_required"
+    )
+    return {"id": row.id, "title": row.title, "body": row.body, "audience": row.audience, "channel": row.channel, "batchId": row.batch_id, "batch": batch.name if batch else None, "program": batch.program if batch else None, "status": row.status, "deliveryStatus": delivery_status, "publishedAt": row.published_at, "createdAt": row.created_at}
+
+
+def _validate_delivery(channel: str, status: str):
+    if status == "published" and channel != "in_app":
+        raise HTTPException(
+            409,
+            detail={
+                "code": "DELIVERY_PROVIDER_REQUIRED",
+                "message": (
+                    "Email, SMS and WhatsApp delivery require a connected "
+                    "provider. Save this notice as a draft or publish it in-app."
+                ),
+            },
+        )
+
+
+@router.get("/capabilities")
+def delivery_capabilities(
+    user: User = Depends(require_roles(*ROLES)),
+):
+    return {
+        "channels": [
+            {"id": "in_app", "label": "In app", "available": True},
+            {
+                "id": "email",
+                "label": "Email",
+                "available": False,
+                "reason": "Delivery provider not connected",
+            },
+            {
+                "id": "sms",
+                "label": "SMS",
+                "available": False,
+                "reason": "Delivery provider not connected",
+            },
+            {
+                "id": "whatsapp",
+                "label": "WhatsApp",
+                "available": False,
+                "reason": "Delivery provider not connected",
+            },
+        ]
+    }
 
 
 @router.get("/notices")
@@ -24,6 +74,7 @@ def list_notices(db: Session = Depends(get_db), user: User = Depends(require_rol
 
 @router.post("/notices", status_code=201)
 def create_notice(payload: NoticeCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles(*ROLES))):
+    _validate_delivery(payload.channel, payload.status)
     batch = db.get(Batch, payload.batch_id) if payload.batch_id else None
     if payload.batch_id and not batch:
         raise HTTPException(404, "Batch not found")
@@ -39,6 +90,7 @@ def update_notice(notice_id: str, payload: NoticeUpdate, db: Session = Depends(g
     row = db.get(Notice, notice_id)
     if not row:
         raise HTTPException(404, "Notice not found")
+    _validate_delivery(payload.channel, payload.status)
     batch = db.get(Batch, payload.batch_id) if payload.batch_id else None
     if payload.batch_id and not batch:
         raise HTTPException(404, "Batch not found")

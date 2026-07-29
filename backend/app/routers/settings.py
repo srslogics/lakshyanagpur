@@ -91,7 +91,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User 
         full_name=payload.full_name.strip(),
         role=payload.role,
         password_hash=hash_password(payload.password),
-        must_change_password=payload.role in {"student", "faculty"},
+        must_change_password=True,
     )
     db.add(row); db.flush()
     audit(db, actor, "settings.user.create", "user", row.id, after={"mobile": row.mobile, "email": row.email, "role": row.role})
@@ -116,6 +116,8 @@ def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db)
     row.is_active = payload.is_active
     if payload.password:
         row.password_hash = hash_password(payload.password)
+        row.must_change_password = True
+        row.token_version += 1
     audit(db, actor, "settings.user.update", "user", row.id, before=before, after={"fullName": row.full_name, "mobile": row.mobile, "email": row.email, "role": row.role, "isActive": row.is_active, "passwordChanged": bool(payload.password)})
     try:
         db.commit()
@@ -170,6 +172,7 @@ def create_parent_access(payload: ParentAccessCreate, db: Session = Depends(get_
         full_name=payload.full_name.strip(),
         role="parent",
         password_hash=hash_password(payload.password),
+        must_change_password=True,
     )
     db.add(account_user)
     db.flush()

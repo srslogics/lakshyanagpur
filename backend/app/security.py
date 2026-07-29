@@ -32,7 +32,14 @@ def verify_password(password: str, encoded: str) -> bool:
 def create_token(user: User) -> str:
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     return jwt.encode(
-        {"sub": user.id, "role": user.role, "jti": token_hex(16), "exp": expires},
+        {
+            "sub": user.id,
+            "role": user.role,
+            "ver": user.token_version,
+            "jti": token_hex(16),
+            "iat": datetime.now(timezone.utc),
+            "exp": expires,
+        },
         settings.secret_key,
         algorithm="HS256",
     )
@@ -57,6 +64,8 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
     user = db.get(User, payload.get("sub"))
     if not user or not user.is_active:
         raise HTTPException(401, "User is inactive or unavailable")
+    if payload.get("ver", 0) != user.token_version:
+        raise HTTPException(401, "Session is no longer valid", headers={"WWW-Authenticate": "Bearer"})
     return user
 
 

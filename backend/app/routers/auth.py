@@ -5,6 +5,7 @@ from time import monotonic
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -84,14 +85,16 @@ def _token_response(user: User):
 @router.get("/bootstrap-status")
 def bootstrap_status(db: Session = Depends(get_db)):
     return {
-        "setupRequired": db.query(User).count() == 0,
+        "setupRequired": db.query(User).filter(User.role == "owner").count() == 0,
         "allowLegacyEmailLogin": settings.allow_legacy_email_login,
     }
 
 
 @router.post("/bootstrap", response_model=TokenResponse, status_code=201)
 def bootstrap_owner(payload: BootstrapOwnerRequest, db: Session = Depends(get_db)):
-    if db.query(User).count() > 0:
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(202600002)"))
+    if db.query(User).filter(User.role == "owner").count() > 0:
         raise HTTPException(409, "Initial owner setup has already been completed")
     user = User(
         mobile=payload.mobile,
@@ -155,6 +158,7 @@ def change_password(
         raise HTTPException(400, "Choose a new password different from the temporary password")
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
+    user.token_version += 1
     token = decode_token(credentials.credentials)
     expires_at = datetime.fromtimestamp(token["exp"], timezone.utc)
     db.add(RevokedToken(id=token["jti"], user_id=user.id, expires_at=expires_at))

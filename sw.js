@@ -1,9 +1,9 @@
-const CACHE_NAME = "lakshya-erp-app-v66";
+const CACHE_NAME = "lakshya-erp-app-v68";
 const ASSETS = [
   "./",
-  "./styles.css?v=41",
-  "./auth-shared.css?v=6",
-  "./app.js?v=49",
+  "./styles.css?v=42",
+  "./auth-shared.css?v=7",
+  "./app.js?v=51",
   "./manifest.webmanifest",
   "./lakshya-logo-576.png",
   "./pwa-icon-192.png"
@@ -31,6 +31,9 @@ self.addEventListener("fetch", event => {
 
   // Authenticated API responses must always come from the backend.
   if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) return;
+  // Each portal owns its own navigation and offline shell. Never replace it
+  // with the Operations shell when this root worker is still controlling a tab.
+  if (/^\/(?:student-app|parent-app|faculty-app|attendance-app)(?:\/|$)/.test(url.pathname)) return;
 
   if (event.request.mode === "navigate") {
     event.respondWith(

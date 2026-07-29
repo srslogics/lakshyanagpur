@@ -92,7 +92,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .sidebar-profile>span:last-child{min-width:0;display:grid}
 .sidebar-profile strong{overflow:hidden;font-size:.82rem;text-overflow:ellipsis;white-space:nowrap}
 .sidebar-profile small{color:rgba(255,255,255,.5);font-size:.68rem}
-.sidebar-profile button{width:36px;height:36px;display:grid;place-items:center;padding:8px;border:0;border-radius:10px;color:rgba(255,255,255,.68);background:rgba(255,255,255,.06)}
+.sidebar-profile button{width:44px;height:44px;display:grid;place-items:center;padding:10px;border:0;border-radius:10px;color:rgba(255,255,255,.68);background:rgba(255,255,255,.06)}
 .sidebar-profile button:hover{color:#fff;background:rgba(255,255,255,.12)}
 
 .app-header{display:none}
@@ -152,7 +152,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .view-count{display:inline-flex;align-items:center;min-height:36px;padding:0 13px;border-radius:999px;color:var(--red);background:var(--red-soft);font-size:.76rem;font-weight:800}
 .filter-pills,.date-filter{display:flex;gap:8px;overflow-x:auto;padding:0 0 14px;scrollbar-width:none}
 .filter-pills::-webkit-scrollbar,.date-filter::-webkit-scrollbar{display:none}
-.filter-pills button,.date-filter button{min-height:42px;flex:0 0 auto;padding:0 15px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--surface);font-size:.78rem;font-weight:800}
+.filter-pills button,.date-filter button{min-height:44px;flex:0 0 auto;padding:0 15px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:var(--surface);font-size:.78rem;font-weight:800}
 .filter-pills button.active,.date-filter button.active{color:#fff;border-color:var(--navy-900);background:var(--navy-900)}
 .session-list,.timeline{display:grid;gap:12px}
 .session-card{display:grid;grid-template-columns:82px minmax(0,1fr) auto;align-items:center;gap:18px;padding:18px 20px;border:1px solid var(--line);border-radius:19px;background:var(--surface);box-shadow:var(--shadow-sm)}
@@ -177,6 +177,8 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .status-pill.overdue{color:var(--red);background:var(--red-soft)}
 .assignment-card h3{margin:18px 0 0;font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.05rem;letter-spacing:-.02em}
 .assignment-card p{display:-webkit-box;overflow:hidden;margin:8px 0 0;color:var(--muted);font-size:.8rem;-webkit-box-orient:vertical;-webkit-line-clamp:3}
+.assignment-progress{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.assignment-progress span{padding:6px 9px;border-radius:999px;color:var(--navy-800);background:var(--navy-50);font-size:.67rem;font-weight:800}
 .assignment-card footer{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:auto;padding-top:18px}
 .assignment-card footer span{display:grid;color:var(--muted);font-size:.69rem}
 .assignment-card footer strong{color:var(--ink);font-size:.76rem}
@@ -341,7 +343,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .with-back{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:13px}
   .back-button{display:grid}
   .bottom-nav{position:fixed;z-index:30;right:0;bottom:0;left:0;height:calc(68px + var(--safe-bottom));display:grid;grid-template-columns:repeat(5,1fr);padding:6px 6px var(--safe-bottom);border-top:1px solid rgba(230,225,214,.9);background:rgba(255,255,255,.96);backdrop-filter:blur(18px)}
-  .bottom-nav button{position:relative;min-width:0;display:grid;place-items:center;align-content:center;gap:3px;border:0;border-radius:12px;color:var(--muted);background:transparent}
+  .bottom-nav button{position:relative;min-width:44px;min-height:48px;display:grid;place-items:center;align-content:center;gap:3px;border:0;border-radius:12px;color:var(--muted);background:transparent}
   .bottom-nav button.active{color:var(--navy-800);background:var(--navy-50)}
   .bottom-nav svg{width:21px;height:21px}
   .bottom-nav em{font-size:.6rem;font-style:normal;font-weight:800}

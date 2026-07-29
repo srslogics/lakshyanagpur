@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,7 @@ from ..models import (
 )
 from ..security import require_roles
 from ..operations_schemas import StudentCreate, StudentUpdate
-from ..services import admission_number, audit
+from ..services import admission_number, audit, canonical_program
 
 READ_ROLES = ("owner", "admissions_manager", "front_desk", "accounts", "academic_coordinator")
 router = APIRouter(prefix="/api/students", tags=["students"])
@@ -49,7 +49,18 @@ def list_students(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*READ_ROLES)),
 ):
-    query = db.query(Student, Enrollment).outerjoin(Enrollment, Enrollment.student_id == Student.id)
+    latest_enrollment_id = (
+        select(Enrollment.id)
+        .where(Enrollment.student_id == Student.id)
+        .order_by(Enrollment.is_active.desc(), Enrollment.created_at.desc(), Enrollment.id.desc())
+        .limit(1)
+        .correlate(Student)
+        .scalar_subquery()
+    )
+    query = db.query(Student, Enrollment).outerjoin(
+        Enrollment,
+        Enrollment.id == latest_enrollment_id,
+    )
     if search:
         term = f"%{search.strip()}%"
         query = query.filter(or_(Student.full_name.ilike(term), Student.mobile.ilike(term), Student.admission_number.ilike(term)))
@@ -99,9 +110,10 @@ def create_student(
     )
     db.add(student)
     db.flush()
+    program = canonical_program(payload.program)
     enrollment = Enrollment(
         student_id=student.id,
-        program=payload.program,
+        program=program,
         batch=payload.batch,
         enrollment_date=payload.enrollmentDate,
         source_type="owner_entry",
@@ -110,6 +122,41 @@ def create_student(
     )
     db.add(enrollment)
     db.flush()
+    academic = StudentAcademicProfile(
+        student_id=student.id,
+        source_student_code=f"ERP-{student.admission_number}",
+        batch_name=payload.batch,
+        source_stream=program,
+        mentor_name=None,
+        source_school_name=student.previous_school,
+        source_primary_mobile=student.mobile,
+        source_secondary_mobile=student.secondary_mobile,
+        import_batch_id=None,
+    )
+    db.add(academic)
+    selected_subjects = sorted(
+        {value.strip() for value in payload.subjects if value.strip()}
+    )
+    for subject in selected_subjects:
+        db.add(
+            StudentSubjectSelection(
+                student_id=student.id,
+                subject_name=subject,
+                source_value="owner_entry",
+                import_batch_id=None,
+            )
+        )
+    agreement = FeeAgreement(
+        student_id=student.id,
+        enrollment_id=enrollment.id,
+        legacy_import_id=None,
+        agreed_amount=payload.agreedAmount,
+        legacy_registration_total=0,
+        currency="INR",
+        status="active" if payload.status == "active" else "draft",
+    )
+    db.add(agreement)
+    db.flush()
     result = _list_item(student, enrollment)
     audit(
         db,
@@ -117,7 +164,12 @@ def create_student(
         "students.create",
         "student",
         student.id,
-        after=result,
+        after={
+            **result,
+            "subjects": selected_subjects,
+            "feeAgreementId": agreement.id,
+            "agreedAmount": agreement.agreed_amount,
+        },
     )
     try:
         db.commit()
@@ -215,9 +267,9 @@ def update_student(
     student.data_quality_status = payload.data_quality_status
     if payload.program:
         if not enrollment:
-            enrollment = Enrollment(student_id=student.id, program=payload.program.strip(), source_type="owner_edit")
+            enrollment = Enrollment(student_id=student.id, program=canonical_program(payload.program), source_type="owner_edit")
             db.add(enrollment)
-        enrollment.program = payload.program.strip()
+        enrollment.program = canonical_program(payload.program)
         enrollment.batch = (payload.batch or "").strip() or None
         enrollment.enrollment_date = payload.enrollment_date
         enrollment.status = "active" if payload.status == "active" else payload.status
@@ -227,6 +279,44 @@ def update_student(
         enrollment.enrollment_date = payload.enrollment_date
         enrollment.status = "active" if payload.status == "active" else payload.status
         enrollment.is_active = payload.status == "active"
+    academic = db.get(StudentAcademicProfile, student.id)
+    if academic and enrollment:
+        academic.batch_name = enrollment.batch or academic.batch_name
+        academic.source_stream = enrollment.program or academic.source_stream
+        academic.source_school_name = student.previous_school
+        academic.source_primary_mobile = student.mobile
+        academic.source_secondary_mobile = student.secondary_mobile
+    elif enrollment and enrollment.batch and enrollment.program:
+        db.add(
+            StudentAcademicProfile(
+                student_id=student.id,
+                source_student_code=f"ERP-{student.admission_number}",
+                batch_name=enrollment.batch,
+                source_stream=enrollment.program,
+                source_school_name=student.previous_school,
+                source_primary_mobile=student.mobile,
+                source_secondary_mobile=student.secondary_mobile,
+                import_batch_id=None,
+            )
+        )
+    if payload.subjects is not None:
+        selected_subjects = sorted(
+            {value.strip() for value in payload.subjects if value.strip()}
+        )
+        if not selected_subjects:
+            raise HTTPException(422, "Select at least one subject")
+        db.query(StudentSubjectSelection).filter_by(student_id=student.id).delete(
+            synchronize_session=False
+        )
+        for subject in selected_subjects:
+            db.add(
+                StudentSubjectSelection(
+                    student_id=student.id,
+                    subject_name=subject,
+                    source_value="owner_edit",
+                    import_batch_id=None,
+                )
+            )
     after = payload.model_dump(by_alias=True, mode="json")
     audit(db, actor, "students.update", "student", student.id, before=before, after=after)
     try:

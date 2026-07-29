@@ -49,6 +49,7 @@ class StudentUpdate(BaseModel):
     program: str | None = Field(default=None, max_length=255)
     batch: str | None = Field(default=None, max_length=255)
     enrollment_date: date | None = Field(default=None, alias="enrollmentDate")
+    subjects: list[str] | None = Field(default=None, max_length=8)
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -58,10 +59,12 @@ class StudentCreate(BaseModel):
     secondaryMobile: str | None = None
     email: EmailStr | None = None
     previousSchool: str | None = Field(default=None, max_length=255)
-    program: Literal["JEE", "NEET", "MHT-CET", "Boards"]
+    program: Literal["JEE", "NEET", "MHT-CET", "Boards", "Boards 11th & 12th Tuition"]
     batch: Literal["Essential", "Tatva"]
     enrollmentDate: date
     status: Literal["active", "draft"] = "active"
+    subjects: list[str] = Field(min_length=1, max_length=8)
+    agreedAmount: int = Field(ge=0)
 
     @field_validator("fullName")
     @classmethod
@@ -93,6 +96,14 @@ class FeeAgreementUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class FeeAgreementCreate(BaseModel):
+    student_id: str = Field(alias="studentId")
+    agreed_amount: int = Field(alias="agreedAmount", ge=0)
+    currency: str = Field(default="INR", min_length=3, max_length=3)
+    status: Literal["active", "draft"] = "active"
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class PaymentReviewUpdate(BaseModel):
     reconciliation_status: Literal["ready", "review", "do_not_import"] = Field(alias="reconciliationStatus")
     model_config = ConfigDict(populate_by_name=True)
@@ -107,6 +118,32 @@ PaymentMethod = Literal[
     "card",
     "other",
 ]
+
+
+class PaymentCreate(BaseModel):
+    student_id: str = Field(alias="studentId")
+    transaction_date: date = Field(alias="transactionDate")
+    amount: int = Field(gt=0)
+    method: PaymentMethod
+    reference: str | None = Field(default=None, max_length=255)
+    notes: str = Field(default="", max_length=2000)
+    model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("method")
+    @classmethod
+    def decided_method(cls, value):
+        if value == "not_decided":
+            raise ValueError("Select the payment method")
+        return value
+
+
+class PaymentReversalCreate(BaseModel):
+    transaction_date: date = Field(alias="transactionDate")
+    kind: Literal["reversal", "refund", "void"] = "reversal"
+    amount: int | None = Field(default=None, gt=0)
+    reason: str = Field(min_length=3, max_length=2000)
+    reference: str | None = Field(default=None, max_length=255)
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class FeeInstallmentCreate(BaseModel):
@@ -177,7 +214,7 @@ class ParentAccessCreate(MobileIdentityMixin):
 
 
 class StudentAssignmentStatusUpdate(BaseModel):
-    status: Literal["published", "completed"]
+    status: Literal["published", "viewed", "submitted", "completed"]
 
 
 class ClassSessionCreate(BaseModel):
@@ -225,6 +262,8 @@ class InventoryItemCreate(BaseModel):
     category: InventoryCategory
     unit: str = Field(default="piece", min_length=1, max_length=40)
     quantityOnHand: int | None = Field(default=None, ge=0)
+    reorderLevel: int = Field(default=0, ge=0)
+    vendorReference: str | None = Field(default=None, max_length=255)
     notes: str = Field(default="", max_length=2000)
 
 
@@ -233,8 +272,50 @@ class InventoryItemUpdate(BaseModel):
     category: InventoryCategory
     unit: str = Field(min_length=1, max_length=40)
     quantityOnHand: int | None = Field(default=None, ge=0)
+    reorderLevel: int = Field(default=0, ge=0)
+    vendorReference: str | None = Field(default=None, max_length=255)
     notes: str = Field(default="", max_length=2000)
     isActive: bool
+
+
+class InventoryMovementCreate(BaseModel):
+    movementType: Literal[
+        "inward",
+        "issue",
+        "return",
+        "write_off",
+        "adjustment",
+    ]
+    quantity: int
+    occurredOn: date
+    targetType: Literal[
+        "student",
+        "batch",
+        "faculty",
+        "department",
+        "vendor",
+        "other",
+    ] | None = None
+    targetReference: str | None = Field(default=None, max_length=255)
+    studentId: str | None = None
+    reference: str | None = Field(default=None, max_length=255)
+    reason: str = Field(min_length=3, max_length=2000)
+
+    @model_validator(mode="after")
+    def valid_direction_and_target(self):
+        if self.quantity == 0:
+            raise ValueError("quantity cannot be zero")
+        if self.movementType != "adjustment" and self.quantity < 0:
+            raise ValueError(
+                "quantity must be positive except for an adjustment",
+            )
+        if self.targetType == "student" and not self.studentId:
+            raise ValueError("studentId is required for a student issue")
+        if self.studentId and self.targetType != "student":
+            raise ValueError(
+                "studentId is allowed only when targetType is student",
+            )
+        return self
 
 
 class AssignmentCreate(BaseModel):

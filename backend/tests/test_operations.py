@@ -48,6 +48,54 @@ def test_assignment_uses_active_batch_without_recipient_fanout(client, database,
     assert recipients == []
 
 
+def test_assignment_progress_tracks_student_workflow(
+    client,
+    database,
+    owner_headers,
+    parent_headers,
+):
+    _, batch, subject, _, _, student, _ = operational_setup(database)
+    student_user = database.query(User).filter_by(role="parent_student").one()
+    database.add(StudentAccount(user_id=student_user.id, student_id=student.id))
+    database.commit()
+    assignment = client.post(
+        "/api/academics/assignments",
+        json={
+            "batchId": batch.id,
+            "subjectId": subject.id,
+            "title": "Submission workflow",
+            "instructions": "Complete and submit the worksheet.",
+            "dueAt": (
+                datetime.now(timezone.utc) + timedelta(days=7)
+            ).isoformat(),
+            "externalUrl": "https://example.com/work.pdf",
+            "status": "published",
+        },
+        headers=owner_headers,
+    )
+    assignment_id = assignment.json()["id"]
+    submitted = client.patch(
+        f"/api/portal/assignments/{assignment_id}/status",
+        json={"status": "submitted"},
+        headers=parent_headers,
+    )
+    assert submitted.status_code == 200
+    progress = client.get(
+        f"/api/academics/assignments/{assignment_id}/progress",
+        headers=owner_headers,
+    )
+    assert progress.status_code == 200
+    assert progress.json()["recipientCount"] == 1
+    assert progress.json()["students"][0]["status"] == "submitted"
+    listed = client.get("/api/academics/assignments", headers=owner_headers)
+    assert listed.json()[0]["progress"] == {
+        "notStarted": 0,
+        "viewed": 0,
+        "submitted": 1,
+        "completed": 0,
+    }
+
+
 def test_submitted_attendance_is_locked_and_corrections_are_audited(client, database, owner_headers, parent_headers):
     faculty, batch, subject, room, _, student, _ = operational_setup(database)
     scheduled = client.post(

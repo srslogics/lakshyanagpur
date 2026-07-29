@@ -1,5 +1,5 @@
-const CACHE = "lakshya-student-v25";
-const ASSETS = ["./", "../portal-shared.css?v=4", "./styles.css?v=13", "../auth-shared.css?v=6", "./app.js?v=15", "./manifest.webmanifest", "../lakshya-logo-576.png", "../pwa-icon-192.png"];
+const CACHE = "lakshya-student-v26";
+const ASSETS = ["./", "../portal-shared.css?v=4", "./styles.css?v=13", "../auth-shared.css?v=7", "./app.js?v=16", "./manifest.webmanifest", "../lakshya-logo-576.png", "../pwa-icon-192.png"];
 self.addEventListener("install", event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener("activate", event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE && key.startsWith("lakshya-student-")).map(key => caches.delete(key))))); self.clients.claim(); });
 self.addEventListener("fetch", event => {
@@ -10,7 +10,7 @@ self.addEventListener("fetch", event => {
     event.respondWith(fetch(event.request, {cache:"no-cache"}).then(response => {
       if (response.ok && response.type === "basic") caches.open(CACHE).then(cache => cache.put(event.request, response.clone()));
       return response;
-    }).catch(() => caches.match(event.request).then(match => match || caches.match("./"))));
+    }).catch(() => url.pathname.startsWith("/student-app/") ? caches.match("./") : Response.error()));
     return;
   }
   event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {

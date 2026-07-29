@@ -7,15 +7,15 @@
   <meta name="description" content="Lakshya Attendance Desk for recording attendance across every scheduled class.">
   <meta property="og:title" content="Lakshya Attendance Desk">
   <meta property="og:description" content="A focused class attendance workspace for Lakshya Institute.">
-  <meta property="og:image" content="../share-card.png">
+  <meta property="og:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=3">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
   <title>Lakshya Attendance Desk</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
-  <link rel="stylesheet" href="../auth-shared.css?v=6">
-  <link rel="stylesheet" href="./styles.css?v=2">
+  <link rel="stylesheet" href="../auth-shared.css?v=7">
+  <link rel="stylesheet" href="./styles.css?v=3">
 </head>
 <body>
   <a class="skip-link" href="#attendance-main">Skip to attendance</a>
@@ -39,6 +39,27 @@
           <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" aria-label="Show password"><span data-icon="eye"></span></button></span></label>
           <div class="form-error hidden" id="login-error" role="alert"></div>
           <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="login-screen hidden" id="password-change-screen" aria-labelledby="password-change-title">
+    <div class="login-brand">
+      <img src="../lakshya-logo-576.png" width="576" height="384" alt="Lakshya">
+      <span>Attendance Desk</span>
+    </div>
+    <div class="login-card">
+      <div class="login-form-wrap">
+        <p class="eyebrow">FIRST LOGIN</p>
+        <h1 id="password-change-title">Create your password</h1>
+        <p class="login-support">Replace the temporary password before opening the Attendance Desk.</p>
+        <form id="password-change-form" novalidate>
+          <label><span>Temporary password</span><input name="currentPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+          <label><span>New password</span><input name="newPassword" type="password" autocomplete="new-password" minlength="10" required><small class="field-help">Use at least 10 characters and do not reuse the temporary password.</small></label>
+          <label><span>Confirm new password</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" required></label>
+          <div class="form-error hidden" id="password-change-error" role="alert"></div>
+          <button class="primary-button" id="password-change-button" type="submit">Save personal password <span data-icon="arrow"></span></button>
         </form>
       </div>
     </div>
@@ -142,6 +163,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=6" defer></script>
+  <script src="./app.js?v=7" defer></script>
 </body>
 </html>

@@ -36,6 +36,17 @@ const cachedUser = (() => {
   catch { return null; }
 })();
 const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const ROLE_VIEWS = {
+  owner: Object.keys({dashboard:1,admissions:1,students:1,finance:1,attendance:1,academics:1,examinations:1,timetable:1,communication:1,inventory:1,reports:1,settings:1}),
+  admissions_manager: ["dashboard","admissions","students","finance","communication"],
+  counsellor: ["dashboard","admissions"],
+  front_desk: ["dashboard","admissions","students","timetable","communication"],
+  accounts: ["dashboard","students","finance","inventory","reports"],
+  academic_coordinator: ["dashboard","students","attendance","academics","examinations","timetable","communication","reports"],
+  faculty: ["dashboard","academics","examinations","timetable"],
+  storekeeper: ["dashboard","inventory"]
+};
+const allowedViews = () => new Set(ROLE_VIEWS[state.user?.role] || ["dashboard"]);
 let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
@@ -267,6 +278,12 @@ async function handleAuth(event) {
 }
 
 async function enterWorkspace() {
+  if (!ROLE_VIEWS[state.user?.role]) {
+    const portal = state.user?.role === "parent" ? "Parent portal" : ["student","parent_student"].includes(state.user?.role) ? "Student portal" : state.user?.role === "attendance_operator" ? "Attendance Desk" : "assigned portal";
+    clearSession();
+    showAuth(`This account belongs to the ${portal}. Open that application to continue.`);
+    return;
+  }
   const name = state.user?.fullName || "Lakshya Director";
   const label = state.user?.role?.replaceAll("_", " ") || "Owner";
   $("#sidebar-user-name").textContent = name; $("#sidebar-user-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
@@ -277,10 +294,14 @@ async function enterWorkspace() {
   $("#boot-screen").classList.add("hidden");
   $("#auth-screen").classList.add("hidden");
   $("#app-shell").classList.remove("hidden");
-  showView("dashboard");
-  loadSecondaryWorkspace().catch(error => {
+  applyRoleUI();
+  const requestedView = location.hash.slice(1);
+  showView(allowedViews().has(requestedView) ? requestedView : "dashboard", false);
+  const loadSecondary = () => loadSecondaryWorkspace().catch(error => {
     if (state.token && error.status !== 401) toast("Some secondary modules are still loading.", "error");
   });
+  if ("requestIdleCallback" in window) requestIdleCallback(loadSecondary, {timeout: 1200});
+  else setTimeout(loadSecondary, 0);
 }
 
 async function fetchAll(path, pageSize = 100) {
@@ -306,7 +327,7 @@ async function loadInitialWorkspace() {
   const [students, agreements, payments, installments, leads, admissionMeta] = await Promise.all([
     optional(() => fetchAll("/api/students"), []),
     optional(() => fetchAll("/api/finance/agreements"), []),
-    optional(() => fetchAll("/api/finance/staged-payments"), []),
+    optional(() => fetchAll("/api/finance/transactions"), []),
     optional(() => fetchAll("/api/finance/installments"), []),
     optional(() => fetchAll("/api/admissions/leads"), []),
     optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
@@ -328,11 +349,11 @@ function renderAll() {
   $("#nav-leads-count").textContent = state.leads.length;
   $("#nav-examinations-count").textContent = state.examinations.length;
   $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
-  const reviewCount = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
+  const reviewCount = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
   $("#nav-finance-count").textContent = state.payments.length + state.installments.filter(item => item.status !== "cancelled").length;
   $("#payment-review-count").textContent = reviewCount ? `${reviewCount} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !reviewCount);
-  renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings(); renderCommandResults(); injectIcons();
+  renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings(); renderCommandResults(); injectIcons(); applyRoleUI();
 }
 
 function metricCard(label, value, iconName, featured = false) {
@@ -356,7 +377,7 @@ function renderDashboard() {
   $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments");
 
   const quality = ["review", "blocked"].map(kind => ({ kind, count: activeStudents.filter(item => item.dataQualityStatus === kind).length })).filter(item => item.count);
-  const paymentReview = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
+  const paymentReview = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
   if (paymentReview) quality.push({ kind: "payment review", count: paymentReview });
   $("#attention-count").textContent = quality.reduce((sum, item) => sum + item.count, 0);
   $("#attention-list").innerHTML = quality.length ? quality.map(item => `<button class="attention-item" type="button" data-view-target="${item.kind === "payment review" ? "finance" : "students"}"><span>${icon("alert")}</span><strong>${esc(item.kind.replace(/\b\w/g, c => c.toUpperCase()))}</strong><em>${item.count}</em></button>`).join("") : `<div class="attention-item"><span>${icon("shield")}</span><strong>No review items</strong></div>`;
@@ -364,16 +385,20 @@ function renderDashboard() {
   const recent = [...activeStudents].sort((a, b) => String(b.enrollmentDate).localeCompare(String(a.enrollmentDate))).slice(0, 5);
   $("#recent-students").innerHTML = recent.length ? recent.map(student => `<button class="record-item" type="button" data-student-id="${esc(student.id)}"><span class="record-avatar">${initials(student.fullName)}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span><span class="record-program">${esc(student.program)}</span><span class="record-date">${formatDate(student.enrollmentDate)}</span>${status(student.dataQualityStatus)}</button>`).join("") : emptyState("users", "No admissions");
 
-  const stagedTotal = state.payments.filter(item => item.type === "payment").reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const readyPayments = state.payments.filter(item => item.reconciliationStatus === "ready").length;
-  const readyPercent = state.payments.length ? Math.round(readyPayments / state.payments.length * 100) : 0;
-  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} payment entries</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} ready</span><span>${state.payments.length - readyPayments} review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open receivables ${icon("arrow-right")}</button></div>`;
+  const stagedRows = state.payments.filter(item => item.status === "staged");
+  const stagedTotal = state.payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
+  const readyPayments = stagedRows.filter(item => item.reconciliationStatus === "ready").length;
+  const readyPercent = stagedRows.length ? Math.round(readyPayments / stagedRows.length * 100) : 100;
+  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} ledger entries</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} imported ready</span><span>${stagedRows.length - readyPayments} review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open receivables ${icon("arrow-right")}</button></div>`;
 }
 
 function compactMetrics(items) { return items.map(item => `<div class="compact-metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`).join(""); }
 function studentPrimary(name, detail = "") { return `<div class="table-primary"><span class="record-avatar">${initials(name)}</span><span><strong>${esc(name)}</strong><small>${esc(detail)}</small></span></div>`; }
 function emptyState(iconName, title, copy = "") { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3>${copy ? `<p>${esc(copy)}</p>` : ""}</div></div>`; }
 function isOwner() { return state.user?.role === "owner"; }
+function canManageFinance() { return ["owner", "accounts"].includes(state.user?.role); }
+function canManageInventory() { return ["owner", "storekeeper"].includes(state.user?.role); }
+function canConvertAdmissions() { return ["owner", "admissions_manager"].includes(state.user?.role); }
 function ownerEditButton(kind, id, label = "Edit") {
   return isOwner() ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-owner-edit="${esc(kind)}" data-edit-id="${esc(id)}">${icon("edit")}${esc(label)}</button>` : "";
 }
@@ -488,17 +513,21 @@ function renderStudentRows() {
 }
 
 function studentPayments(studentId) {
-  return state.payments.filter(item => item.studentId === studentId && item.type === "payment" && item.reconciliationStatus !== "do_not_import");
+  return state.payments.filter(item =>
+    item.studentId === studentId
+    && ["staged", "posted"].includes(item.status)
+    && item.reconciliationStatus !== "do_not_import"
+  );
 }
 
 function studentAccount(agreement) {
   const payments = studentPayments(agreement.studentId);
-  const paid = payments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const paid = payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
   const agreed = Number(agreement.agreedAmount || 0);
   const workbookControl = Number(agreement.legacyRegistrationTotal || 0);
   const balance = agreed - paid;
   const difference = paid - workbookControl;
-  const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && item.reconciliationStatus !== "ready").length;
+  const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && item.status === "staged" && item.reconciliationStatus !== "ready").length;
   return {
     ...agreement,
     payments,
@@ -533,9 +562,11 @@ function renderFinance() {
   const paymentTotal = accounts.reduce((sum, item) => sum + item.paid, 0);
   const outstanding = accounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
   const scheduledCount = state.installments.filter(item => item.status === "scheduled").length;
-  const review = state.payments.filter(item => item.reconciliationStatus !== "ready").length;
+  const review = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
   const registerCount = state.payments.length + state.installments.length;
   $("#new-future-payment").classList.toggle("hidden", !isOwner());
+  $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
+  $("#new-payment").classList.toggle("hidden", !canManageFinance());
   $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Recorded payments", value: shortMoney(paymentTotal) }, { label: "Outstanding", value: shortMoney(outstanding) }, { label: "Future payments", value: String(scheduledCount) }]);
   $("#fee-agreement-count").textContent = accounts.length;
   $("#payment-total-count").textContent = registerCount;
@@ -569,7 +600,9 @@ function renderPaymentRows() {
   const search = $("#payment-search").value.trim().toLowerCase();
   const today = dateInputValue();
   const installmentState = item => item.status === "cancelled" ? "cancelled" : item.date < today ? "overdue" : "scheduled";
-  const entryState = item => item.type === "scheduled_payment" ? installmentState(item) : item.reconciliationStatus;
+  const entryState = item => item.type === "scheduled_payment"
+    ? installmentState(item)
+    : item.status === "staged" ? item.reconciliationStatus : item.type;
   const register = [...state.payments, ...state.installments].sort((a, b) =>
     String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31"))
     || String(a.studentName || "").localeCompare(String(b.studentName || ""))
@@ -577,7 +610,7 @@ function renderPaymentRows() {
   const rows = register.filter(item => {
     const matchesStudent = !financeStudentFilter || item.studentId === financeStudentFilter;
     const matchesStatus = !filter || entryState(item) === filter;
-    const matchesSearch = !search || [item.studentName, item.method, item.sourceNote, item.date, item.amount, item.type].some(value => String(value || "").toLowerCase().includes(search));
+    const matchesSearch = !search || [item.studentName, item.method, item.sourceNote, item.reference, item.receiptNumber, item.date, item.amount, item.type].some(value => String(value || "").toLowerCase().includes(search));
     return matchesStudent && matchesStatus && matchesSearch;
   });
   const student = financeStudentFilter
@@ -585,18 +618,31 @@ function renderPaymentRows() {
     : null;
   $("#payment-student-filter").classList.toggle("hidden", !student);
   $("#payment-student-filter-name").textContent = student?.studentName || "";
-  const paymentRows = rows.filter(item => item.type === "payment");
+  const paymentRows = rows.filter(item => item.type !== "scheduled_payment");
   const installmentRows = rows.filter(item => item.type === "scheduled_payment");
-  const total = paymentRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${paymentRows.length} received · ${installmentRows.length} future · ${money(total)} received`;
-  const typeLabel = item => item.type === "payment" ? "Payment received" : item.type === "scheduled_payment" ? "Future payment" : "Incentive";
-  const amountLabel = item => item.type === "payment" || item.type === "scheduled_payment" ? money(item.amount) : "—";
-  const sourceLabel = item => item.sourceNote || (item.type === "scheduled_payment" ? "Client schedule" : "—");
+  const total = paymentRows.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
+  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${paymentRows.length} posted · ${installmentRows.length} future · ${money(total)} net received`;
+  const typeLabel = item => ({
+    payment: "Payment received",
+    reversal: "Reversal",
+    refund: "Refund",
+    void: "Void",
+    scheduled_payment: "Future payment",
+  }[item.type] || String(item.type || "Entry").replaceAll("_", " "));
+  const amountLabel = item => {
+    const amount = Number(item.signedAmount ?? item.amount ?? 0);
+    return amount < 0 ? `−${money(Math.abs(amount))}` : money(amount);
+  };
+  const sourceLabel = item => item.receiptNumber || item.reference || item.sourceNote || (item.type === "scheduled_payment" ? "Client schedule" : "—");
   const action = item => item.type === "scheduled_payment"
     ? isOwner() ? `<button class="button button-secondary button-small" type="button" data-installment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : ""
-    : ownerEditButton("payment", item.id, "Review");
-  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.type === "scheduled_payment" ? item.admissionNumber : `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc(sourceLabel(item))}">${esc(sourceLabel(item).slice(0, 42))}</td><td><div class="cell-actions">${status(entryState(item))}${action(item)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.")}</td></tr>`;
-  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(entryState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Source</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") : emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.");
+    : item.status === "staged"
+      ? ownerEditButton("payment", item.id, "Review")
+      : item.type === "payment" && canManageFinance()
+        ? `<button class="button button-secondary button-small" type="button" data-payment-reverse="${esc(item.id)}">${icon("refresh")}Reverse</button>`
+        : "";
+  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.admissionNumber || `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc([item.receiptNumber, item.reference, item.notes || item.sourceNote].filter(Boolean).join(" · "))}"><strong>${esc(sourceLabel(item).slice(0, 32))}</strong>${item.reference && item.receiptNumber ? `<br><small>${esc(item.reference.slice(0, 32))}</small>` : ""}</td><td><div class="cell-actions">${status(entryState(item))}${action(item)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.")}</td></tr>`;
+  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(entryState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Receipt</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") : emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.");
 }
 
 function activateFinanceTab(name, focus = false) {
@@ -642,16 +688,17 @@ function renderStudentLedger(studentId) {
     balance: runningBalance,
     note: "Fee agreement"
   }, ...payments.map(item => {
-    runningBalance -= Number(item.amount || 0);
+    const effect = Number(item.signedAmount ?? item.amount ?? 0);
+    runningBalance -= effect;
     return {
       date: item.date,
-      particulars: "Fee received",
-      reference: `Import line ${item.line || "—"}`,
+      particulars: item.type === "payment" ? "Fee received" : String(item.type || "Adjustment").replace(/^./, value => value.toUpperCase()),
+      reference: item.receiptNumber || (item.line ? `Import line ${item.line}` : item.reference || "—"),
       mode: item.method || "Not captured",
-      debit: null,
-      credit: Number(item.amount || 0),
+      debit: effect < 0 ? Math.abs(effect) : null,
+      credit: effect > 0 ? effect : null,
       balance: runningBalance,
-      note: item.sourceNote || "",
+      note: item.notes || item.sourceNote || "",
       reconciliationStatus: item.reconciliationStatus
     };
   })];
@@ -707,8 +754,9 @@ function renderAdmissions() {
 function renderLeadRows() {
   const search = $("#lead-search").value.trim().toLowerCase(), stage = $("#lead-stage-filter").value;
   const rows = state.leads.filter(item => (!search || [item.student, item.mobile, item.program].some(value => String(value || "").toLowerCase().includes(search))) && (!stage || item.stage === stage));
-  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td>${ownerEditButton("lead", item.id)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "No enquiries", state.leads.length ? "Clear a filter." : "Create an enquiry to begin.")}</td></tr>`;
-  $("#leads-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div>${ownerEditButton("lead", item.id)}</article>`).join("");
+  const actions = item => `<div class="cell-actions"><button class="button button-secondary button-small" type="button" data-lead-follow-up="${esc(item.id)}">${icon("message")}Follow-up</button>${item.stage === "Admission Confirmed" && canConvertAdmissions() ? `<button class="button button-primary button-small" type="button" data-lead-convert="${esc(item.id)}">${icon("arrow-right")}Convert</button>` : ""}${ownerEditButton("lead", item.id)}</div>`;
+  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td>${actions(item)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "No enquiries", state.leads.length ? "Clear a filter." : "Create an enquiry to begin.")}</td></tr>`;
+  $("#leads-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div>${actions(item)}</article>`).join("");
 }
 
 function renderTimetable() {
@@ -780,7 +828,7 @@ function renderAttendance() {
 
 function renderCommunication() {
   $("#communication-metrics").innerHTML = compactMetrics([{ label: "Notices", value: String(state.notices.length) }, { label: "Published", value: String(state.notices.filter(item => item.status === "published").length) }, { label: "Batch", value: String(state.notices.filter(item => item.audience === "batch").length) }, { label: "Channels", value: String(new Set(state.notices.map(item => item.channel)).size) }]);
-  $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span><div class="cell-actions">${status(item.status)}${ownerEditButton("notice", item.id)}</div></div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch ? `${item.batch} · ${item.program}` : item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
+  $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span><div class="cell-actions">${status(item.deliveryStatus || item.status)}${ownerEditButton("notice", item.id)}</div></div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch ? `${item.batch} · ${item.program}` : item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
 }
 
 function inventoryCategory(value) {
@@ -796,18 +844,21 @@ function renderInventory() {
     (!search || [item.name, item.sku, item.category].some(value => String(value || "").toLowerCase().includes(search)))
     && (!category || item.category === category)
   );
-  $("#new-inventory-item").classList.toggle("hidden", !isOwner());
+  $("#new-inventory-item").classList.toggle("hidden", !canManageInventory());
   $("#inventory-metrics").innerHTML = compactMetrics([
     { label: "Active items", value: String(summary.activeItems || 0) },
-    { label: "Books", value: String((inventory.items || []).filter(item => item.isActive && item.category === "book").length) },
+    { label: "Low stock", value: String(summary.lowStock || 0) },
     { label: "Stock recorded", value: String(summary.knownQuantities || 0) },
     { label: "Quantity pending", value: String(summary.quantityPending || 0) }
   ]);
   $("#inventory-result-summary").textContent = `${rows.length} of ${(inventory.items || []).length} items`;
-  const edit = item => isOwner() ? `<button class="button button-secondary button-small" type="button" data-inventory-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : "";
-  const quantity = item => item.quantityOnHand == null ? `<strong>Quantity pending</strong><small>Enter current stock</small>` : `<strong>${esc(item.quantityOnHand)} ${esc(item.unit)}</strong><small>Current balance</small>`;
-  $("#inventory-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.name, item.sourceNote || "ERP entry")}</td><td><strong>${esc(item.sku)}</strong></td><td>${esc(inventoryCategory(item.category))}</td><td>${esc(item.unit)}</td><td><span class="inventory-quantity">${quantity(item)}</span></td><td>${status(item.isActive ? item.quantityOnHand == null ? "quantity pending" : "active" : "inactive")}</td><td>${edit(item)}</td></tr>`).join("") : `<tr><td colspan="7">${emptyState("inventory", "No matching inventory items", "Clear a filter or add a new item.")}</td></tr>`;
-  $("#inventory-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(item.isActive ? item.quantityOnHand == null ? "quantity pending" : "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Quantity pending" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Source</span><strong>${esc(item.sourceNote || "ERP entry")}</strong></div></div>${edit(item)}</article>`).join("") : emptyState("inventory", "No matching inventory items");
+  const actions = item => canManageInventory() ? `<div class="cell-actions"><button class="button button-primary button-small" type="button" data-inventory-movement="${esc(item.id)}">${icon("inventory")}Movement</button><button class="button button-secondary button-small" type="button" data-inventory-edit="${esc(item.id)}">${icon("edit")}Edit</button></div>` : "";
+  const stockState = item => !item.isActive ? "inactive" : item.quantityOnHand == null ? "quantity pending" : Number(item.quantityOnHand) <= Number(item.reorderLevel || 0) ? "low stock" : "active";
+  const quantity = item => item.quantityOnHand == null ? `<strong>Quantity pending</strong><small>Record opening stock</small>` : `<strong>${esc(item.quantityOnHand)} ${esc(item.unit)}</strong><small>Reorder at ${esc(item.reorderLevel || 0)}</small>`;
+  $("#inventory-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.name, item.vendorReference || item.sourceNote || "ERP entry")}</td><td><strong>${esc(item.sku)}</strong></td><td>${esc(inventoryCategory(item.category))}</td><td>${esc(item.unit)}</td><td><span class="inventory-quantity">${quantity(item)}</span></td><td>${status(stockState(item))}</td><td>${actions(item)}</td></tr>`).join("") : `<tr><td colspan="7">${emptyState("inventory", "No matching inventory items", "Clear a filter or add a new item.")}</td></tr>`;
+  $("#inventory-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(stockState(item))}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Quantity pending" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Reorder level</span><strong>${esc(item.reorderLevel || 0)} ${esc(item.unit)}</strong></div></div>${actions(item)}</article>`).join("") : emptyState("inventory", "No matching inventory items");
+  const movements = inventory.recentMovements || [];
+  $("#inventory-movement-list").innerHTML = movements.length ? movements.map(item => `<div class="audit-row"><span class="icon-tile">${icon("inventory")}</span><span><strong>${esc(item.itemName)} · ${esc(item.movementType.replaceAll("_", " "))}</strong><small>${esc(item.createdBy)} · ${formatDate(item.occurredOn)} · ${esc(item.reason)}</small></span><em>${item.quantityDelta > 0 ? "+" : ""}${esc(item.quantityDelta)} · ${esc(item.balanceAfter)} left</em></div>`).join("") : emptyState("inventory", "No stock movements", "Record opening stock or an inward, issue, return or adjustment.");
 }
 
 function renderReports() {
@@ -817,6 +868,40 @@ function renderReports() {
   $("#report-metrics").innerHTML = [metricCard("Students", String(metrics.students || 0), "users", true), metricCard("Attendance", metrics.attendanceRate == null ? "—" : `${metrics.attendanceRate}%`, "calendar-check"), metricCard("Payments", shortMoney(metrics.recordedPayments), "wallet"), metricCard("Upcoming classes", String(metrics.scheduledClasses || 0), "clock")].join("");
   renderBars("#report-leads", report.leadFunnel || [], "stage"); renderBars("#report-attendance", report.attendance || [], "status");
   $("#report-audit").innerHTML = auditRows(report.recentAudit || []);
+}
+
+async function downloadReport(reportName, button) {
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/reports/export/${encodeURIComponent(reportName)}`, {
+      headers: { Authorization: `Bearer ${state.token}` },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      let message = "The report could not be generated.";
+      try {
+        const body = await response.json();
+        message = typeof body.detail === "string" ? body.detail : body.detail?.message || message;
+      } catch {}
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("content-disposition") || "";
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `lakshya-${reportName}.csv`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`${reportName.replaceAll("_", " ")} report downloaded.`);
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderBars(selector, rows, labelKey) {
@@ -929,8 +1014,10 @@ function openStudentCreateForm() {
     <div class="form-pair"><label class="field"><span>Primary mobile <small>(optional)</small></span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16"></label><label class="field"><span>Secondary mobile <small>(optional)</small></span><input name="secondaryMobile" type="tel" inputmode="tel" placeholder="10-digit mobile number" maxlength="16"></label></div>
     <div class="form-pair"><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label><label class="field"><span>Previous school <small>(optional)</small></span><input name="previousSchool"></label></div>
     <div class="form-pair"><label class="field"><span>Program</span><select name="program" required><option value="">Select program</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${esc(program)}">${esc(program)}</option>`).join("")}</select></label><label class="field"><span>Batch</span><select name="batch" required><option value="">Select batch</option>${STUDENT_BATCH_ORDER.map(batch => `<option value="${esc(batch)}">${esc(batch)}</option>`).join("")}</select></label></div>
+    <fieldset class="choice-fieldset"><legend>Subjects</legend><div class="choice-grid">${["Physics", "Chemistry", "Mathematics", "Biology"].map(subject => `<label class="check-field"><input name="subjects" type="checkbox" value="${subject}"><span>${subject}</span></label>`).join("")}</div><small>Select every subject this student will attend.</small></fieldset>
+    <label class="field"><span>Agreed course fee</span><input name="agreedAmount" type="number" min="0" step="1" inputmode="numeric" required></label>
     <div class="form-pair"><label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${dateInputValue()}" required></label><label class="field"><span>Student status</span><select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label></div>
-    <div class="immutable-record-note">${icon("shield")}<span>Admission number generated automatically.<small>Fee agreement and portal access remain separate owner actions.</small></span></div>
+    <div class="immutable-record-note">${icon("shield")}<span>Admission number generated automatically.<small>Enrollment, attendance profile and fee agreement are created together. Portal access remains a separate owner action.</small></span></div>
     ${formError("student-create-error")}
     <button class="button button-primary button-large" type="submit">${icon("plus")}Add student</button>
   </form>`);
@@ -939,7 +1026,7 @@ function openStudentCreateForm() {
 
 async function createStudent(event) {
   event.preventDefault();
-  const form = event.currentTarget, data = Object.fromEntries(new FormData(form).entries());
+  const form = event.currentTarget, formData = new FormData(form), data = Object.fromEntries(formData.entries());
   const button = $('button[type="submit"]', form); button.disabled = true;
   const payload = {
     ...data,
@@ -948,13 +1035,21 @@ async function createStudent(event) {
     secondaryMobile: String(data.secondaryMobile || "").trim() || null,
     email: String(data.email || "").trim() || null,
     previousSchool: String(data.previousSchool || "").trim() || null,
+    subjects: formData.getAll("subjects"),
+    agreedAmount: Number(data.agreedAmount),
   };
+  if (!payload.subjects.length) {
+    showFormError("#student-create-error", new Error("Select at least one subject."));
+    button.disabled = false;
+    return;
+  }
   try {
     const student = await api("/api/students", {
       method: "POST",
       body: JSON.stringify(payload),
     });
     state.students = await fetchAll("/api/students");
+    state.agreements = await fetchAll("/api/finance/agreements");
     state.report = await optional(() => api("/api/reports/overview"), state.report);
     studentHierarchyState.open.add(`batch:${student.batch}`);
     studentHierarchyState.open.add(`program:${student.batch}:${student.program}`);
@@ -977,6 +1072,85 @@ async function createLead(event) {
   const payload = Object.fromEntries([...form.entries()].map(([key, value]) => [key, String(value).trim()]));
   try { const lead = await api("/api/admissions/leads", { method: "POST", body: JSON.stringify(payload) }); state.leads.unshift(lead); closeDetail(); renderAdmissions(); $("#nav-leads-count").textContent = state.leads.length; toast("Enquiry created."); }
   catch (error) { $("#lead-form-error").textContent = error.message; $("#lead-form-error").classList.remove("hidden"); button.disabled = false; }
+}
+
+function openLeadFollowUpForm(lead) {
+  openDrawer(`Follow-up · ${lead.student}`, `<form class="auth-form" id="lead-follow-up-form" data-lead-id="${esc(lead.id)}">
+    <label class="field"><span>Activity</span><select name="kind"><option value="call">Call</option><option value="follow_up">Follow-up</option><option value="counselling">Counselling</option><option value="note">Note</option></select></label>
+    <label class="field"><span>Outcome / note</span><textarea name="note" rows="4" minlength="2" required></textarea></label>
+    <label class="field"><span>Next action <small>(optional)</small></span><input name="nextAction" value="${esc(lead.nextAction || "")}" maxlength="255"></label>
+    <label class="field"><span>Next follow-up <small>(optional)</small></span><input name="nextFollowUpAt" type="datetime-local" value="${lead.nextFollowUpAt ? localInputValue(lead.nextFollowUpAt) : ""}"></label>
+    ${formError("lead-follow-up-error")}
+    <button class="button button-primary button-large" type="submit">${icon("message")}Save follow-up</button>
+  </form>`);
+  $("#lead-follow-up-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget, data = new FormData(form), button = $('button[type="submit"]', form);
+    button.disabled = true;
+    try {
+      await api(`/api/admissions/leads/${encodeURIComponent(form.dataset.leadId)}/activity`, {
+        method: "POST",
+        body: JSON.stringify({
+          kind: data.get("kind"),
+          note: String(data.get("note") || "").trim(),
+          nextAction: String(data.get("nextAction") || "").trim() || null,
+          nextFollowUpAt: data.get("nextFollowUpAt") ? indiaInputToISOString(data.get("nextFollowUpAt")) : null,
+        }),
+      });
+      state.leads = await fetchAll("/api/admissions/leads");
+      closeDetail();
+      renderAdmissions();
+      toast("Follow-up saved.");
+    } catch (error) {
+      showFormError("#lead-follow-up-error", error);
+      button.disabled = false;
+    }
+  });
+}
+
+function openLeadConversionForm(lead) {
+  if (!canConvertAdmissions()) { toast("Admissions manager access is required.", "error"); return; }
+  openDrawer(`Convert admission · ${lead.student}`, `<form class="auth-form" id="lead-conversion-form" data-lead-id="${esc(lead.id)}">
+    <div class="inline-notice">${icon("shield")}<span>This creates the active student, enrollment, attendance profile and fee agreement in one transaction.</span></div>
+    <div class="form-pair"><label class="field"><span>Batch</span><select name="batch" required><option value="">Select batch</option>${STUDENT_BATCH_ORDER.map(batch => `<option value="${batch}">${batch}</option>`).join("")}</select></label><label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${dateInputValue()}" required></label></div>
+    <fieldset class="choice-fieldset"><legend>Subjects</legend><div class="choice-grid">${["Physics", "Chemistry", "Mathematics", "Biology"].map(subject => `<label class="check-field"><input name="subjects" type="checkbox" value="${subject}"><span>${subject}</span></label>`).join("")}</div></fieldset>
+    <label class="field"><span>Agreed course fee</span><input name="agreedAmount" type="number" min="0" step="1" inputmode="numeric" required></label>
+    <label class="field"><span>Guardian relationship</span><select name="guardianRelationship"><option value="guardian">Guardian</option><option value="father">Father</option><option value="mother">Mother</option></select></label>
+    <label class="check-field"><input name="concessionRequested" type="checkbox"><span>Fee concession requested</span></label>
+    ${formError("lead-conversion-error")}
+    <button class="button button-primary button-large" type="submit">${icon("arrow-right")}Create student record</button>
+  </form>`);
+  $("#lead-conversion-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget, data = new FormData(form), button = $('button[type="submit"]', form);
+    const subjects = data.getAll("subjects");
+    if (!subjects.length) { showFormError("#lead-conversion-error", new Error("Select at least one subject.")); return; }
+    button.disabled = true;
+    try {
+      const result = await api(`/api/admissions/leads/${encodeURIComponent(form.dataset.leadId)}/convert`, {
+        method: "POST",
+        body: JSON.stringify({
+          batch: data.get("batch"),
+          enrollmentDate: data.get("enrollmentDate"),
+          subjects,
+          agreedAmount: Number(data.get("agreedAmount")),
+          guardianRelationship: data.get("guardianRelationship"),
+          concessionRequested: data.get("concessionRequested") === "on",
+        }),
+      });
+      [state.leads, state.students, state.agreements] = await Promise.all([
+        fetchAll("/api/admissions/leads"),
+        fetchAll("/api/students"),
+        fetchAll("/api/finance/agreements"),
+      ]);
+      closeDetail();
+      renderAll();
+      toast(`Admission converted · ${state.students.find(row => row.id === result.studentId)?.admissionNumber || "student created"}`);
+    } catch (error) {
+      showFormError("#lead-conversion-error", error);
+      button.disabled = false;
+    }
+  });
 }
 
 function openDrawer(title, html, wide = false) {
@@ -1061,11 +1235,13 @@ async function submitTeachingAssignment(event) {
 }
 
 function openInventoryItemForm(item = null) {
-  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  if (!canManageInventory()) { toast("Inventory access is required.", "error"); return; }
   openDrawer(item ? "Edit inventory item" : "New inventory item", `<form class="auth-form" id="inventory-item-form" data-item-id="${esc(item?.id || "")}">
     <label class="field"><span>Item name</span><input name="name" value="${esc(item?.name || "")}" required></label>
     <div class="form-pair"><label class="field"><span>SKU</span><input name="sku" value="${esc(item?.sku || "")}" placeholder="ITEM-CODE" ${item ? "readonly" : "required"}></label><label class="field"><span>Category</span><select name="category" required><option value="book"${selected("book", item?.category)}>Book</option><option value="bag"${selected("bag", item?.category)}>Bag</option><option value="apparel"${selected("apparel", item?.category)}>Apparel</option><option value="other"${selected("other", item?.category)}>Other</option></select></label></div>
-    <div class="form-pair"><label class="field"><span>Unit</span><input name="unit" value="${esc(item?.unit || "piece")}" required></label><label class="field"><span>Quantity on hand <small>(optional)</small></span><input name="quantityOnHand" type="number" min="0" value="${item?.quantityOnHand ?? ""}" placeholder="Not supplied"></label></div>
+    <div class="form-pair"><label class="field"><span>Unit</span><input name="unit" value="${esc(item?.unit || "piece")}" required></label><label class="field"><span>${item?.quantityOnHand == null ? "Opening quantity" : "Current balance"}</span><input name="quantityOnHand" type="number" min="0" value="${item?.quantityOnHand ?? ""}" placeholder="Not supplied"${item?.quantityOnHand != null ? " readonly" : ""}></label></div>
+    <div class="form-pair"><label class="field"><span>Reorder level</span><input name="reorderLevel" type="number" min="0" value="${item?.reorderLevel ?? 0}" required></label><label class="field"><span>Vendor reference <small>(optional)</small></span><input name="vendorReference" value="${esc(item?.vendorReference || "")}"></label></div>
+    ${item?.quantityOnHand != null ? `<div class="inline-notice">${icon("shield")}<span>Stock balance is controlled by the movement register and cannot be edited directly.</span></div>` : ""}
     <label class="field"><span>Notes</span><textarea name="notes" rows="4">${esc(item?.notes || "")}</textarea></label>
     ${item ? `<label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Inventory item active</span></label>` : ""}
     ${formError("inventory-item-error")}
@@ -1085,6 +1261,8 @@ async function submitInventoryItem(event) {
     category: data.get("category"),
     unit: String(data.get("unit") || "").trim(),
     quantityOnHand: quantity === "" ? null : Number(quantity),
+    reorderLevel: Number(data.get("reorderLevel") || 0),
+    vendorReference: String(data.get("vendorReference") || "").trim() || null,
     notes: String(data.get("notes") || "").trim(),
     ...(itemId ? { isActive: form.elements.isActive.checked } : {}),
   };
@@ -1103,6 +1281,55 @@ async function submitInventoryItem(event) {
     showFormError("#inventory-item-error", error);
     button.disabled = false;
   }
+}
+
+function openInventoryMovementForm(item) {
+  if (!canManageInventory()) { toast("Inventory access is required.", "error"); return; }
+  const studentOptions = state.inventory.studentTargets || state.students.filter(student => student.status === "active");
+  openDrawer(`Record movement · ${item.name}`, `<form class="auth-form" id="inventory-movement-form" data-item-id="${esc(item.id)}">
+    <div class="inline-notice">${icon("inventory")}<span>Available: <strong>${item.quantityOnHand ?? 0} ${esc(item.unit)}</strong>. Every movement is permanent and auditable.</span></div>
+    <div class="form-pair"><label class="field"><span>Movement</span><select name="movementType"><option value="inward">Purchase / inward</option><option value="issue">Issue</option><option value="return">Return</option><option value="write_off">Write-off</option><option value="adjustment">Adjustment (+ or −)</option></select></label><label class="field"><span>Quantity</span><input name="quantity" type="number" step="1" value="1" required></label></div>
+    <label class="field"><span>Movement date</span><input name="occurredOn" type="date" value="${dateInputValue()}" required></label>
+    <div class="form-pair"><label class="field"><span>Target / source</span><select name="targetType"><option value="">Not applicable</option><option value="student">Student</option><option value="batch">Batch</option><option value="faculty">Faculty</option><option value="department">Department</option><option value="vendor">Vendor</option><option value="other">Other</option></select></label><label class="field"><span>Reference</span><input name="reference" placeholder="Invoice or issue reference"></label></div>
+    <label class="field hidden" id="inventory-movement-student-field"><span>Student</span><select name="studentId"><option value="">Select student</option>${options(studentOptions, student => `${student.fullName} · ${student.admissionNumber}`)}</select></label>
+    <label class="field" id="inventory-movement-target-field"><span>Target / source name <small>(optional)</small></span><input name="targetReference" placeholder="Batch, vendor or department"></label>
+    <label class="field"><span>Reason</span><textarea name="reason" rows="3" minlength="3" required></textarea></label>
+    ${formError("inventory-movement-error")}
+    <button class="button button-primary button-large" type="submit">${icon("inventory")}Record movement</button>
+  </form>`);
+  const form = $("#inventory-movement-form");
+  form.elements.targetType.addEventListener("change", () => {
+    const studentTarget = form.elements.targetType.value === "student";
+    $("#inventory-movement-student-field").classList.toggle("hidden", !studentTarget);
+    $("#inventory-movement-target-field").classList.toggle("hidden", studentTarget);
+    form.elements.studentId.required = studentTarget;
+  });
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const data = new FormData(form), button = $('button[type="submit"]', form);
+    button.disabled = true;
+    const payload = {
+      movementType: data.get("movementType"),
+      quantity: Number(data.get("quantity")),
+      occurredOn: data.get("occurredOn"),
+      targetType: data.get("targetType") || null,
+      targetReference: String(data.get("targetReference") || "").trim() || null,
+      studentId: data.get("studentId") || null,
+      reference: String(data.get("reference") || "").trim() || null,
+      reason: String(data.get("reason") || "").trim(),
+    };
+    try {
+      await api(`/api/inventory/items/${encodeURIComponent(form.dataset.itemId)}/movements`, { method: "POST", body: JSON.stringify(payload) });
+      state.inventory = await api("/api/inventory/bootstrap");
+      closeDetail();
+      renderInventory();
+      injectIcons($("#inventory"));
+      toast("Stock movement recorded.");
+    } catch (error) {
+      showFormError("#inventory-movement-error", error);
+      button.disabled = false;
+    }
+  });
 }
 
 function openFuturePaymentForm(item = null) {
@@ -1129,6 +1356,137 @@ function openFuturePaymentForm(item = null) {
     <button class="button button-primary button-large" type="submit">${icon(item ? "edit" : "calendar-check")}${item ? "Save future payment" : "Schedule payment"}</button>
   </form>`);
   $("#future-payment-form").addEventListener("submit", submitFuturePayment);
+}
+
+function paymentMethodOptions(current = "") {
+  return [
+    ["cash", "Cash"],
+    ["upi", "UPI"],
+    ["bank_transfer", "Bank transfer"],
+    ["cheque", "Cheque"],
+    ["card", "Card"],
+    ["other", "Other"],
+  ].map(([value, label]) => `<option value="${value}"${selected(value, current)}>${label}</option>`).join("");
+}
+
+function openPaymentForm() {
+  if (!canManageFinance()) { toast("Finance access is required.", "error"); return; }
+  if (!state.agreements.length) { toast("Create a fee agreement before recording a payment.", "error"); return; }
+  const preferredStudent = financeStudentFilter && state.agreements.some(row => row.studentId === financeStudentFilter)
+    ? financeStudentFilter
+    : "";
+  openDrawer("Record payment", `<form class="auth-form" id="payment-create-form">
+    <div class="inline-notice">${icon("receipt")}<span>A numbered receipt is created immediately.<small>Posted entries cannot be edited or deleted; corrections use a reversal.</small></span></div>
+    <label class="field"><span>Student account</span><select name="studentId" required><option value="">Select student</option>${state.agreements.map(row => `<option value="${esc(row.studentId)}"${selected(row.studentId, preferredStudent)}>${esc(row.studentName)} · ${esc(row.admissionNumber)}</option>`).join("")}</select></label>
+    <div class="form-pair"><label class="field"><span>Payment date</span><input name="transactionDate" type="date" max="${dateInputValue()}" value="${dateInputValue()}" required></label><label class="field"><span>Amount received</span><input name="amount" type="number" min="1" step="1" inputmode="numeric" required></label></div>
+    <label class="field"><span>Payment mode</span><select name="method" required><option value="">Select payment mode</option>${paymentMethodOptions()}</select></label>
+    <label class="field"><span>Bank / UPI / cheque reference <small>(optional for cash)</small></span><input name="reference" maxlength="255"></label>
+    <label class="field"><span>Internal note <small>(optional)</small></span><textarea name="notes" rows="3" maxlength="2000"></textarea></label>
+    ${formError("payment-create-error")}
+    <button class="button button-primary button-large" type="submit">${icon("receipt")}Post payment &amp; issue receipt</button>
+  </form>`);
+  $("#payment-create-form").addEventListener("submit", submitPayment);
+}
+
+async function submitPayment(event) {
+  event.preventDefault();
+  const form = event.currentTarget, data = new FormData(form);
+  const button = $('button[type="submit"]', form); button.disabled = true;
+  const payload = {
+    studentId: data.get("studentId"),
+    transactionDate: data.get("transactionDate"),
+    amount: Number(data.get("amount")),
+    method: data.get("method"),
+    reference: String(data.get("reference") || "").trim() || null,
+    notes: String(data.get("notes") || "").trim(),
+  };
+  try {
+    const payment = await api("/api/finance/payments", { method: "POST", body: JSON.stringify(payload) });
+    state.payments = await fetchAll("/api/finance/transactions");
+    closeDetail();
+    renderAll();
+    activateFinanceTab("payments");
+    toast(`Payment posted · ${payment.receiptNumber}`);
+  } catch (error) {
+    showFormError("#payment-create-error", error);
+    button.disabled = false;
+  }
+}
+
+function openPaymentReversalForm(item) {
+  if (!item || item.status !== "posted" || item.type !== "payment") return;
+  openDrawer("Reverse payment", `<form class="auth-form" id="payment-reversal-form" data-payment-id="${esc(item.id)}">
+    <div class="immutable-record-note">${icon("receipt")}<span>${esc(item.receiptNumber)} · ${money(item.amount)}<small>${esc(item.studentName)} · ${formatDate(item.date)}</small></span></div>
+    <label class="field"><span>Correction type</span><select name="kind"><option value="reversal">Reversal</option><option value="refund">Refund</option><option value="void">Void</option></select></label>
+    <div class="form-pair"><label class="field"><span>Date</span><input name="transactionDate" type="date" min="${esc(item.date)}" max="${dateInputValue()}" value="${dateInputValue()}" required></label><label class="field"><span>Amount</span><input name="amount" type="number" min="1" max="${item.amount}" value="${item.amount}" required></label></div>
+    <label class="field"><span>Reason</span><textarea name="reason" rows="4" minlength="3" required></textarea></label>
+    <label class="field"><span>Reference <small>(optional)</small></span><input name="reference" maxlength="255"></label>
+    <div class="inline-notice inline-notice-danger">${icon("alert")}<span>This creates a permanent offsetting entry.<small>The original receipt remains in the audit trail.</small></span></div>
+    ${formError("payment-reversal-error")}
+    <button class="button button-danger button-large" type="submit">${icon("refresh")}Post correction</button>
+  </form>`);
+  $("#payment-reversal-form").addEventListener("submit", submitPaymentReversal);
+}
+
+async function submitPaymentReversal(event) {
+  event.preventDefault();
+  const form = event.currentTarget, data = new FormData(form);
+  const button = $('button[type="submit"]', form); button.disabled = true;
+  try {
+    const kind = data.get("kind");
+    await api(`/api/finance/payments/${encodeURIComponent(form.dataset.paymentId)}/reverse`, {
+      method: "POST",
+      body: JSON.stringify({
+        transactionDate: data.get("transactionDate"),
+        kind,
+        amount: Number(data.get("amount")),
+        reason: String(data.get("reason") || "").trim(),
+        reference: String(data.get("reference") || "").trim() || null,
+      }),
+    });
+    state.payments = await fetchAll("/api/finance/transactions");
+    closeDetail();
+    renderAll();
+    activateFinanceTab("payments");
+    toast(`${String(kind).replace(/^./, value => value.toUpperCase())} posted.`);
+  } catch (error) {
+    showFormError("#payment-reversal-error", error);
+    button.disabled = false;
+  }
+}
+
+function openFeeAgreementForm() {
+  if (!canManageFinance()) { toast("Finance access is required.", "error"); return; }
+  const existingIds = new Set(state.agreements.map(row => row.studentId));
+  const students = state.students.filter(row => !existingIds.has(row.id));
+  if (!students.length) { toast("Every student already has a fee agreement."); return; }
+  openDrawer("Create fee agreement", `<form class="auth-form" id="fee-agreement-create-form">
+    <label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${students.map(row => `<option value="${esc(row.id)}">${esc(row.fullName)} · ${esc(row.admissionNumber)}</option>`).join("")}</select></label>
+    <label class="field"><span>Agreed course fee</span><input name="agreedAmount" type="number" min="0" step="1" inputmode="numeric" required></label>
+    <div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="INR" maxlength="3" required></label><label class="field"><span>Status</span><select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label></div>
+    ${formError("fee-agreement-create-error")}
+    <button class="button button-primary button-large" type="submit">${icon("wallet")}Create fee agreement</button>
+  </form>`);
+  $("#fee-agreement-create-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget, data = new FormData(form), button = $('button[type="submit"]', form);
+    button.disabled = true;
+    try {
+      await api("/api/finance/agreements", { method: "POST", body: JSON.stringify({
+        studentId: data.get("studentId"),
+        agreedAmount: Number(data.get("agreedAmount")),
+        currency: data.get("currency"),
+        status: data.get("status"),
+      }) });
+      state.agreements = await fetchAll("/api/finance/agreements");
+      closeDetail();
+      renderAll();
+      toast("Fee agreement created.");
+    } catch (error) {
+      showFormError("#fee-agreement-create-error", error);
+      button.disabled = false;
+    }
+  });
 }
 
 async function submitFuturePayment(event) {
@@ -1295,7 +1653,7 @@ async function saveExaminationMarks(publish) {
 }
 
 function openNoticeForm() {
-  openDrawer("New notice", `<form class="auth-form" id="notice-form"><label class="field"><span>Title</span><input name="title" required></label><label class="field"><span>Message</span><textarea name="body" rows="5" required></textarea></label><label class="field"><span>Audience</span><select name="audience"><option value="all">Everyone</option><option value="parents">Parents</option><option value="students">Students</option><option value="faculty">Faculty</option><option value="batch">Batch</option></select></label><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${options(state.timetable.batches || [], item => `${item.name} · ${item.program}`)}</select></label><label class="field"><span>Channel</span><select name="channel"><option value="in_app">In app</option><option value="email">Email</option><option value="sms">SMS</option><option value="whatsapp">WhatsApp</option></select></label><label class="field"><span>Status</span><select name="status"><option value="published">Published</option><option value="draft">Draft</option></select></label>${formError("notice-form-error")}<button class="button button-primary button-large" type="submit">${icon("message")}Publish notice</button></form>`);
+  openDrawer("New notice", `<form class="auth-form" id="notice-form"><label class="field"><span>Title</span><input name="title" required></label><label class="field"><span>Message</span><textarea name="body" rows="5" required></textarea></label><label class="field"><span>Audience</span><select name="audience"><option value="all">Everyone</option><option value="parents">Parents</option><option value="students">Students</option><option value="faculty">Faculty</option><option value="batch">Batch</option></select></label><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${options(state.timetable.batches || [], item => `${item.name} · ${item.program}`)}</select></label><label class="field"><span>Channel</span><select name="channel"><option value="in_app">In app</option><option value="email" disabled>Email · provider not connected</option><option value="sms" disabled>SMS · provider not connected</option><option value="whatsapp" disabled>WhatsApp · provider not connected</option></select></label><div class="inline-notice">${icon("info")}<span>Email, SMS and WhatsApp become available after a delivery provider is connected. In-app notices work now.</span></div><label class="field"><span>Status</span><select name="status"><option value="published">Publish now</option><option value="draft">Save draft</option></select></label>${formError("notice-form-error")}<button class="button button-primary button-large" type="submit">${icon("message")}Save notice</button></form>`);
   $("#notice-form").addEventListener("submit", submitNotice);
 }
 
@@ -1405,7 +1763,8 @@ async function openOwnerEdit(kind, id) {
       <label class="field"><span>Previous school</span><input name="previousSchool" value="${esc(item.previousSchool || "")}"></label>
       <div class="form-pair"><label class="field"><span>Student status</span><select name="status">${ownerStatusOptions(["active","draft","inactive","forfeited"], item.status)}</select></label><label class="field"><span>Data quality</span><select name="dataQualityStatus">${ownerStatusOptions(["ready","review","blocked"], item.dataQualityStatus)}</select></label></div>
       <div class="form-pair"><label class="field"><span>Program</span><input name="program" value="${esc(item.enrollment?.program || "")}"></label><label class="field"><span>Batch</span><input name="batch" value="${esc(item.enrollment?.batch || "")}"></label></div>
-      <label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${esc(item.enrollment?.enrollmentDate || "")}"></label>`;
+      <label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${esc(item.enrollment?.enrollmentDate || "")}"></label>
+      <fieldset class="choice-fieldset"><legend>Subjects</legend><div class="choice-grid">${["Physics", "Chemistry", "Mathematics", "Biology"].map(subject => `<label class="check-field"><input name="subjects" type="checkbox" value="${subject}"${checked(item.academicProfile?.subjects?.includes(subject))}><span>${subject}</span></label>`).join("")}</div></fieldset>`;
   } else if (kind === "lead") {
     title = "Edit enquiry";
     fields = `<div class="form-pair"><label class="field"><span>Student name</span><input name="student" value="${esc(item.student)}" required></label><label class="field"><span>Mobile</span><input name="mobile" value="${esc(item.mobile)}" required></label></div>
@@ -1450,7 +1809,7 @@ async function submitOwnerEdit(event) {
   const form = event.currentTarget, kind = form.dataset.kind, id = form.dataset.recordId, data = Object.fromEntries(new FormData(form).entries());
   const button = $('button[type="submit"]', form); button.disabled = true;
   let endpoint = "", payload = { ...data };
-  if (kind === "student") { endpoint = `/api/students/${id}`; payload.email ||= null; payload.mobile ||= null; payload.secondaryMobile ||= null; payload.previousSchool ||= null; payload.program ||= null; payload.batch ||= null; payload.enrollmentDate ||= null; }
+  if (kind === "student") { endpoint = `/api/students/${id}`; payload.email ||= null; payload.mobile ||= null; payload.secondaryMobile ||= null; payload.previousSchool ||= null; payload.program ||= null; payload.batch ||= null; payload.enrollmentDate ||= null; payload.subjects = new FormData(form).getAll("subjects"); }
   else if (kind === "lead") { endpoint = `/api/admissions/leads/${id}`; payload.email ||= null; payload.parentMobile ||= null; payload.nextFollowUpAt = payload.nextFollowUpAt ? indiaInputToISOString(payload.nextFollowUpAt) : null; }
   else if (kind === "agreement") { endpoint = `/api/finance/agreements/${id}`; payload.agreedAmount = Number(payload.agreedAmount); payload.legacyRegistrationTotal = Number(payload.legacyRegistrationTotal); }
   else if (kind === "payment") endpoint = `/api/finance/staged-payments/${id}/review`;
@@ -1464,7 +1823,7 @@ async function submitOwnerEdit(event) {
     if (kind === "student") state.students = await fetchAll("/api/students");
     else if (kind === "lead") state.leads = await fetchAll("/api/admissions/leads");
     else if (kind === "agreement") state.agreements = await fetchAll("/api/finance/agreements");
-    else if (kind === "payment") state.payments = await fetchAll("/api/finance/staged-payments");
+    else if (kind === "payment") state.payments = await fetchAll("/api/finance/transactions");
     else if (kind === "session") { state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; state.attendanceSessions = await api("/api/attendance/sessions"); }
     else if (kind === "assignment") state.assignments = await api("/api/academics/assignments");
     else if (kind === "notice") state.notices = await api("/api/communication/notices");
@@ -1474,18 +1833,19 @@ async function submitOwnerEdit(event) {
 }
 
 const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", inventory: "Inventory", reports: "Reports", settings: "Settings & audit" };
-function showView(view) {
-  if (!$("#" + view)) return; state.view = view;
+function showView(view, updateHash = true) {
+  if (!$("#" + view) || !allowedViews().has(view)) return; state.view = view;
   if (view === "finance") closeStudentLedger(false);
   $$(".app-view").forEach(node => node.classList.toggle("active", node.id === view));
   $$(".nav-item").forEach(node => { const active = node.dataset.view === view; node.classList.toggle("active", active); active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current"); });
   $("#page-title").textContent = viewTitles[view];
+  if (updateHash && location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
   closeSidebar(); closeCommand(); $("#main-content").focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
 function renderCommandResults(query = "") {
   const needle = query.trim().toLowerCase();
-  const views = Object.entries(viewTitles).filter(([, title]) => !needle || title.toLowerCase().includes(needle)).slice(0, 7);
+  const views = Object.entries(viewTitles).filter(([key, title]) => allowedViews().has(key) && (!needle || title.toLowerCase().includes(needle))).slice(0, 7);
   const students = state.students.filter(item => !needle || [item.fullName, item.admissionNumber, item.mobile].some(value => String(value || "").toLowerCase().includes(needle))).slice(0, needle ? 7 : 3);
   $("#command-results").innerHTML = `<p>${needle ? "Results" : "Navigate"}</p>${views.map(([key, title]) => `<button class="command-item" type="button" data-command-view="${key}"><span>${icon(key === "dashboard" ? "grid" : key === "finance" ? "wallet" : key === "students" ? "users" : key === "examinations" ? "exam" : "arrow-right")}</span><strong>${esc(title)}</strong><span>${icon("chevron-right")}</span></button>`).join("")}${students.length ? `<p>Students</p>${students.map(student => `<button class="command-item" type="button" data-command-student="${esc(student.id)}"><span>${icon("user")}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)} · ${esc(student.program)}</small></span><span>${icon("chevron-right")}</span></button>`).join("")}` : needle ? emptyState("search", "No results") : ""}`;
 }
@@ -1493,10 +1853,87 @@ function syncBodyScrollLock() {
   const overlayOpen = $("#detail-drawer").classList.contains("open") || !$("#command-overlay").classList.contains("hidden") || $("#sidebar").classList.contains("open");
   document.body.classList.toggle("no-scroll", overlayOpen);
 }
-function openCommand() { $("#command-overlay").classList.remove("hidden"); $("#global-search").value = ""; renderCommandResults(); syncBodyScrollLock(); setTimeout(() => $("#global-search").focus(), 10); }
-function closeCommand() { $("#command-overlay").classList.add("hidden"); syncBodyScrollLock(); }
-function openSidebar() { $("#sidebar").classList.add("open"); $("#drawer-scrim").classList.add("open"); $("#menu-button").setAttribute("aria-expanded", "true"); syncBodyScrollLock(); }
-function closeSidebar() { $("#sidebar").classList.remove("open"); $("#drawer-scrim").classList.remove("open"); $("#menu-button").setAttribute("aria-expanded", "false"); syncBodyScrollLock(); }
+let commandTrigger = null;
+function openCommand() { commandTrigger = document.activeElement; $("#command-overlay").classList.remove("hidden"); $("#command-overlay").setAttribute("aria-hidden", "false"); $("#global-search").value = ""; renderCommandResults(); syncBodyScrollLock(); setTimeout(() => $("#global-search").focus(), 10); }
+function closeCommand(restoreFocus = false) { const wasOpen = !$("#command-overlay").classList.contains("hidden"); $("#command-overlay").classList.add("hidden"); $("#command-overlay").setAttribute("aria-hidden", "true"); syncBodyScrollLock(); if (restoreFocus && wasOpen) commandTrigger?.focus?.(); commandTrigger = null; }
+const mobileNavigation = matchMedia("(max-width: 960px)");
+let sidebarTrigger = null;
+function syncSidebarAccessibility() {
+  const mobile = mobileNavigation.matches;
+  const open = $("#sidebar").classList.contains("open");
+  $("#sidebar").inert = mobile && !open;
+  $("#sidebar").setAttribute("aria-hidden", String(mobile && !open));
+  $("#main-content").inert = mobile && open;
+}
+function openSidebar() { sidebarTrigger = document.activeElement; $("#sidebar").classList.add("open"); $("#drawer-scrim").classList.add("open"); $("#menu-button").setAttribute("aria-expanded", "true"); syncSidebarAccessibility(); syncBodyScrollLock(); $("#sidebar-close").focus(); }
+function closeSidebar(restoreFocus = false) { const wasOpen = $("#sidebar").classList.contains("open"); $("#sidebar").classList.remove("open"); $("#drawer-scrim").classList.remove("open"); $("#menu-button").setAttribute("aria-expanded", "false"); syncSidebarAccessibility(); syncBodyScrollLock(); if (restoreFocus && wasOpen) (sidebarTrigger || $("#menu-button")).focus(); sidebarTrigger = null; }
+
+function applyRoleUI() {
+  const role = state.user?.role || "";
+  const visibleViews = allowedViews();
+  document.body.dataset.role = role;
+  $$(".nav-item").forEach(node => {
+    const visible = visibleViews.has(node.dataset.view);
+    node.hidden = !visible;
+    node.disabled = !visible;
+  });
+  const actionRoles = {
+    "#new-lead-button": ["owner","admissions_manager","counsellor","front_desk"],
+    "#new-student": ["owner"],
+    "#new-future-payment": ["owner","accounts","admissions_manager"],
+    "#new-session": ["owner","academic_coordinator"],
+    "#new-teaching-assignment": ["owner","academic_coordinator"],
+    "#new-assignment": ["owner","academic_coordinator"],
+    "#new-examination": ["owner","academic_coordinator"],
+    "#new-notice": ["owner","admissions_manager","academic_coordinator","front_desk"],
+    "#new-inventory-item": ["owner","storekeeper"],
+    "#new-user": ["owner"],
+    "#new-student-access": ["owner"],
+    "#new-parent-access": ["owner"],
+    "#new-faculty-access": ["owner"],
+    "#new-attendance-access": ["owner"],
+    "#new-master": ["owner"]
+  };
+  Object.entries(actionRoles).forEach(([selector, roles]) => {
+    const node = $(selector);
+    if (node) node.hidden = !roles.includes(role);
+  });
+  $$("[data-owner-edit]").forEach(node => {
+    const kind = node.dataset.ownerEdit;
+    const roles = ["agreement","payment"].includes(kind) ? ["owner","accounts","admissions_manager"] : ["session","assignment"].includes(kind) ? ["owner","academic_coordinator"] : ["owner"];
+    node.hidden = !roles.includes(role);
+  });
+  $$("[data-inventory-edit]").forEach(node => { node.hidden = !["owner","storekeeper"].includes(role); });
+  $$("[data-teaching-assignment-edit], [data-examination-edit]").forEach(node => { node.hidden = !["owner","academic_coordinator"].includes(role); });
+}
+
+function handleCommandKeyboard(event) {
+  if ($("#command-overlay").classList.contains("hidden")) return;
+  const items = $$(".command-item", $("#command-results"));
+  if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+    event.preventDefault();
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement);
+    const next = current < 0 ? (event.key === "ArrowDown" ? 0 : items.length - 1) : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[next].focus();
+    return;
+  }
+  if (event.key === "Enter" && document.activeElement === $("#global-search") && items.length) {
+    event.preventDefault();
+    items[0].click();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = [$("#global-search"), ...items];
+  const first = focusable[0], last = focusable.at(-1);
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 let accountMenuTrigger = null;
 function closeAccountMenu(restoreFocus = false) {
@@ -1582,10 +2019,30 @@ function bindEvents() {
       const item = (state.inventory.items || []).find(row => row.id === inventoryEdit.dataset.inventoryEdit);
       if (item) openInventoryItemForm(item);
     }
+    const inventoryMovement = event.target.closest("[data-inventory-movement]");
+    if (inventoryMovement) {
+      const item = (state.inventory.items || []).find(row => row.id === inventoryMovement.dataset.inventoryMovement);
+      if (item) openInventoryMovementForm(item);
+    }
     const installmentEdit = event.target.closest("[data-installment-edit]");
     if (installmentEdit) {
       const item = state.installments.find(row => row.id === installmentEdit.dataset.installmentEdit);
       if (item) openFuturePaymentForm(item);
+    }
+    const paymentReverse = event.target.closest("[data-payment-reverse]");
+    if (paymentReverse) {
+      const item = state.payments.find(row => row.id === paymentReverse.dataset.paymentReverse);
+      if (item) openPaymentReversalForm(item);
+    }
+    const leadFollowUp = event.target.closest("[data-lead-follow-up]");
+    if (leadFollowUp) {
+      const item = state.leads.find(row => row.id === leadFollowUp.dataset.leadFollowUp);
+      if (item) openLeadFollowUpForm(item);
+    }
+    const leadConvert = event.target.closest("[data-lead-convert]");
+    if (leadConvert) {
+      const item = state.leads.find(row => row.id === leadConvert.dataset.leadConvert);
+      if (item) openLeadConversionForm(item);
     }
     const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
@@ -1597,6 +2054,8 @@ function bindEvents() {
   $("#detail-close").addEventListener("click", closeDetail); $("#detail-overlay").addEventListener("click", closeDetail);
   $("#search-trigger").addEventListener("click", openCommand); $("#command-overlay").addEventListener("click", event => { if (event.target === event.currentTarget) closeCommand(); });
   $("#global-search").addEventListener("input", event => renderCommandResults(event.target.value));
+  $("#global-search").addEventListener("keydown", handleCommandKeyboard);
+  $("#command-results").addEventListener("keydown", handleCommandKeyboard);
   $("#theme-toggle").addEventListener("click", toggleTheme);
   [$("#user-menu-button"), $("#topbar-profile-button")].forEach(button => button.addEventListener("click", event => toggleAccountMenu(event.currentTarget)));
   $("#logout-button").addEventListener("click", () => logout());
@@ -1611,6 +2070,8 @@ function bindEvents() {
   $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", () => openUserForm()); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-faculty-access").addEventListener("click", () => openUserForm("faculty")); $("#new-attendance-access").addEventListener("click", () => openUserForm("attendance_operator")); $("#new-master").addEventListener("click", openMasterForm);
   $("#new-inventory-item").addEventListener("click", () => openInventoryItemForm());
   $("#new-future-payment").addEventListener("click", () => openFuturePaymentForm());
+  $("#new-payment").addEventListener("click", openPaymentForm);
+  $("#new-fee-agreement").addEventListener("click", openFeeAgreementForm);
   $("#inventory-search").addEventListener("input", renderInventory);
   $("#inventory-category-filter").addEventListener("change", renderInventory);
   $("#new-examination").addEventListener("click", () => openExaminationForm());
@@ -1619,6 +2080,7 @@ function bindEvents() {
   $("#academic-import-file").addEventListener("change", importAcademicData);
   $("#refresh-attendance").addEventListener("click", async () => { try { state.attendanceSessions = await api("/api/attendance/sessions"); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $$("[data-report-export]").forEach(button => button.addEventListener("click", () => downloadReport(button.dataset.reportExport, button)));
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));
   $(".segmented-control[role='tablist']").addEventListener("keydown", event => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -1632,8 +2094,20 @@ function bindEvents() {
   document.addEventListener("keydown", event => {
     trapDrawerFocus(event);
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); openCommand(); }
-    if (event.key === "Escape") { closeStudentLedger(); closeCommand(); closeDetail(); closeSidebar(); closeAccountMenu(true); }
+    if (event.key === "Escape") { closeStudentLedger(); closeCommand(true); closeDetail(); closeSidebar(true); closeAccountMenu(true); }
+    if (event.key === "Tab" && mobileNavigation.matches && $("#sidebar").classList.contains("open")) {
+      const focusable = $$('button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])', $("#sidebar")).filter(node => node.offsetParent !== null);
+      const first = focusable[0], last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
   });
+  window.addEventListener("popstate", () => {
+    const view = location.hash.slice(1);
+    if (state.token && allowedViews().has(view)) showView(view, false);
+  });
+  mobileNavigation.addEventListener?.("change", syncSidebarAccessibility);
+  syncSidebarAccessibility();
 }
 
 initialize();

@@ -1,14 +1,16 @@
 from pathlib import Path
 from uuid import uuid4
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
-from .database import SessionLocal
+from .database import SessionLocal, get_db
 from .routers import academics, admissions, attendance, auth, communication, examinations, faculty, finance, inventory, portal, reports, settings as settings_router, students, timetable
 from .seed import seed_development_data
 
@@ -114,7 +116,26 @@ async def validation_error(request: Request, exc: RequestValidationError):
 
 @app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
 @app.api_route("/api/health", methods=["GET", "HEAD"])
-def health():
+def health(db=Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+        if settings.is_render or settings.environment in {"production", "prod"}:
+            revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
+            if revision != "c15d8a42f901":
+                raise HTTPException(
+                    503,
+                    detail={
+                        "code": "SCHEMA_NOT_READY",
+                        "message": "Database migrations are not current",
+                    },
+                )
+    except HTTPException:
+        raise
+    except SQLAlchemyError as error:
+        raise HTTPException(
+            503,
+            detail={"code": "DATABASE_UNAVAILABLE", "message": "Database health check failed"},
+        ) from error
     return {"status": "ok", "service": "lakshya-erp"}
 
 for static_dir in ("assets", "src"):

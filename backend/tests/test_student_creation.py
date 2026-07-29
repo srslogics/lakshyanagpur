@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.models import AuditLog, Enrollment, Student
+from app.models import AuditLog, Enrollment, FeeAgreement, Student, StudentAcademicProfile, StudentSubjectSelection
 
 
 def test_owner_creates_student_and_enrollment_atomically(
@@ -20,6 +20,8 @@ def test_owner_creates_student_and_enrollment_atomically(
             "batch": "Tatva",
             "enrollmentDate": "2026-07-29",
             "status": "active",
+            "subjects": ["Physics", "Chemistry", "Mathematics"],
+            "agreedAmount": 80000,
         },
         headers=owner_headers,
     )
@@ -33,10 +35,19 @@ def test_owner_creates_student_and_enrollment_atomically(
 
     student = database.query(Student).one()
     enrollment = database.query(Enrollment).filter_by(student_id=student.id).one()
+    academic = database.get(StudentAcademicProfile, student.id)
+    agreement = database.query(FeeAgreement).filter_by(student_id=student.id).one()
     assert student.email == "new.student@example.com"
     assert enrollment.enrollment_date == date(2026, 7, 29)
     assert enrollment.source_type == "owner_entry"
     assert enrollment.is_active is True
+    assert academic.batch_name == "Tatva"
+    assert academic.source_stream == "JEE"
+    assert agreement.agreed_amount == 80000
+    assert {
+        row.subject_name
+        for row in database.query(StudentSubjectSelection).filter_by(student_id=student.id)
+    } == {"Physics", "Chemistry", "Mathematics"}
     assert database.query(AuditLog).filter_by(
         action="students.create",
         entity_id=student.id,
@@ -67,6 +78,8 @@ def test_student_creation_requires_owner_and_unique_contact(
         "batch": "Tatva",
         "enrollmentDate": "2026-07-29",
         "status": "active",
+        "subjects": ["Physics", "Chemistry", "Biology"],
+        "agreedAmount": 75000,
     }
 
     denied = client.post(
@@ -101,6 +114,8 @@ def test_student_creation_validates_mobile_numbers(
             "batch": "Essential",
             "enrollmentDate": "2026-07-29",
             "status": "draft",
+            "subjects": ["Physics"],
+            "agreedAmount": 40000,
         },
         headers=owner_headers,
     )
@@ -114,6 +129,8 @@ def test_student_creation_validates_mobile_numbers(
             "program": "JEE",
             "batch": "Tatva",
             "enrollmentDate": "2026-07-29",
+            "subjects": ["Physics"],
+            "agreedAmount": 40000,
         },
         headers=owner_headers,
     )

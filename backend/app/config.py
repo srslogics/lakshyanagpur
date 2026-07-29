@@ -21,6 +21,8 @@ def normalize_database_url(value: str) -> str:
 
 
 class Settings:
+    environment: str = os.getenv("APP_ENV", "development").strip().lower()
+    is_render: bool = bool(os.getenv("RENDER"))
     database_url: str = normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///./lakshya_erp.db"))
     app_host: str = os.getenv("APP_HOST", "127.0.0.1")
     app_port: int = int(os.getenv("APP_PORT", "8000"))
@@ -32,3 +34,23 @@ class Settings:
 
 
 settings = Settings()
+
+
+def validate_runtime_settings(runtime: Settings = settings) -> None:
+    """Fail fast when a hosted process would otherwise use development defaults."""
+    if not (runtime.is_render or runtime.environment in {"production", "prod"}):
+        return
+    errors: list[str] = []
+    if runtime.database_url.startswith("sqlite"):
+        errors.append("DATABASE_URL must point to PostgreSQL")
+    if runtime.secret_key == "development-only-change-me" or len(runtime.secret_key) < 32:
+        errors.append("SECRET_KEY must be a random value of at least 32 characters")
+    if not runtime.cors_origins or runtime.cors_origins == ["http://localhost:8000"]:
+        errors.append("CORS_ORIGINS must contain the deployed application origin")
+    if runtime.seed_demo_data:
+        errors.append("SEED_DEMO_DATA must be false")
+    if errors:
+        raise RuntimeError("Invalid production configuration: " + "; ".join(errors))
+
+
+validate_runtime_settings()

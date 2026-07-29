@@ -33,6 +33,7 @@ class User(TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(64), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class RevokedToken(Base):
@@ -220,7 +221,7 @@ class StudentAcademicProfile(TimestampMixin, Base):
     source_school_name: Mapped[str | None] = mapped_column(String(255))
     source_primary_mobile: Mapped[str | None] = mapped_column(String(20))
     source_secondary_mobile: Mapped[str | None] = mapped_column(String(20))
-    import_batch_id: Mapped[str] = mapped_column(ForeignKey("academic_import_batches.id"), index=True)
+    import_batch_id: Mapped[str | None] = mapped_column(ForeignKey("academic_import_batches.id"), index=True)
 
 
 class StudentSubjectSelection(Base):
@@ -231,7 +232,7 @@ class StudentSubjectSelection(Base):
     )
     subject_name: Mapped[str] = mapped_column(String(120), primary_key=True)
     source_value: Mapped[str] = mapped_column(String(120))
-    import_batch_id: Mapped[str] = mapped_column(ForeignKey("academic_import_batches.id"), index=True)
+    import_batch_id: Mapped[str | None] = mapped_column(ForeignKey("academic_import_batches.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
 
 
@@ -266,7 +267,7 @@ class FeeAgreement(TimestampMixin, Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("fee"))
     student_id: Mapped[str] = mapped_column(ForeignKey("students.id"), index=True)
     enrollment_id: Mapped[str] = mapped_column(ForeignKey("enrollments.id"), unique=True)
-    legacy_import_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    legacy_import_id: Mapped[str | None] = mapped_column(String(80), unique=True, index=True)
     agreed_amount: Mapped[int] = mapped_column(Integer)
     legacy_registration_total: Mapped[int] = mapped_column(Integer)
     currency: Mapped[str] = mapped_column(String(3), default="INR")
@@ -279,13 +280,21 @@ class PaymentTransaction(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("pay"))
     student_id: Mapped[str] = mapped_column(ForeignKey("students.id"), index=True)
     fee_agreement_id: Mapped[str] = mapped_column(ForeignKey("fee_agreements.id"), index=True)
-    legacy_import_id: Mapped[str] = mapped_column(String(80), index=True)
-    legacy_line_number: Mapped[int] = mapped_column(Integer)
+    legacy_import_id: Mapped[str | None] = mapped_column(String(80), index=True)
+    legacy_line_number: Mapped[int | None] = mapped_column(Integer)
+    receipt_number: Mapped[str | None] = mapped_column(String(48), unique=True, index=True)
     transaction_date: Mapped[date | None] = mapped_column(Date)
     amount: Mapped[int] = mapped_column(Integer)
     method: Mapped[str] = mapped_column(String(24))
     transaction_type: Mapped[str] = mapped_column(String(32), default="payment")
     source_note: Mapped[str] = mapped_column(Text)
+    reference: Mapped[str | None] = mapped_column(String(255))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    related_transaction_id: Mapped[str | None] = mapped_column(
+        ForeignKey("payment_transactions.id"),
+        index=True,
+    )
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
     status: Mapped[str] = mapped_column(String(32), default="staged", index=True)
     reconciliation_status: Mapped[str] = mapped_column(String(32), default="review", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
@@ -377,10 +386,43 @@ class InventoryItem(TimestampMixin, Base):
     category: Mapped[str] = mapped_column(String(40), index=True)
     unit: Mapped[str] = mapped_column(String(40), default="piece")
     quantity_on_hand: Mapped[int | None] = mapped_column(Integer)
+    reorder_level: Mapped[int] = mapped_column(Integer, default=0)
+    vendor_reference: Mapped[str | None] = mapped_column(String(255))
     notes: Mapped[str] = mapped_column(Text, default="")
     source_note: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class InventoryMovement(Base):
+    __tablename__ = "inventory_movements"
+    id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        default=lambda: new_id("mov"),
+    )
+    item_id: Mapped[str] = mapped_column(
+        ForeignKey("inventory_items.id"),
+        index=True,
+    )
+    movement_type: Mapped[str] = mapped_column(String(24), index=True)
+    quantity_delta: Mapped[int] = mapped_column(Integer)
+    balance_after: Mapped[int] = mapped_column(Integer)
+    occurred_on: Mapped[date] = mapped_column(Date, index=True)
+    target_type: Mapped[str | None] = mapped_column(String(24), index=True)
+    target_reference: Mapped[str | None] = mapped_column(String(255))
+    student_id: Mapped[str | None] = mapped_column(
+        ForeignKey("students.id"),
+        index=True,
+    )
+    reference: Mapped[str | None] = mapped_column(String(255))
+    reason: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now,
+        nullable=False,
+    )
 
 
 class ClassSession(TimestampMixin, Base):
@@ -469,6 +511,28 @@ class Examination(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(24), default="draft", index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class ExaminationParticipant(Base):
+    """Immutable eligibility snapshot captured when an examination is created."""
+
+    __tablename__ = "examination_participants"
+    exam_id: Mapped[str] = mapped_column(
+        ForeignKey("examinations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    student_id: Mapped[str] = mapped_column(
+        ForeignKey("students.id"),
+        primary_key=True,
+        index=True,
+    )
+    admission_number: Mapped[str] = mapped_column(String(32))
+    full_name: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now,
+        nullable=False,
+    )
 
 
 class ExaminationResult(Base):
