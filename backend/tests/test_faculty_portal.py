@@ -77,6 +77,64 @@ def test_faculty_email_is_first_login_only_until_mobile_activation(client, datab
     ).count() == 1
 
 
+def test_faculty_with_confirmed_mobile_uses_mobile_for_first_login(
+    client,
+    database,
+):
+    faculty = User(
+        mobile="9325511100",
+        email="meet.faculty@example.com",
+        full_name="Meet Sir",
+        role="faculty",
+        password_hash=hash_password("Lakshya@2026!"),
+        must_change_password=True,
+    )
+    database.add(faculty)
+    database.commit()
+
+    email_login = client.post(
+        "/api/auth/login",
+        json={
+            "email": faculty.email,
+            "password": "Lakshya@2026!",
+        },
+    )
+    assert email_login.status_code == 401
+
+    mobile_login = client.post(
+        "/api/auth/login",
+        json={
+            "mobile": faculty.mobile,
+            "password": "Lakshya@2026!",
+        },
+    )
+    assert mobile_login.status_code == 200
+    assert mobile_login.json()["user"]["mustChangePassword"] is True
+    headers = {
+        "Authorization": f"Bearer {mobile_login.json()['access_token']}",
+    }
+    assert client.get("/api/faculty/bootstrap", headers=headers).status_code == 403
+
+    changed = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={
+            "currentPassword": "Lakshya@2026!",
+            "newPassword": "MeetPersonal456!",
+        },
+    )
+    assert changed.status_code == 204
+    replacement_login = client.post(
+        "/api/auth/login",
+        json={
+            "mobile": faculty.mobile,
+            "password": "MeetPersonal456!",
+        },
+    )
+    assert replacement_login.status_code == 200
+    assert replacement_login.json()["user"]["mustChangePassword"] is False
+
+
 def test_faculty_mobile_activation_rejects_duplicates_and_other_roles(
     client,
     database,

@@ -32,7 +32,13 @@ def test_client_faculty_allocations_match_confirmed_scopes(database):
         "Kanchan Ma'am",
         "Kajal Ma'am",
     }
-    assert all(row.mobile is None for row in faculties)
+    assert {row.full_name: row.mobile for row in faculties} == {
+        "Meet Sir": "9325511100",
+        "Jitendra Sir": "9850242456",
+        "Anita Ma'am": "9923057717",
+        "Kanchan Ma'am": "9049834525",
+        "Kajal Ma'am": "9156376488",
+    }
     assert all(row.password_hash == "unprovisioned" for row in faculties)
 
     counts = {

@@ -12,16 +12,19 @@ from .models import (
 
 
 CLIENT_SOURCE = "Client confirmation · 28 Jul 2026"
+FACULTY_MOBILE_SOURCE = "Client confirmation · 29 Jul 2026"
 
 FACULTIES = (
     {
         "name": "Meet Sir",
+        "mobile": "9325511100",
         "subject": "Physics",
         "subject_code": "PHY",
         "scopes": (("Tatva", "JEE"), ("Tatva", "NEET")),
     },
     {
         "name": "Kajal Ma'am",
+        "mobile": "9156376488",
         "subject": "Physics",
         "subject_code": "PHY",
         "scopes": (
@@ -31,6 +34,7 @@ FACULTIES = (
     },
     {
         "name": "Jitendra Sir",
+        "mobile": "9850242456",
         "subject": "Chemistry",
         "subject_code": "CHEM",
         "scopes": (
@@ -42,6 +46,7 @@ FACULTIES = (
     },
     {
         "name": "Anita Ma'am",
+        "mobile": "9923057717",
         "subject": "Maths",
         "subject_code": "MATH",
         "scopes": (
@@ -53,6 +58,7 @@ FACULTIES = (
     },
     {
         "name": "Kanchan Ma'am",
+        "mobile": "9049834525",
         "subject": "Biology",
         "subject_code": "BIO",
         "scopes": (
@@ -117,7 +123,7 @@ def sync_client_master_data(db: Session) -> dict:
         if not faculty:
             faculty = User(
                 full_name=definition["name"],
-                mobile=None,
+                mobile=definition["mobile"],
                 email=None,
                 password_hash="unprovisioned",
                 role="faculty",

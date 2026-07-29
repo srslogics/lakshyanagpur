@@ -1,8 +1,8 @@
-"""Provision first-login email credentials for the confirmed faculty roster.
+"""Provision first-login credentials for the confirmed faculty roster.
 
-Email access is intentionally temporary: after a faculty member registers a
-mobile number in the Faculty app, the API accepts only that mobile for future
-sign-ins.
+Faculty with a confirmed mobile number sign in with mobile from the beginning.
+Email is retained as a recovery/contact identity and is only a first-login
+fallback while no mobile number has been assigned.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ FACULTY_EMAILS = {
 class FacultyCredential:
     full_name: str
     email: str
+    mobile: str | None
     temporary_password: str
 
 
@@ -70,7 +71,10 @@ def provision_faculty_accounts(
         if not faculty:
             missing_profiles.append({"fullName": full_name, "email": email})
             continue
-        if faculty.mobile or (
+        if (
+            faculty.mobile
+            and faculty.password_hash != "unprovisioned"
+        ) or (
             faculty.email
             and str(faculty.email).lower() == email
             and faculty.password_hash != "unprovisioned"
@@ -113,7 +117,7 @@ def provision_faculty_accounts(
                 before=before,
                 after={
                     "email": email,
-                    "mobile": None,
+                    "mobile": faculty.mobile,
                     "provisioned": True,
                     "mustChangePassword": True,
                 },
@@ -121,6 +125,7 @@ def provision_faculty_accounts(
             credentials.append(FacultyCredential(
                 full_name=faculty.full_name,
                 email=email,
+                mobile=faculty.mobile,
                 temporary_password=password,
             ))
 
@@ -147,10 +152,16 @@ def write_credentials(path: Path, credentials: list[FacultyCredential]) -> None:
         os.chmod(temporary_path, 0o600)
         with os.fdopen(descriptor, "w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["Faculty name", "First-login email", "Temporary password"])
+            writer.writerow([
+                "Faculty name",
+                "Mobile number",
+                "First-login email",
+                "Temporary password",
+            ])
             for item in credentials:
                 writer.writerow([
                     item.full_name,
+                    item.mobile or "",
                     item.email,
                     item.temporary_password,
                 ])
@@ -167,11 +178,12 @@ def verify_credentials(db: Session, path: Path) -> int:
     for row in rows:
         email = row["First-login email"].strip().lower()
         faculty = db.query(User).filter_by(email=email, role="faculty").first()
+        expected_mobile = normalize_mobile(row["Mobile number"]) if row["Mobile number"] else None
         if (
             not faculty
-            or faculty.mobile
             or not faculty.is_active
             or not faculty.must_change_password
+            or faculty.mobile != expected_mobile
         ):
             raise RuntimeError(f"Faculty first-login account verification failed for {email}")
         if not verify_password(row["Temporary password"], faculty.password_hash):
