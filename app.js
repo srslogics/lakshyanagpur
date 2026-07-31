@@ -36,6 +36,8 @@ const cachedUser = (() => {
   catch { return null; }
 })();
 const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const loadedResources = new Set();
+const resourceLoads = new Map();
 const ROLE_VIEWS = {
   owner: Object.keys({dashboard:1,admissions:1,students:1,finance:1,attendance:1,academics:1,examinations:1,timetable:1,communication:1,inventory:1,reports:1,settings:1}),
   admissions_manager: ["dashboard","admissions","students","finance","communication"],
@@ -215,6 +217,8 @@ function clearSession() {
   state.token = null;
   state.user = null;
   state.view = "dashboard";
+  loadedResources.clear();
+  resourceLoads.clear();
   Object.assign(state, { students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
   sessionStorage.removeItem("lakshya_user");
@@ -297,11 +301,6 @@ async function enterWorkspace() {
   applyRoleUI();
   const requestedView = location.hash.slice(1);
   showView(allowedViews().has(requestedView) ? requestedView : "dashboard", false);
-  const loadSecondary = () => loadSecondaryWorkspace().catch(error => {
-    if (state.token && error.status !== 401) toast("Some secondary modules are still loading.", "error");
-  });
-  if ("requestIdleCallback" in window) requestIdleCallback(loadSecondary, {timeout: 1200});
-  else setTimeout(loadSecondary, 0);
 }
 
 async function fetchAll(path, pageSize = 100) {
@@ -324,36 +323,94 @@ async function optional(load, fallback) {
 }
 
 async function loadInitialWorkspace() {
-  const [students, agreements, payments, installments, leads, admissionMeta] = await Promise.all([
-    optional(() => fetchAll("/api/students"), []),
-    optional(() => fetchAll("/api/finance/agreements"), []),
-    optional(() => fetchAll("/api/finance/transactions"), []),
-    optional(() => fetchAll("/api/finance/installments"), []),
-    optional(() => fetchAll("/api/admissions/leads"), []),
-    optional(() => api("/api/admissions/bootstrap"), { stageOrder: [] }),
-  ]);
-  Object.assign(state, { students, agreements, payments, installments, leads, stages: admissionMeta.stageOrder || [] });
-  renderAll();
+  const workspace = await api("/api/workspace/bootstrap");
+  Object.assign(state, {
+    students: workspace.students || [],
+    agreements: workspace.agreements || [],
+    payments: workspace.payments || [],
+    installments: workspace.installments || [],
+    leads: workspace.leads || [],
+    stages: workspace.admissionsMeta?.stageOrder || [],
+  });
+  renderCore();
 }
 
-async function loadSecondaryWorkspace() {
-  const [timetable, assignments, examinations, attendanceSessions, notices, inventory, report, masters, auditRows] = await Promise.all([
-    optional(() => api("/api/timetable/bootstrap"), { sessions: [], batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }), optional(() => api("/api/academics/assignments"), []), optional(() => api("/api/examinations"), []), optional(() => api("/api/attendance/sessions"), []), optional(() => api("/api/communication/notices"), []), optional(() => api("/api/inventory/bootstrap"), { items: [], summary: {} }), optional(() => api("/api/reports/overview"), null), optional(() => api("/api/settings/bootstrap"), { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }), optional(() => api("/api/settings/audit"), [])
-  ]);
-  Object.assign(state, { sessions: timetable.sessions || [], timetable, assignments, examinations, attendanceSessions, notices, inventory, report, masters, audit: auditRows });
-  renderAll();
+async function loadResource(resource) {
+  if (loadedResources.has(resource)) return;
+  if (resourceLoads.has(resource)) return resourceLoads.get(resource);
+  const request = (async () => {
+    if (resource === "timetable") {
+      state.timetable = await api("/api/timetable/bootstrap");
+      state.sessions = state.timetable.sessions || [];
+    } else if (resource === "assignments") state.assignments = await api("/api/academics/assignments");
+    else if (resource === "examinations") state.examinations = await api("/api/examinations");
+    else if (resource === "attendance") state.attendanceSessions = await api("/api/attendance/sessions");
+    else if (resource === "notices") state.notices = await api("/api/communication/notices");
+    else if (resource === "inventory") state.inventory = await api("/api/inventory/bootstrap");
+    else if (resource === "reports") state.report = await api("/api/reports/overview");
+    else if (resource === "masters") state.masters = await api("/api/settings/bootstrap");
+    else if (resource === "audit") state.audit = await api("/api/settings/audit");
+    loadedResources.add(resource);
+    renderResource(resource);
+  })().finally(() => resourceLoads.delete(resource));
+  resourceLoads.set(resource, request);
+  return request;
 }
 
-function renderAll() {
+async function loadViewResources(view) {
+  const requirements = {
+    timetable: ["timetable"],
+    academics: ["timetable", "assignments"],
+    examinations: ["timetable", "examinations"],
+    attendance: ["attendance"],
+    communication: ["timetable", "notices"],
+    inventory: ["inventory"],
+    reports: ["reports"],
+    settings: ["timetable", "masters", "audit"],
+  }[view] || [];
+  if (!requirements.some(resource => !loadedResources.has(resource))) return;
+  const viewNode = document.getElementById(view);
+  viewNode?.setAttribute("aria-busy", "true");
+  try {
+    await Promise.all(requirements.map(loadResource));
+  } finally {
+    viewNode?.removeAttribute("aria-busy");
+  }
+}
+
+function renderCore() {
   $("#nav-students-count").textContent = state.students.length;
   $("#nav-leads-count").textContent = state.leads.length;
-  $("#nav-examinations-count").textContent = state.examinations.length;
-  $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
   const reviewCount = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
   $("#nav-finance-count").textContent = state.payments.length + state.installments.filter(item => item.status !== "cancelled").length;
   $("#payment-review-count").textContent = reviewCount ? `${reviewCount} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !reviewCount);
-  renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings(); renderCommandResults(); injectIcons(); applyRoleUI();
+  renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderCommandResults(); injectIcons(); applyRoleUI();
+}
+
+function renderResource(resource) {
+  if (resource === "timetable") renderTimetable();
+  else if (resource === "assignments") renderAcademics();
+  else if (resource === "examinations") {
+    $("#nav-examinations-count").textContent = state.examinations.length;
+    renderExaminations();
+  } else if (resource === "attendance") renderAttendance();
+  else if (resource === "notices") renderCommunication();
+  else if (resource === "inventory") {
+    $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
+    renderInventory();
+  } else if (resource === "reports") renderReports();
+  else if (resource === "masters" || resource === "audit") renderSettings();
+  injectIcons();
+  applyRoleUI();
+}
+
+function renderAll() {
+  renderCore();
+  renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings();
+  $("#nav-examinations-count").textContent = state.examinations.length;
+  $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
+  injectIcons(); applyRoleUI();
 }
 
 function metricCard(label, value, iconName, featured = false) {
@@ -1899,6 +1956,9 @@ function showView(view, updateHash = true) {
   $("#page-title").textContent = viewTitles[view];
   if (updateHash && location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
   closeSidebar(); closeCommand(); $("#main-content").focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  loadViewResources(view).catch(error => {
+    if (state.token && error.status !== 401) toast(error.message || "This module could not be loaded.", "error");
+  });
 }
 
 function renderCommandResults(query = "") {

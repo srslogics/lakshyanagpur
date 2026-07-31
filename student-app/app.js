@@ -36,7 +36,7 @@ const titles = {
 const hashView = () => (views.has(location.hash.slice(1)) ? location.hash.slice(1) : "home");
 const state = {
   token: localStorage.getItem("lakshya_student_token"),
-  identity: null,
+  identity: (() => { try { return JSON.parse(localStorage.getItem("lakshya_student_user") || "null"); } catch { return null; } })(),
   data: null,
   view: hashView(),
   assignmentFilter: "open",
@@ -180,6 +180,7 @@ function clearSession() {
   state.identity = null;
   state.data = null;
   localStorage.removeItem("lakshya_student_token");
+  localStorage.removeItem("lakshya_student_user");
 }
 
 function showLogin(message = "") {
@@ -240,13 +241,14 @@ async function initialize() {
     return;
   }
   try {
-    const identity = await api("/api/auth/me");
+    const identity = state.identity || await api("/api/auth/me");
     if (!["student", "parent_student"].includes(identity.role)) {
       const error = new Error("This login is not assigned to the Student portal.");
       error.status = 403;
       throw error;
     }
     state.identity = identity;
+    localStorage.setItem("lakshya_student_user", JSON.stringify(identity));
     if (identity.mustChangePassword) {
       showPasswordChange(identity);
       return;
@@ -285,6 +287,7 @@ async function login(event) {
     }
     state.identity = account;
     localStorage.setItem("lakshya_student_token", state.token);
+    localStorage.setItem("lakshya_student_user", JSON.stringify(account));
     if (account.mustChangePassword) {
       showPasswordChange(account);
       return;

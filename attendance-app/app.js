@@ -26,7 +26,7 @@ const state = {
   upcoming: false,
   lastFocus: null,
   confirmTimer: null,
-  identity: null,
+  identity: (() => { try { return JSON.parse(localStorage.getItem("lakshya_attendance_user") || "null"); } catch { return null; } })(),
   online: navigator.onLine
 };
 
@@ -141,6 +141,7 @@ function clearSession() {
   state.identity = null;
   state.data = null;
   localStorage.removeItem("lakshya_attendance_token");
+  localStorage.removeItem("lakshya_attendance_user");
 }
 
 function showLogin(message = "") {
@@ -203,13 +204,14 @@ async function initialize() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
   if (!state.token) return showLogin();
   try {
-    const identity = await api("/api/auth/me");
+    const identity = state.identity || await api("/api/auth/me");
     if (identity.role !== "attendance_operator") {
       const error = new Error("This account is not assigned to the Attendance Desk.");
       error.status = 403;
       throw error;
     }
     state.identity = identity;
+    localStorage.setItem("lakshya_attendance_user", JSON.stringify(identity));
     if (identity.mustChangePassword) return showPasswordChange(identity);
     await loadDesk();
   } catch (error) {
@@ -245,6 +247,7 @@ async function login(event) {
     state.token = result.access_token;
     state.identity = result.user;
     localStorage.setItem("lakshya_attendance_token", state.token);
+    localStorage.setItem("lakshya_attendance_user", JSON.stringify(result.user));
     if (result.user.mustChangePassword) {
       showPasswordChange(result.user);
       return;

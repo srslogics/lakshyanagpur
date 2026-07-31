@@ -31,6 +31,7 @@ class Settings:
     access_token_minutes: int = int(os.getenv("ACCESS_TOKEN_MINUTES", "480"))
     seed_demo_data: bool = os.getenv("SEED_DEMO_DATA", "false").lower() == "true"
     allow_legacy_email_login: bool = os.getenv("ALLOW_LEGACY_EMAIL_LOGIN", "false").lower() == "true"
+    database_pool_pre_ping: bool = os.getenv("DATABASE_POOL_PRE_PING", "false").lower() == "true"
 
 
 settings = Settings()

@@ -59,11 +59,17 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
     if not credentials:
         raise HTTPException(401, "Authentication required", headers={"WWW-Authenticate": "Bearer"})
     payload = decode_token(credentials.credentials)
-    if db.get(RevokedToken, payload["jti"]):
+    identity = (
+        db.query(User, RevokedToken.id)
+        .outerjoin(RevokedToken, RevokedToken.id == payload["jti"])
+        .filter(User.id == payload.get("sub"))
+        .first()
+    )
+    if identity and identity[1] is not None:
         raise HTTPException(401, "Session has been signed out", headers={"WWW-Authenticate": "Bearer"})
-    user = db.get(User, payload.get("sub"))
+    user = identity[0] if identity else None
     if not user or not user.is_active or user.is_test_account:
-        raise HTTPException(401, "User is inactive or unavailable")
+        raise HTTPException(401, "Session is inactive or unavailable", headers={"WWW-Authenticate": "Bearer"})
     if payload.get("ver", 0) != user.token_version:
         raise HTTPException(401, "Session is no longer valid", headers={"WWW-Authenticate": "Bearer"})
     return user

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -41,19 +41,31 @@ def _aware(value: datetime) -> datetime:
 
 
 def _student_for_account(db: Session, model, user: User):
-    account = db.query(model).filter_by(user_id=user.id).first()
-    if not account:
-        raise HTTPException(403, "This account is not linked to a student record")
-    student = db.get(Student, account.student_id)
-    if not student:
-        raise HTTPException(404, "Student record not found")
-    enrollment = (
-        db.query(Enrollment)
-        .filter_by(student_id=student.id, is_active=True)
-        .order_by(Enrollment.created_at.desc())
+    latest_enrollment_id = (
+        select(Enrollment.id)
+        .where(Enrollment.student_id == Student.id)
+        .order_by(
+            Enrollment.is_active.desc(),
+            Enrollment.created_at.desc(),
+            Enrollment.id.desc(),
+        )
+        .limit(1)
+        .correlate(Student)
+        .scalar_subquery()
+    )
+    row = (
+        db.query(model, Student, Enrollment)
+        .join(Student, Student.id == model.student_id)
+        .outerjoin(Enrollment, Enrollment.id == latest_enrollment_id)
+        .filter(
+            model.user_id == user.id,
+            Student.is_test_account.is_(False),
+        )
         .first()
     )
-    return account, student, enrollment
+    if not row:
+        raise HTTPException(403, "This account is not linked to a student record")
+    return row
 
 
 def schedule_rows(db: Session, enrollment: Enrollment | None):
@@ -303,13 +315,30 @@ def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
 
 
 def fee_summary(db: Session, student: Student):
-    agreement = (
-        db.query(FeeAgreement)
-        .filter_by(student_id=student.id)
-        .order_by(FeeAgreement.created_at.desc())
-        .first()
+    latest_agreement_id = (
+        select(FeeAgreement.id)
+        .where(FeeAgreement.student_id == student.id)
+        .order_by(FeeAgreement.created_at.desc(), FeeAgreement.id.desc())
+        .limit(1)
+        .scalar_subquery()
     )
-    if not agreement:
+    rows = (
+        db.query(FeeAgreement, PaymentTransaction)
+        .outerjoin(
+            PaymentTransaction,
+            and_(
+                PaymentTransaction.fee_agreement_id == FeeAgreement.id,
+                PaymentTransaction.student_id == student.id,
+            ),
+        )
+        .filter(FeeAgreement.id == latest_agreement_id)
+        .order_by(
+            PaymentTransaction.transaction_date.desc(),
+            PaymentTransaction.created_at.desc(),
+        )
+        .all()
+    )
+    if not rows:
         return {
             "agreedAmount": 0,
             "paidAmount": 0,
@@ -317,15 +346,8 @@ def fee_summary(db: Session, student: Student):
             "currency": "INR",
             "payments": [],
         }
-    transactions = (
-        db.query(PaymentTransaction)
-        .filter_by(student_id=student.id, fee_agreement_id=agreement.id)
-        .order_by(
-            PaymentTransaction.transaction_date.desc(),
-            PaymentTransaction.created_at.desc(),
-        )
-        .all()
-    )
+    agreement = rows[0][0]
+    transactions = [transaction for _, transaction in rows if transaction is not None]
     paid = sum(payment_effect(item) for item in transactions)
     return {
         "agreedAmount": agreement.agreed_amount,

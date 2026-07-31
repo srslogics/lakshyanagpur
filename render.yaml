@@ -18,6 +18,8 @@ services:
         value: false
       - key: ALLOW_LEGACY_EMAIL_LOGIN
         value: false
+      - key: DATABASE_POOL_PRE_PING
+        value: false
       - key: APP_HOST
         value: 0.0.0.0
       - key: APP_PORT

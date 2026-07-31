@@ -1,9 +1,9 @@
-const CACHE = "lakshya-attendance-v7";
+const CACHE = "lakshya-attendance-v8";
 const ASSETS = [
   "./",
   "./styles.css?v=3",
   "../auth-shared.css?v=7",
-  "./app.js?v=7",
+  "./app.js?v=8",
   "./manifest.webmanifest",
   "../lakshya-logo-576.png",
   "../pwa-icon-192.png"

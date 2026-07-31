@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
 from .database import SessionLocal, get_db
-from .routers import academics, admissions, attendance, auth, communication, examinations, faculty, finance, inventory, portal, reports, settings as settings_router, students, timetable
+from .routers import academics, admissions, attendance, auth, communication, examinations, faculty, finance, inventory, portal, reports, settings as settings_router, students, timetable, workspace
 from .seed import seed_development_data
 
 @asynccontextmanager
@@ -58,6 +58,7 @@ app.include_router(reports.router)
 app.include_router(settings_router.router)
 app.include_router(portal.router)
 app.include_router(portal.parent_router)
+app.include_router(workspace.router)
 
 @app.middleware("http")
 async def request_context(request: Request, call_next):

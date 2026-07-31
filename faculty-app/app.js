@@ -27,7 +27,7 @@ const icons = {
 
 const state = {
   token: localStorage.getItem("lakshya_faculty_token"),
-  identity: null,
+  identity: (() => { try { return JSON.parse(localStorage.getItem("lakshya_faculty_user") || "null"); } catch { return null; } })(),
   loginMode: "mobile",
   data: null,
   view: "dashboard",
@@ -175,6 +175,7 @@ function clearSession() {
   state.identity = null;
   state.data = null;
   localStorage.removeItem("lakshya_faculty_token");
+  localStorage.removeItem("lakshya_faculty_user");
 }
 
 function showLogin(message = "") {
@@ -274,13 +275,14 @@ async function initialize() {
     return;
   }
   try {
-    const identity = await api("/api/auth/me");
+    const identity = state.identity || await api("/api/auth/me");
     if (identity.role !== "faculty") {
       const error = new Error("This account does not have Faculty access.");
       error.status = 403;
       throw error;
     }
     state.identity = identity;
+    localStorage.setItem("lakshya_faculty_user", JSON.stringify(identity));
     if (!identity.mobile) {
       showMobileSetup(identity);
       return;
@@ -323,6 +325,7 @@ async function login(event) {
     state.token = result.access_token;
     state.identity = result.user;
     localStorage.setItem("lakshya_faculty_token", state.token);
+    localStorage.setItem("lakshya_faculty_user", JSON.stringify(result.user));
     if (!result.user.mobile) {
       showMobileSetup(result.user);
       return;
@@ -424,11 +427,7 @@ async function changeFacultyPassword(event) {
 }
 
 async function loadPortal() {
-  const [portal, examinations] = await Promise.all([
-    api("/api/faculty/bootstrap"),
-    api("/api/examinations")
-  ]);
-  state.data = {...portal, examinations};
+  state.data = await api("/api/faculty/bootstrap");
   $("#startup-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
   $("#mobile-setup-screen").classList.add("hidden");
@@ -440,11 +439,7 @@ async function loadPortal() {
 }
 
 async function refreshPortal(message = "") {
-  const [portal, examinations] = await Promise.all([
-    api("/api/faculty/bootstrap"),
-    api("/api/examinations")
-  ]);
-  state.data = {...portal, examinations};
+  state.data = await api("/api/faculty/bootstrap");
   renderAll();
   showView(state.view, false);
   if (message) toast(message);

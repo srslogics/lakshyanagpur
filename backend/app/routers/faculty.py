@@ -23,6 +23,7 @@ from ..models import (
 from ..schemas import FacultyMobileActivationRequest
 from ..security import bearer, current_user, decode_token, hash_password, require_roles, verify_password
 from ..services import audit
+from .examinations import _exam_rows, _serialize_many
 
 router = APIRouter(prefix="/api/faculty", tags=["faculty portal"])
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
@@ -247,5 +248,6 @@ def bootstrap(
             key=lambda item: (item["batch"], item["subject"]),
         ),
         "assignments": assignments,
+        "examinations": _serialize_many(db, _exam_rows(db, faculty_user)),
         "notices": notices,
     }
