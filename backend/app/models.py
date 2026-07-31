@@ -34,6 +34,7 @@ class User(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_test_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
 
 class RevokedToken(Base):
@@ -89,6 +90,7 @@ class Student(TimestampMixin, Base):
     legacy_import_id: Mapped[str | None] = mapped_column(String(80), unique=True, index=True)
     data_quality_status: Mapped[str] = mapped_column(String(24), default="ready", index=True)
     status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
+    is_test_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
 
 class Guardian(TimestampMixin, Base):
@@ -317,6 +319,14 @@ class FeeInstallment(TimestampMixin, Base):
 def payment_transaction_updates_are_restricted(mapper, connection, target):
     changed = {attribute.key for attribute in inspect(target).attrs if attribute.history.has_changes()}
     if changed <= {"reconciliation_status"}:
+        return
+    if target.status == "staged" and changed <= {
+        "reconciliation_status",
+        "transaction_date",
+        "method",
+        "reference",
+        "notes",
+    }:
         return
     raise ValueError("Payment transactions are immutable; create a reversal or adjustment instead")
 

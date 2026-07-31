@@ -115,6 +115,20 @@ class LeadCreate(BaseModel):
             raise ValueError("invalid lead source")
         return normalized
 
+    @field_validator("program")
+    @classmethod
+    def canonical_program(cls, value):
+        normalized = " ".join(value.strip().lower().replace("_", " ").split())
+        if "mht" in normalized or "cet" in normalized:
+            return "MHT-CET"
+        if "neet" in normalized:
+            return "NEET"
+        if "jee" in normalized:
+            return "JEE"
+        if "board" in normalized:
+            return "Boards"
+        raise ValueError("program must be JEE, NEET, MHT-CET or Boards")
+
 
 class LeadUpdate(LeadCreate):
     pass

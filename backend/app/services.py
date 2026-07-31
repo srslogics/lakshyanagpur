@@ -40,6 +40,8 @@ def payment_effect(transaction: PaymentTransaction) -> int:
     """Return the canonical signed value used by every financial summary."""
     if transaction.status not in {"staged", "posted"}:
         return 0
+    if transaction.status == "staged" and transaction.reconciliation_status != "ready":
+        return 0
     if transaction.reconciliation_status == "do_not_import":
         return 0
     if transaction.transaction_type == "payment":

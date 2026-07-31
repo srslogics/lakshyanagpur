@@ -60,7 +60,7 @@ def list_students(
     query = db.query(Student, Enrollment).outerjoin(
         Enrollment,
         Enrollment.id == latest_enrollment_id,
-    )
+    ).filter(Student.is_test_account.is_(False))
     if search:
         term = f"%{search.strip()}%"
         query = query.filter(or_(Student.full_name.ilike(term), Student.mobile.ilike(term), Student.admission_number.ilike(term)))
@@ -185,7 +185,7 @@ def create_student(
 @router.get("/{student_id}")
 def student_detail(student_id: str, db: Session = Depends(get_db), user: User = Depends(require_roles(*READ_ROLES))):
     student = db.get(Student, student_id)
-    if not student:
+    if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
     enrollment = (
         db.query(Enrollment)

@@ -66,9 +66,10 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .password-field button{width:48px;height:48px;display:grid;place-items:center;border:0;color:var(--ink);background:transparent}
 .primary-button{min-height:52px;display:flex;align-items:center;justify-content:center;gap:10px;padding:0 20px;border:0;border-radius:14px;color:#fff;background:var(--navy-900);font-weight:800;box-shadow:0 12px 28px rgba(16,18,56,.2);transition:background .18s var(--ease),opacity .18s var(--ease)}
 .primary-button:hover{background:var(--navy-800)}
-.login-mode-button{min-height:44px;padding:0;border:0;color:var(--navy-800);background:transparent;font-size:.82rem;font-weight:800;text-decoration:underline;text-underline-offset:4px}
+.login-mode-button{min-height:46px;padding:0 16px;border:1px solid var(--navy-200);border-radius:13px;color:var(--navy-800);background:var(--navy-50);font-size:.82rem;font-weight:800}
 .login-mode-button:hover{color:var(--red)}
 .login-support{margin:14px 0 0;color:var(--muted);font-size:.83rem;line-height:1.55}
+.login-method-help{margin:2px 0 -6px;text-align:center}
 .setup-identity{margin:16px 0 -3px;padding:11px 13px;border-radius:12px;color:var(--navy-800);background:var(--navy-50);font-size:.78rem;font-weight:800;overflow-wrap:anywhere}
 .form-error,.modal-error{padding:11px 13px;border-radius:11px;color:var(--red);background:var(--red-soft);font-size:.8125rem;line-height:1.5}
 

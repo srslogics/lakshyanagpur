@@ -78,12 +78,18 @@ def overview(
     attendance_total = sum(
         count for status, count in attendance.items() if status != "unclassified"
     )
-    paid = sum(payment_effect(row) for row in db.query(PaymentTransaction).all())
-    recent = db.query(AuditLog, User).outerjoin(User, User.id == AuditLog.actor_id).order_by(AuditLog.created_at.desc()).limit(10).all()
+    paid = sum(
+        payment_effect(row)
+        for row, _student in db.query(PaymentTransaction, Student)
+        .join(Student, Student.id == PaymentTransaction.student_id)
+        .filter(Student.is_test_account.is_(False))
+        .all()
+    )
+    recent = db.query(AuditLog, User).outerjoin(User, User.id == AuditLog.actor_id).filter((User.id.is_(None)) | (User.is_test_account.is_(False))).order_by(AuditLog.created_at.desc()).limit(10).all()
     return {
         "metrics": {
-            "students": db.query(Student).count(),
-            "activeUsers": db.query(User).filter(User.is_active.is_(True)).count(),
+            "students": db.query(Student).filter(Student.is_test_account.is_(False)).count(),
+            "activeUsers": db.query(User).filter(User.is_active.is_(True), User.is_test_account.is_(False)).count(),
             "scheduledClasses": db.query(ClassSession).filter(ClassSession.starts_at >= now).count(),
             "publishedNotices": db.query(Notice).filter_by(status="published").count(),
             "assignments": db.query(Assignment).count(),
@@ -146,7 +152,7 @@ def export_report(
                 .all()
             )
         }
-        students = db.query(Student).order_by(Student.full_name).all()
+        students = db.query(Student).filter(Student.is_test_account.is_(False)).order_by(Student.full_name).all()
         return _csv_download(
             f"lakshya-students-{stamp}.csv",
             [
@@ -187,6 +193,7 @@ def export_report(
         agreements = (
             db.query(FeeAgreement, Student)
             .join(Student, Student.id == FeeAgreement.student_id)
+            .filter(Student.is_test_account.is_(False))
             .order_by(Student.full_name, FeeAgreement.created_at.desc())
             .all()
         )

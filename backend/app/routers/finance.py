@@ -112,10 +112,10 @@ def _create_posted_payment(
 
 @router.get("/agreements")
 def fee_agreements(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), db: Session = Depends(get_db), user: User = Depends(require_roles(*FINANCE_ROLES))):
-    query = db.query(FeeAgreement, Student).join(Student, Student.id == FeeAgreement.student_id)
+    query = db.query(FeeAgreement, Student).join(Student, Student.id == FeeAgreement.student_id).filter(Student.is_test_account.is_(False))
     total = query.count()
     rows = query.order_by(Student.full_name).offset((page - 1) * page_size).limit(page_size).all()
-    return {"items": [{"id": fee.id, "studentId": student.id, "studentName": student.full_name, "admissionNumber": student.admission_number, "agreedAmount": fee.agreed_amount, "legacyRegistrationTotal": fee.legacy_registration_total, "currency": fee.currency, "status": fee.status} for fee, student in rows], "total": total, "page": page, "pageSize": page_size}
+    return {"items": [{"id": fee.id, "studentId": student.id, "studentName": student.full_name, "studentMobile": student.mobile, "admissionNumber": student.admission_number, "agreedAmount": fee.agreed_amount, "legacyRegistrationTotal": fee.legacy_registration_total, "currency": fee.currency, "status": fee.status} for fee, student in rows], "total": total, "page": page, "pageSize": page_size}
 
 
 @router.post("/agreements", status_code=201)
@@ -125,7 +125,7 @@ def create_agreement(
     actor: User = Depends(require_roles(*FINANCE_ROLES)),
 ):
     student = db.get(Student, payload.student_id)
-    if not student:
+    if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
     if db.query(FeeAgreement).filter_by(student_id=student.id).first():
         raise HTTPException(409, "This student already has a fee agreement")
@@ -143,7 +143,7 @@ def create_agreement(
         legacy_import_id=None,
         agreed_amount=payload.agreed_amount,
         legacy_registration_total=0,
-        currency=payload.currency.upper(),
+        currency="INR",
         status=payload.status,
     )
     db.add(agreement)
@@ -158,6 +158,7 @@ def create_agreement(
         "id": agreement.id,
         "studentId": student.id,
         "studentName": student.full_name,
+        "studentMobile": student.mobile,
         "admissionNumber": student.admission_number,
         "agreedAmount": agreement.agreed_amount,
         "legacyRegistrationTotal": agreement.legacy_registration_total,
@@ -168,7 +169,7 @@ def create_agreement(
 
 @router.get("/staged-payments")
 def staged_payments(reconciliation_status: str | None = None, page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100), db: Session = Depends(get_db), user: User = Depends(require_roles(*FINANCE_ROLES))):
-    query = db.query(PaymentTransaction, Student).join(Student, Student.id == PaymentTransaction.student_id).filter(PaymentTransaction.status == "staged")
+    query = db.query(PaymentTransaction, Student).join(Student, Student.id == PaymentTransaction.student_id).filter(PaymentTransaction.status == "staged", Student.is_test_account.is_(False))
     if reconciliation_status:
         query = query.filter(PaymentTransaction.reconciliation_status == reconciliation_status)
     total = query.count()
@@ -186,7 +187,7 @@ def transactions(
     query = db.query(PaymentTransaction, Student).join(
         Student,
         Student.id == PaymentTransaction.student_id,
-    )
+    ).filter(Student.is_test_account.is_(False))
     total = query.count()
     rows = (
         query.order_by(
@@ -212,7 +213,7 @@ def post_payment(
     actor: User = Depends(require_roles("owner", "accounts")),
 ):
     student = db.get(Student, payload.student_id)
-    if not student:
+    if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
     agreement = db.query(FeeAgreement).filter_by(student_id=student.id).first()
     if not agreement:
@@ -312,7 +313,7 @@ def installments(
     query = db.query(FeeInstallment, Student).join(
         Student,
         Student.id == FeeInstallment.student_id,
-    )
+    ).filter(Student.is_test_account.is_(False))
     total = query.count()
     rows = query.order_by(
         FeeInstallment.due_date,
@@ -333,7 +334,7 @@ def create_installment(
     actor: User = Depends(require_roles(*FINANCE_ROLES)),
 ):
     student = db.get(Student, payload.studentId)
-    if not student:
+    if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
     agreement = db.query(FeeAgreement).filter_by(student_id=student.id).first()
     if not agreement:
@@ -403,21 +404,47 @@ def update_agreement(agreement_id: str, payload: FeeAgreementUpdate, db: Session
     before = {"agreedAmount": row.agreed_amount, "legacyRegistrationTotal": row.legacy_registration_total, "currency": row.currency, "status": row.status}
     row.agreed_amount = payload.agreed_amount
     row.legacy_registration_total = payload.legacy_registration_total
-    row.currency = payload.currency.upper()
+    row.currency = "INR"
     row.status = payload.status
     audit(db, actor, "finance.agreement.update", "fee_agreement", row.id, before=before, after=payload.model_dump(by_alias=True))
     db.commit()
     student = db.get(Student, row.student_id)
-    return {"id": row.id, "studentId": student.id, "studentName": student.full_name, "admissionNumber": student.admission_number, "agreedAmount": row.agreed_amount, "legacyRegistrationTotal": row.legacy_registration_total, "currency": row.currency, "status": row.status}
+    return {"id": row.id, "studentId": student.id, "studentName": student.full_name, "studentMobile": student.mobile, "admissionNumber": student.admission_number, "agreedAmount": row.agreed_amount, "legacyRegistrationTotal": row.legacy_registration_total, "currency": row.currency, "status": row.status}
 
 
 @router.patch("/staged-payments/{payment_id}/review")
 def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles(*FINANCE_ROLES))):
     row = db.get(PaymentTransaction, payment_id)
-    if not row:
+    if not row or row.status != "staged":
         raise HTTPException(404, "Staged payment not found")
-    before = {"reconciliationStatus": row.reconciliation_status}
+    before = {
+        "reconciliationStatus": row.reconciliation_status,
+        "transactionDate": row.transaction_date,
+        "method": row.method,
+        "reference": row.reference,
+        "notes": row.notes,
+    }
+    if payload.transaction_date is not None:
+        row.transaction_date = payload.transaction_date
+    if payload.method is not None:
+        row.method = payload.method
+    if payload.reference is not None:
+        row.reference = payload.reference.strip() or None
+    if payload.notes is not None:
+        row.notes = payload.notes.strip()
+    if payload.reconciliation_status == "ready":
+        if row.transaction_date is None:
+            raise HTTPException(422, "Enter the confirmed payment date before marking this row ready")
+        if row.method not in {"cash", "upi", "bank_transfer", "cheque", "card", "other"}:
+            raise HTTPException(422, "Select the confirmed payment mode before marking this row ready")
     row.reconciliation_status = payload.reconciliation_status
-    audit(db, actor, "finance.payment.review", "payment_transaction", row.id, before=before, after=payload.model_dump(by_alias=True))
+    after = {
+        "reconciliationStatus": row.reconciliation_status,
+        "transactionDate": row.transaction_date,
+        "method": row.method,
+        "reference": row.reference,
+        "notes": row.notes,
+    }
+    audit(db, actor, "finance.payment.review", "payment_transaction", row.id, before=before, after=after)
     db.commit()
-    return {"id": row.id, "reconciliationStatus": row.reconciliation_status}
+    return {"id": row.id, **after}

@@ -1063,7 +1063,7 @@ async function createStudent(event) {
 }
 
 function openLeadForm() {
-  openDrawer("New enquiry", `<form class="auth-form" id="lead-create-form"><label class="field"><span>Student name</span><input name="student" required></label><label class="field"><span>Mobile number</span><input name="mobile" inputmode="numeric" required></label><label class="field"><span>Program</span><input name="program" required></label><label class="field"><span>Parent / guardian</span><input name="parent" required></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(state.user?.fullName || "Admissions desk")}" required></label><label class="field"><span>Source</span><select name="source" required><option value="walk-in">Walk-in</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="website">Website</option><option value="referral">Referral</option><option value="campaign">Campaign</option><option value="seminar">Seminar</option><option value="social media">Social media</option></select></label><label class="field"><span>Next action</span><input name="nextAction" placeholder="Call, campus visit, counselling…" required></label><div class="auth-error hidden" id="lead-form-error" role="alert"></div><button class="button button-primary button-large" type="submit">${icon("plus")}Create enquiry</button></form>`);
+  openDrawer("New enquiry", `<form class="auth-form" id="lead-create-form"><label class="field"><span>Student name</span><input name="student" required></label><label class="field"><span>Mobile number</span><input name="mobile" inputmode="numeric" required></label><label class="field"><span>Program</span><select name="program" required><option value="">Select program</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${esc(program)}">${esc(program)}</option>`).join("")}</select></label><label class="field"><span>Parent / guardian</span><input name="parent" required></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(state.user?.fullName || "Admissions desk")}" required></label><label class="field"><span>Source</span><select name="source" required><option value="walk-in">Walk-in</option><option value="phone">Phone</option><option value="whatsapp">WhatsApp</option><option value="website">Website</option><option value="referral">Referral</option><option value="campaign">Campaign</option><option value="seminar">Seminar</option><option value="social media">Social media</option></select></label><label class="field"><span>Next action</span><input name="nextAction" placeholder="Call, campus visit, counselling…" required></label><div class="auth-error hidden" id="lead-form-error" role="alert"></div><button class="button button-primary button-large" type="submit">${icon("plus")}Create enquiry</button></form>`);
   $("#lead-create-form").addEventListener("submit", createLead);
 }
 
@@ -1182,6 +1182,48 @@ function trapDrawerFocus(event) {
 const options = (rows, label) => rows.map(item => `<option value="${esc(item.id)}">${esc(label(item))}</option>`).join("");
 const formError = id => `<div class="auth-error hidden" id="${id}" role="alert"></div>`;
 function showFormError(id, error) { const node = $(id); node.textContent = error.message; node.classList.remove("hidden"); }
+
+let studentPickerSequence = 0;
+const studentPickerId = item => item.studentId || item.id;
+const studentPickerMobile = item => item.studentMobile || item.mobile || state.students.find(student => student.id === studentPickerId(item))?.mobile || "";
+const studentPickerLabel = item => [item.studentName || item.fullName, item.admissionNumber, studentPickerMobile(item) ? mobileLabel(studentPickerMobile(item)) : ""].filter(Boolean).join(" · ");
+
+function studentPickerMarkup(rows, { label = "Student", preferredId = "", placeholder = "Search by name, admission ID or mobile" } = {}) {
+  const listId = `student-picker-options-${++studentPickerSequence}`;
+  const selectedItem = rows.find(item => studentPickerId(item) === preferredId);
+  return `<label class="field student-picker"><span>${esc(label)}</span><input type="search" data-student-picker-input list="${listId}" value="${esc(selectedItem ? studentPickerLabel(selectedItem) : "")}" placeholder="${esc(placeholder)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="${listId}" required><input type="hidden" name="studentId" data-student-picker-id value="${esc(selectedItem ? studentPickerId(selectedItem) : "")}"><datalist id="${listId}">${rows.map(item => `<option value="${esc(studentPickerLabel(item))}"></option>`).join("")}</datalist><small>Start typing a student name, admission ID or mobile number, then choose the matching record.</small></label>`;
+}
+
+function bindStudentPicker(form, rows) {
+  const input = $("[data-student-picker-input]", form);
+  const hidden = $("[data-student-picker-id]", form);
+  if (!input || !hidden) return;
+  const resolve = () => {
+    const query = input.value.trim().toLowerCase();
+    const mobile = normalizedMobile(input.value);
+    const matches = rows.filter(item => {
+      const candidateMobile = normalizedMobile(studentPickerMobile(item));
+      return studentPickerLabel(item).toLowerCase() === query
+        || String(item.admissionNumber || "").toLowerCase() === query
+        || String(item.studentName || item.fullName || "").toLowerCase() === query
+        || (mobile && candidateMobile === mobile);
+    });
+    hidden.value = matches.length === 1 ? studentPickerId(matches[0]) : "";
+    input.setCustomValidity(query && matches.length !== 1 ? "Choose one student from the matching list." : "");
+    return hidden.value;
+  };
+  input.addEventListener("input", resolve);
+  input.addEventListener("change", resolve);
+  input.addEventListener("blur", resolve);
+  form.resolveStudentPicker = resolve;
+}
+
+function requireStudentPicker(form) {
+  if (!form.resolveStudentPicker || form.resolveStudentPicker()) return true;
+  const input = $("[data-student-picker-input]", form);
+  input?.reportValidity();
+  return false;
+}
 
 function openSessionForm() {
   const start = new Date(Date.now() + 86400000), end = new Date(start.getTime() + 5400000);
@@ -1343,7 +1385,7 @@ function openFuturePaymentForm(item = null) {
     : "";
   const studentField = item
     ? `<div class="immutable-record-note">${icon("user")}<span>${esc(item.studentName)}<small>${esc(item.admissionNumber || "Student fee account")}</small></span></div>`
-    : `<label class="field"><span>Student</span><select name="studentId" required><option value="">Select student account</option>${state.agreements.map(row => `<option value="${esc(row.studentId)}"${selected(row.studentId, preferredStudent)}>${esc(row.studentName)} · ${esc(row.admissionNumber)}</option>`).join("")}</select></label>`;
+    : studentPickerMarkup(state.agreements, { label: "Student account", preferredId: preferredStudent });
   const dueDate = item?.date || dateInputValue(new Date(Date.now() + 30 * 86400000));
   openDrawer(item ? "Edit future payment" : "Schedule future payment", `<form class="auth-form" id="future-payment-form" data-installment-id="${esc(item?.id || "")}">
     ${studentField}
@@ -1355,7 +1397,9 @@ function openFuturePaymentForm(item = null) {
     ${formError("future-payment-error")}
     <button class="button button-primary button-large" type="submit">${icon(item ? "edit" : "calendar-check")}${item ? "Save future payment" : "Schedule payment"}</button>
   </form>`);
-  $("#future-payment-form").addEventListener("submit", submitFuturePayment);
+  const futurePaymentForm = $("#future-payment-form");
+  if (!item) bindStudentPicker(futurePaymentForm, state.agreements);
+  futurePaymentForm.addEventListener("submit", submitFuturePayment);
 }
 
 function paymentMethodOptions(current = "") {
@@ -1377,7 +1421,7 @@ function openPaymentForm() {
     : "";
   openDrawer("Record payment", `<form class="auth-form" id="payment-create-form">
     <div class="inline-notice">${icon("receipt")}<span>A numbered receipt is created immediately.<small>Posted entries cannot be edited or deleted; corrections use a reversal.</small></span></div>
-    <label class="field"><span>Student account</span><select name="studentId" required><option value="">Select student</option>${state.agreements.map(row => `<option value="${esc(row.studentId)}"${selected(row.studentId, preferredStudent)}>${esc(row.studentName)} · ${esc(row.admissionNumber)}</option>`).join("")}</select></label>
+    ${studentPickerMarkup(state.agreements, { label: "Student account", preferredId: preferredStudent })}
     <div class="form-pair"><label class="field"><span>Payment date</span><input name="transactionDate" type="date" max="${dateInputValue()}" value="${dateInputValue()}" required></label><label class="field"><span>Amount received</span><input name="amount" type="number" min="1" step="1" inputmode="numeric" required></label></div>
     <label class="field"><span>Payment mode</span><select name="method" required><option value="">Select payment mode</option>${paymentMethodOptions()}</select></label>
     <label class="field"><span>Bank / UPI / cheque reference <small>(optional for cash)</small></span><input name="reference" maxlength="255"></label>
@@ -1385,12 +1429,16 @@ function openPaymentForm() {
     ${formError("payment-create-error")}
     <button class="button button-primary button-large" type="submit">${icon("receipt")}Post payment &amp; issue receipt</button>
   </form>`);
-  $("#payment-create-form").addEventListener("submit", submitPayment);
+  const paymentForm = $("#payment-create-form");
+  bindStudentPicker(paymentForm, state.agreements);
+  paymentForm.addEventListener("submit", submitPayment);
 }
 
 async function submitPayment(event) {
   event.preventDefault();
-  const form = event.currentTarget, data = new FormData(form);
+  const form = event.currentTarget;
+  if (!requireStudentPicker(form)) return;
+  const data = new FormData(form);
   const button = $('button[type="submit"]', form); button.disabled = true;
   const payload = {
     studentId: data.get("studentId"),
@@ -1458,18 +1506,22 @@ async function submitPaymentReversal(event) {
 function openFeeAgreementForm() {
   if (!canManageFinance()) { toast("Finance access is required.", "error"); return; }
   const existingIds = new Set(state.agreements.map(row => row.studentId));
-  const students = state.students.filter(row => !existingIds.has(row.id));
+  const students = state.students.filter(row => ["active", "draft"].includes(row.status) && !existingIds.has(row.id));
   if (!students.length) { toast("Every student already has a fee agreement."); return; }
   openDrawer("Create fee agreement", `<form class="auth-form" id="fee-agreement-create-form">
-    <label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${students.map(row => `<option value="${esc(row.id)}">${esc(row.fullName)} · ${esc(row.admissionNumber)}</option>`).join("")}</select></label>
+    ${studentPickerMarkup(students)}
     <label class="field"><span>Agreed course fee</span><input name="agreedAmount" type="number" min="0" step="1" inputmode="numeric" required></label>
-    <div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="INR" maxlength="3" required></label><label class="field"><span>Status</span><select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label></div>
+    <div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="INR" readonly aria-readonly="true"></label><label class="field"><span>Status</span><select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label></div>
     ${formError("fee-agreement-create-error")}
     <button class="button button-primary button-large" type="submit">${icon("wallet")}Create fee agreement</button>
   </form>`);
-  $("#fee-agreement-create-form").addEventListener("submit", async event => {
+  const feeAgreementForm = $("#fee-agreement-create-form");
+  bindStudentPicker(feeAgreementForm, students);
+  feeAgreementForm.addEventListener("submit", async event => {
     event.preventDefault();
-    const form = event.currentTarget, data = new FormData(form), button = $('button[type="submit"]', form);
+    const form = event.currentTarget;
+    if (!requireStudentPicker(form)) return;
+    const data = new FormData(form), button = $('button[type="submit"]', form);
     button.disabled = true;
     try {
       await api("/api/finance/agreements", { method: "POST", body: JSON.stringify({
@@ -1491,7 +1543,9 @@ function openFeeAgreementForm() {
 
 async function submitFuturePayment(event) {
   event.preventDefault();
-  const form = event.currentTarget, installmentId = form.dataset.installmentId, data = new FormData(form);
+  const form = event.currentTarget, installmentId = form.dataset.installmentId;
+  if (!installmentId && !requireStudentPicker(form)) return;
+  const data = new FormData(form);
   const button = $('button[type="submit"]', form); button.disabled = true;
   const payload = {
     ...(installmentId ? {} : { studentId: data.get("studentId") }),
@@ -1762,13 +1816,13 @@ async function openOwnerEdit(kind, id) {
       <label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email || "")}"></label>
       <label class="field"><span>Previous school</span><input name="previousSchool" value="${esc(item.previousSchool || "")}"></label>
       <div class="form-pair"><label class="field"><span>Student status</span><select name="status">${ownerStatusOptions(["active","draft","inactive","forfeited"], item.status)}</select></label><label class="field"><span>Data quality</span><select name="dataQualityStatus">${ownerStatusOptions(["ready","review","blocked"], item.dataQualityStatus)}</select></label></div>
-      <div class="form-pair"><label class="field"><span>Program</span><input name="program" value="${esc(item.enrollment?.program || "")}"></label><label class="field"><span>Batch</span><input name="batch" value="${esc(item.enrollment?.batch || "")}"></label></div>
+      <div class="form-pair"><label class="field"><span>Program</span><select name="program"><option value="">Not assigned</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${esc(program)}"${selected(program, item.enrollment?.program)}>${esc(program)}</option>`).join("")}</select></label><label class="field"><span>Batch</span><select name="batch"><option value="">Not assigned</option>${STUDENT_BATCH_ORDER.map(batch => `<option value="${esc(batch)}"${selected(batch, item.enrollment?.batch)}>${esc(batch)}</option>`).join("")}</select></label></div>
       <label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${esc(item.enrollment?.enrollmentDate || "")}"></label>
       <fieldset class="choice-fieldset"><legend>Subjects</legend><div class="choice-grid">${["Physics", "Chemistry", "Mathematics", "Biology"].map(subject => `<label class="check-field"><input name="subjects" type="checkbox" value="${subject}"${checked(item.academicProfile?.subjects?.includes(subject))}><span>${subject}</span></label>`).join("")}</div></fieldset>`;
   } else if (kind === "lead") {
     title = "Edit enquiry";
     fields = `<div class="form-pair"><label class="field"><span>Student name</span><input name="student" value="${esc(item.student)}" required></label><label class="field"><span>Mobile</span><input name="mobile" value="${esc(item.mobile)}" required></label></div>
-      <div class="form-pair"><label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email || "")}"></label><label class="field"><span>Program</span><input name="program" value="${esc(item.program)}" required></label></div>
+      <div class="form-pair"><label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email || "")}"></label><label class="field"><span>Program</span><select name="program" required>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${esc(program)}"${selected(program, item.program)}>${esc(program)}</option>`).join("")}</select></label></div>
       <div class="form-pair"><label class="field"><span>Parent / guardian</span><input name="parent" value="${esc(item.parent)}" required></label><label class="field"><span>Parent mobile</span><input name="parentMobile" value="${esc(item.parentMobile || "")}"></label></div>
       <div class="form-pair"><label class="field"><span>Source</span><select name="source">${ownerStatusOptions(["walk-in","website","phone","whatsapp","referral","campaign","seminar","social media"], item.source)}</select></label><label class="field"><span>Counsellor</span><input name="counsellor" value="${esc(item.counsellor)}" required></label></div>
       <div class="form-pair"><label class="field"><span>Stage</span><select name="stage">${state.stages.map(value => `<option${selected(value,item.stage)}>${esc(value)}</option>`).join("")}</select></label><label class="field"><span>Priority</span><select name="priority">${ownerStatusOptions(["low","medium","high","urgent"], item.priority)}</select></label></div>
@@ -1777,10 +1831,14 @@ async function openOwnerEdit(kind, id) {
       <label class="field"><span>Summary</span><textarea name="summary">${esc(item.summary || "")}</textarea></label>`;
   } else if (kind === "agreement") {
     title = `Edit fee agreement · ${item.studentName}`;
-    fields = `<div class="form-pair"><label class="field"><span>Agreed fee</span><input name="agreedAmount" type="number" min="0" value="${item.agreedAmount}" required></label><label class="field"><span>Registration total</span><input name="legacyRegistrationTotal" type="number" min="0" value="${item.legacyRegistrationTotal}" required></label></div><div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="${esc(item.currency)}" maxlength="3" required></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["active","draft","inactive","completed"], item.status)}</select></label></div>`;
+    fields = `<div class="form-pair"><label class="field"><span>Agreed fee</span><input name="agreedAmount" type="number" min="0" value="${item.agreedAmount}" required></label><label class="field"><span>Registration total</span><input name="legacyRegistrationTotal" type="number" min="0" value="${item.legacyRegistrationTotal}" required></label></div><div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="INR" readonly aria-readonly="true"></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["active","draft","inactive","completed"], item.status)}</select></label></div>`;
   } else if (kind === "payment") {
     title = `Review staged payment · ${item.studentName}`;
-    fields = `<div class="immutable-record-note">${icon("shield")}<span>${money(item.amount)} · ${formatDate(item.date)} · ${esc(item.method || "Unknown mode")}<small>Source amounts and dates remain immutable. Only the review classification can change.</small></span></div><label class="field"><span>Review classification</span><select name="reconciliationStatus">${ownerStatusOptions(["ready","review","do_not_import"], item.reconciliationStatus)}</select></label>`;
+    fields = `<div class="immutable-record-note">${icon("shield")}<span>${money(item.amount)} · ${esc(item.sourceNote || "Imported workbook row")}<small>The source row and amount remain immutable. Confirm the normalized date and payment mode before including it in trusted totals.</small></span></div>
+      <div class="form-pair"><label class="field"><span>Confirmed payment date</span><input name="transactionDate" type="date" value="${esc(item.date || "")}" max="${dateInputValue()}"></label><label class="field"><span>Confirmed payment mode</span><select name="method"><option value="">Select mode</option>${paymentMethodOptions(item.method)}</select></label></div>
+      <label class="field"><span>Bank / UPI / cheque reference <small>(optional for cash)</small></span><input name="reference" value="${esc(item.reference || "")}" maxlength="255"></label>
+      <label class="field"><span>Reconciliation note <small>(optional)</small></span><textarea name="notes" rows="3" maxlength="2000">${esc(item.notes || "")}</textarea></label>
+      <label class="field"><span>Review classification</span><select name="reconciliationStatus">${ownerStatusOptions(["ready","review","do_not_import"], item.reconciliationStatus)}</select><small>Only Ready rows contribute to recorded-payment totals.</small></label>`;
   } else if (kind === "session") {
     title = "Edit class";
     fields = `<label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label><div class="form-pair"><label class="field"><span>Faculty</span><select name="facultyId">${state.timetable.faculty.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.facultyId)}>${esc(row.fullName)}</option>`).join("")}</select></label><label class="field"><span>Room</span><select name="roomId">${state.timetable.rooms.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.roomId)}>${esc(row.name)}</option>`).join("")}</select></label></div><div class="form-pair"><label class="field"><span>Starts</span><input name="startsAt" type="datetime-local" value="${localInputValue(item.startsAt)}" required></label><label class="field"><span>Ends</span><input name="endsAt" type="datetime-local" value="${localInputValue(item.endsAt)}" required></label></div><div class="form-pair"><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["scheduled","completed","cancelled"], item.status)}</select></label><label class="check-field"><input name="allowOverride" type="checkbox"><span>Allow schedule override</span></label></div><label class="field"><span>Notes</span><textarea name="notes">${esc(item.notes || "")}</textarea></label><label class="field"><span>Override reason</span><textarea name="overrideReason">${esc(item.overrideReason || "")}</textarea></label>`;
@@ -1812,7 +1870,7 @@ async function submitOwnerEdit(event) {
   if (kind === "student") { endpoint = `/api/students/${id}`; payload.email ||= null; payload.mobile ||= null; payload.secondaryMobile ||= null; payload.previousSchool ||= null; payload.program ||= null; payload.batch ||= null; payload.enrollmentDate ||= null; payload.subjects = new FormData(form).getAll("subjects"); }
   else if (kind === "lead") { endpoint = `/api/admissions/leads/${id}`; payload.email ||= null; payload.parentMobile ||= null; payload.nextFollowUpAt = payload.nextFollowUpAt ? indiaInputToISOString(payload.nextFollowUpAt) : null; }
   else if (kind === "agreement") { endpoint = `/api/finance/agreements/${id}`; payload.agreedAmount = Number(payload.agreedAmount); payload.legacyRegistrationTotal = Number(payload.legacyRegistrationTotal); }
-  else if (kind === "payment") endpoint = `/api/finance/staged-payments/${id}/review`;
+  else if (kind === "payment") { endpoint = `/api/finance/staged-payments/${id}/review`; payload.transactionDate ||= null; payload.method ||= null; payload.reference ||= null; }
   else if (kind === "session") { endpoint = `/api/timetable/sessions/${id}`; payload.startsAt = indiaInputToISOString(payload.startsAt); payload.endsAt = indiaInputToISOString(payload.endsAt); payload.allowOverride = form.elements.allowOverride.checked; }
   else if (kind === "assignment") { endpoint = `/api/academics/assignments/${id}`; payload.dueAt = indiaInputToISOString(payload.dueAt); }
   else if (kind === "notice") { endpoint = `/api/communication/notices/${id}`; payload.batchId ||= null; }

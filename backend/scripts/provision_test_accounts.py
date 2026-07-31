@@ -11,6 +11,7 @@ import os
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal
 from app.models import ParentAccount, Student, StudentAccount, User
 from app.security import hash_password
@@ -71,6 +72,7 @@ def _upsert_user(db: Session, key: str, password: str) -> User:
             role=spec["role"],
             password_hash=hash_password(password),
             is_active=True,
+            is_test_account=True,
         )
         db.add(user)
         db.flush()
@@ -78,10 +80,13 @@ def _upsert_user(db: Session, key: str, password: str) -> User:
         user.full_name = spec["full_name"]
         user.password_hash = hash_password(password)
         user.is_active = True
+        user.is_test_account = True
     return user
 
 
 def provision_test_accounts(db: Session, passwords: dict[str, str]) -> dict:
+    if settings.is_render or settings.environment in {"production", "prod"}:
+        raise RuntimeError("Test accounts cannot be provisioned in production")
     student = (
         db.query(Student)
         .filter(Student.legacy_import_id == DEMO_LEGACY_ID)
@@ -95,6 +100,7 @@ def provision_test_accounts(db: Session, passwords: dict[str, str]) -> dict:
             legacy_import_id=DEMO_LEGACY_ID,
             data_quality_status="ready",
             status="inactive",
+            is_test_account=True,
         )
         db.add(student)
         db.flush()
@@ -102,6 +108,7 @@ def provision_test_accounts(db: Session, passwords: dict[str, str]) -> dict:
         student.full_name = "Lakshya Portal Test Student"
         student.mobile = ACCOUNT_SPECS["student"]["mobile"]
         student.status = "inactive"
+        student.is_test_account = True
 
     users = {
         key: _upsert_user(db, key, passwords[key])

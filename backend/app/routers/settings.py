@@ -26,7 +26,7 @@ def _room(row: Room):
 
 @router.get("/bootstrap")
 def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles("owner"))):
-    users = db.query(User).order_by(User.full_name).all()
+    users = db.query(User).filter(User.is_test_account.is_(False)).order_by(User.full_name).all()
     academic_imports = (
         db.query(AcademicImportBatch)
         .order_by(AcademicImportBatch.created_at.desc())
@@ -49,7 +49,7 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
             "unresolvedItems": item.unresolved_items,
             "createdAt": item.created_at,
         } for item in academic_imports],
-        "studentAccess": [{"userId": account.user_id, "studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "mobile": account_user.mobile, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).order_by(Student.full_name).all()],
+        "studentAccess": [{"userId": account.user_id, "studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "mobile": account_user.mobile, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).filter(Student.is_test_account.is_(False), User.is_test_account.is_(False)).order_by(Student.full_name).all()],
         "parentAccess": [{
             "userId": account.user_id,
             "studentId": student.id,
@@ -62,7 +62,7 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
             "isActive": account_user.is_active,
         } for account, student, account_user in db.query(ParentAccount, Student, User).join(
             Student, Student.id == ParentAccount.student_id
-        ).join(User, User.id == ParentAccount.user_id).order_by(Student.full_name, User.full_name).all()],
+        ).join(User, User.id == ParentAccount.user_id).filter(Student.is_test_account.is_(False), User.is_test_account.is_(False)).order_by(Student.full_name, User.full_name).all()],
     }
 
 
@@ -130,11 +130,11 @@ def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db)
 @router.post("/student-access", status_code=201)
 def create_student_access(payload: StudentAccessCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
     student = db.get(Student, payload.student_id)
-    if not student:
+    if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
     if db.query(StudentAccount).filter_by(student_id=student.id).first():
         raise HTTPException(409, "This student already has portal access")
-    if db.query(StudentAccount).count() >= 100:
+    if db.query(StudentAccount).join(User, User.id == StudentAccount.user_id).filter(User.is_test_account.is_(False)).count() >= 100:
         raise HTTPException(409, "The student portal is configured for a maximum of 100 accounts")
     if db.query(User).filter(User.mobile == payload.mobile).first():
         raise HTTPException(409, "This mobile number is already assigned to another account")
@@ -159,7 +159,7 @@ def create_student_access(payload: StudentAccessCreate, db: Session = Depends(ge
 @router.post("/parent-access", status_code=201)
 def create_parent_access(payload: ParentAccessCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
     student = db.get(Student, payload.student_id)
-    if not student:
+    if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
     if db.query(User).filter(User.mobile == payload.mobile).first():
         raise HTTPException(409, "This mobile number is already assigned to another account")

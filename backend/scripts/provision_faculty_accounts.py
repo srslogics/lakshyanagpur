@@ -33,6 +33,14 @@ FACULTY_EMAILS = {
     "Kajal Ma'am": "kajal.faculty@lakshyanagpur.in",
 }
 
+FACULTY_MOBILES = {
+    "Meet Sir": "9325511100",
+    "Jitendra Sir": "9850242456",
+    "Anita Ma'am": "9923057717",
+    "Kanchan Ma'am": "9049834525",
+    "Kajal Ma'am": "9156376488",
+}
+
 
 @dataclass(frozen=True)
 class FacultyCredential:
@@ -61,12 +69,18 @@ def provision_faculty_accounts(
         for row in db.query(User).filter(User.email.is_not(None)).all()
         if row.email
     }
-    eligible: list[tuple[User, str]] = []
+    users_by_mobile = {
+        row.mobile: row
+        for row in db.query(User).filter(User.mobile.is_not(None)).all()
+        if row.mobile
+    }
+    eligible: list[tuple[User, str, str]] = []
     existing: list[dict] = []
     missing_profiles: list[dict] = []
     conflicts: list[dict] = []
 
     for full_name, email in FACULTY_EMAILS.items():
+        mobile = FACULTY_MOBILES[full_name]
         faculty = faculty_by_name.get(full_name)
         if not faculty:
             missing_profiles.append({"fullName": full_name, "email": email})
@@ -93,11 +107,19 @@ def provision_faculty_accounts(
                 "existingRole": conflicting_user.role,
             })
             continue
-        eligible.append((faculty, email))
+        conflicting_mobile_user = users_by_mobile.get(mobile)
+        if conflicting_mobile_user and conflicting_mobile_user.id != faculty.id:
+            conflicts.append({
+                "fullName": full_name,
+                "email": email,
+                "existingRole": conflicting_mobile_user.role,
+            })
+            continue
+        eligible.append((faculty, email, mobile))
 
     credentials: list[FacultyCredential] = []
     if apply:
-        for faculty, email in eligible:
+        for faculty, email, mobile in eligible:
             password = password_factory()
             before = {
                 "email": faculty.email,
@@ -105,6 +127,7 @@ def provision_faculty_accounts(
                 "provisioned": faculty.password_hash != "unprovisioned",
             }
             faculty.email = email
+            faculty.mobile = mobile
             faculty.password_hash = hash_password(password)
             faculty.is_active = True
             faculty.must_change_password = True
@@ -117,7 +140,7 @@ def provision_faculty_accounts(
                 before=before,
                 after={
                     "email": email,
-                    "mobile": faculty.mobile,
+                    "mobile": mobile,
                     "provisioned": True,
                     "mustChangePassword": True,
                 },
@@ -125,7 +148,7 @@ def provision_faculty_accounts(
             credentials.append(FacultyCredential(
                 full_name=faculty.full_name,
                 email=email,
-                mobile=faculty.mobile,
+                mobile=mobile,
                 temporary_password=password,
             ))
 

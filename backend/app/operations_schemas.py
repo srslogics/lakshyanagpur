@@ -95,6 +95,13 @@ class FeeAgreementUpdate(BaseModel):
     status: Literal["active", "draft", "inactive", "completed"] = "active"
     model_config = ConfigDict(populate_by_name=True)
 
+    @field_validator("currency")
+    @classmethod
+    def inr_only(cls, value):
+        if value.strip().upper() != "INR":
+            raise ValueError("currency must be INR")
+        return "INR"
+
 
 class FeeAgreementCreate(BaseModel):
     student_id: str = Field(alias="studentId")
@@ -103,9 +110,20 @@ class FeeAgreementCreate(BaseModel):
     status: Literal["active", "draft"] = "active"
     model_config = ConfigDict(populate_by_name=True)
 
+    @field_validator("currency")
+    @classmethod
+    def inr_only(cls, value):
+        if value.strip().upper() != "INR":
+            raise ValueError("currency must be INR")
+        return "INR"
+
 
 class PaymentReviewUpdate(BaseModel):
     reconciliation_status: Literal["ready", "review", "do_not_import"] = Field(alias="reconciliationStatus")
+    transaction_date: date | None = Field(default=None, alias="transactionDate")
+    method: Literal["cash", "upi", "bank_transfer", "cheque", "card", "other"] | None = None
+    reference: str | None = Field(default=None, max_length=255)
+    notes: str | None = Field(default=None, max_length=2000)
     model_config = ConfigDict(populate_by_name=True)
 
 

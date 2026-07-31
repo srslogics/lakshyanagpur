@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from app.models import AuditLog, Enrollment, FeeAgreement, PaymentTransaction, Student
+from app.services import payment_effect
 
 
 def _account(database):
@@ -121,3 +122,48 @@ def test_create_fee_agreement_for_existing_manual_student(
     assert response.status_code == 201
     assert response.json()["agreedAmount"] == 40000
     assert response.json()["legacyRegistrationTotal"] == 0
+
+
+def test_imported_payment_does_not_affect_ledger_until_owner_confirms_it(
+    client,
+    database,
+    owner_headers,
+):
+    student = _account(database)
+    agreement = database.query(FeeAgreement).filter_by(student_id=student.id).one()
+    payment = PaymentTransaction(
+        student_id=student.id,
+        fee_agreement_id=agreement.id,
+        transaction_date=None,
+        amount=5000,
+        method="unknown",
+        transaction_type="payment",
+        source_note="5K payment date and mode pending client confirmation",
+        status="staged",
+        reconciliation_status="review",
+    )
+    database.add(payment)
+    database.commit()
+
+    assert payment_effect(payment) == 0
+
+    incomplete = client.patch(
+        f"/api/finance/staged-payments/{payment.id}/review",
+        json={"reconciliationStatus": "ready"},
+        headers=owner_headers,
+    )
+    assert incomplete.status_code == 422
+
+    confirmed = client.patch(
+        f"/api/finance/staged-payments/{payment.id}/review",
+        json={
+            "reconciliationStatus": "ready",
+            "transactionDate": "2026-06-06",
+            "method": "upi",
+        },
+        headers=owner_headers,
+    )
+    assert confirmed.status_code == 200
+    database.refresh(payment)
+    assert payment.transaction_date == date(2026, 6, 6)
+    assert payment_effect(payment) == 5000

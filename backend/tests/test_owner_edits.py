@@ -112,14 +112,18 @@ def test_owner_can_edit_fee_agreement_and_only_review_imported_payment(
 
     review_response = client.patch(
         f"/api/finance/staged-payments/{payment.id}/review",
-        json={"reconciliationStatus": "ready"},
+        json={
+            "reconciliationStatus": "ready",
+            "transactionDate": "2026-01-21",
+            "method": "cash",
+        },
         headers=owner_headers,
     )
     assert review_response.status_code == 200
     database.refresh(payment)
     assert payment.reconciliation_status == "ready"
     assert payment.amount == 20000
-    assert payment.transaction_date is None
+    assert payment.transaction_date.isoformat() == "2026-01-21"
 
     database.delete(payment)
     with pytest.raises(ValueError, match="immutable"):
