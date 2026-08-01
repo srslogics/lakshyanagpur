@@ -380,7 +380,6 @@ async function loadViewResources(view) {
 }
 
 function renderCore() {
-  $("#nav-students-count").textContent = state.students.length;
   $("#nav-leads-count").textContent = state.leads.length;
   const reviewCount = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
   $("#nav-finance-count").textContent = state.payments.length + state.installments.filter(item => item.status !== "cancelled").length;
