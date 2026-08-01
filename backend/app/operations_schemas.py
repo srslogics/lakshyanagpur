@@ -447,3 +447,18 @@ class NoticeCreate(BaseModel):
 
 class NoticeUpdate(NoticeCreate):
     pass
+
+
+class CommunicationThreadCreate(BaseModel):
+    subject_id: str | None = Field(default=None, alias="subjectId")
+    topic: str = Field(min_length=2, max_length=255)
+    body: str = Field(min_length=1, max_length=3000)
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CommunicationMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=3000)
+
+
+class CommunicationThreadStatusUpdate(BaseModel):
+    status: Literal["open", "closed"]

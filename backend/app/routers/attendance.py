@@ -12,6 +12,7 @@ from ..models import (
     Batch,
     ClassSession,
     Enrollment,
+    Notice,
     Room,
     Student,
     StudentAcademicProfile,
@@ -123,6 +124,8 @@ def _attendance_catalog(db: Session):
     stream_students = {}
     subject_students = {}
     for student_id, batch_name, stream_name, subject_name in rows:
+        if batch_name not in {"Tatva", "Essential"}:
+            continue
         group_students.setdefault(batch_name, set()).add(student_id)
         stream_students.setdefault(
             (batch_name, stream_name),
@@ -132,7 +135,7 @@ def _attendance_catalog(db: Session):
             (batch_name, stream_name, subject_name),
             set(),
         ).add(student_id)
-    batch_order = {"Essential": 0, "Tatva": 1}
+    batch_order = {"Tatva": 0, "Essential": 1}
     stream_order = {"JEE": 0, "NEET": 1, "MHT-CET": 2, "Boards": 3}
     groups = []
     for batch_name, students in sorted(
@@ -284,6 +287,13 @@ def attendance_portal_bootstrap(
         if _aware(item["startsAt"]) > now and item["status"] == "scheduled"
     ]
     submitted = [item for item in sessions if item["registerStatus"] == "submitted"]
+    notice_rows = (
+        db.query(Notice)
+        .filter(Notice.status == "published", Notice.audience == "all")
+        .order_by(Notice.published_at.desc(), Notice.created_at.desc())
+        .limit(5)
+        .all()
+    )
     return {
         "profile": {
             "id": operator.id,
@@ -301,6 +311,12 @@ def attendance_portal_bootstrap(
         },
         "sessions": sessions,
         "catalog": _attendance_catalog(db),
+        "notices": [{
+            "id": notice.id,
+            "title": notice.title,
+            "body": notice.body,
+            "publishedAt": _aware(notice.published_at or notice.created_at),
+        } for notice in notice_rows],
     }
 
 

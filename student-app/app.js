@@ -12,6 +12,7 @@ const icons = {
   spark: '<path d="m12 3 1.4 4.1 4.1 1.4-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3Z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   notice: '<path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
   logout: '<path d="m10 17 5-5-5-5m5 5H3m12-9h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-5"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   "chevron-right": '<path d="m9 18 6-6-6-6"/>',
@@ -20,14 +21,15 @@ const icons = {
   "eye-off": '<path d="m3 3 18 18M10.6 5.2A11.4 11.4 0 0 1 12 5c6.5 0 10 7 10 7a16 16 0 0 1-2.1 3.2M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.1-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
 };
 
-const views = new Set(["home", "schedule", "assignments", "examinations", "attendance", "notices", "profile", "more"]);
-const overflowViews = new Set(["examinations", "notices", "profile", "more"]);
+const views = new Set(["home", "schedule", "assignments", "examinations", "attendance", "messages", "notices", "profile", "more"]);
+const overflowViews = new Set(["examinations", "messages", "notices", "profile", "more"]);
 const titles = {
   home: "Home",
   schedule: "Schedule",
   assignments: "Assignments",
   examinations: "Examinations",
   attendance: "Attendance",
+  messages: "Messages",
   notices: "Notices",
   profile: "Profile",
   more: "More",
@@ -38,6 +40,7 @@ const state = {
   token: localStorage.getItem("lakshya_student_token"),
   identity: (() => { try { return JSON.parse(localStorage.getItem("lakshya_student_user") || "null"); } catch { return null; } })(),
   data: null,
+  communication: null,
   view: hashView(),
   assignmentFilter: "open",
   examinationFilter: "upcoming",
@@ -179,6 +182,7 @@ function clearSession() {
   state.token = null;
   state.identity = null;
   state.data = null;
+  state.communication = null;
   localStorage.removeItem("lakshya_student_token");
   localStorage.removeItem("lakshya_student_user");
 }
@@ -400,6 +404,7 @@ function showView(view, updateHash = true) {
     top: 0,
     behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
   });
+  if (view === "messages") loadCommunication();
 }
 
 function empty(name, title, copy = "") {
@@ -706,6 +711,69 @@ function renderProfile() {
   $("#profile-details").innerHTML = details.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(displayValue(value))}</dd></div>`).join("");
 }
 
+function messageError(selector, error) {
+  const node = $(selector);
+  node.textContent = error.message;
+  node.classList.remove("hidden");
+}
+
+async function loadCommunication(force = false) {
+  if (state.communication && !force) return renderCommunication();
+  $("#conversation-list").innerHTML = empty("clock", "Loading conversations");
+  try {
+    state.communication = await api("/api/communication/inbox");
+    renderCommunication();
+  } catch (error) {
+    $("#conversation-list").innerHTML = empty("notice", "Messages unavailable", error.message);
+  }
+}
+
+function renderCommunication() {
+  const inbox = state.communication || { threads: [], subjects: [] };
+  const openCount = inbox.threads.filter(item => item.status === "open").length;
+  $("#conversation-count").textContent = `${openCount} open`;
+  $("#more-message-copy").textContent = inbox.threads.length ? `${inbox.threads.length} conversation${inbox.threads.length === 1 ? "" : "s"}` : "Contact Operations or faculty";
+  $("#conversation-subject").innerHTML = `<option value="">Institute office</option>${inbox.subjects.map(item => `<option value="${esc(item.id)}">${esc(item.name)}${item.faculty?.length ? ` · ${esc(item.faculty.join(", "))}` : ""}</option>`).join("")}`;
+  $("#conversation-list").innerHTML = inbox.threads.length ? inbox.threads.map(item => `<button class="message-thread" type="button" data-message-thread="${esc(item.id)}"><span class="message-thread-icon">${icon(item.subjectId ? "book" : "notice")}</span><span><strong>${esc(item.topic)}</strong><small>${esc(item.subject)} · ${esc(item.lastSender)}</small><p>${esc(item.lastMessage)}</p></span><time>${dateText(item.lastMessageAt)}</time></button>`).join("") : empty("notice", "No conversations", "Start a conversation with the institute office or your subject faculty.");
+  injectIcons($("#messages"));
+}
+
+async function openMessageThread(threadId) {
+  const panel = $("#conversation-detail");
+  panel.classList.remove("hidden");
+  panel.innerHTML = empty("clock", "Loading conversation");
+  try {
+    const detail = await api(`/api/communication/threads/${encodeURIComponent(threadId)}`);
+    panel.innerHTML = `<div class="message-detail-head"><div><p class="eyebrow">${esc(detail.subject)}</p><h2>${esc(detail.topic)}</h2><small>${esc(detail.status)}</small></div><button class="message-detail-close" type="button" aria-label="Close conversation">×</button></div><div class="message-log">${detail.messages.map(item => `<article class="message-bubble ${item.senderId === state.identity?.id ? "mine" : ""}"><header><strong>${esc(item.senderName)}</strong><time>${dateText(item.createdAt)} · ${timeText(item.createdAt)}</time></header><p>${esc(item.body)}</p></article>`).join("")}</div>${detail.canReply ? `<form class="message-reply-form" id="message-reply-form" data-thread-id="${esc(threadId)}"><label><span>Reply</span><textarea name="body" rows="3" maxlength="3000" required></textarea></label><div class="form-error hidden" id="message-reply-error" role="alert"></div><button class="primary-button" type="submit">Send reply</button></form>` : `<p class="message-closed">This conversation is closed. Start a new conversation if you need further help.</p>`}`;
+    $(".message-detail-close", panel).addEventListener("click", () => panel.classList.add("hidden"));
+    $("#message-reply-form")?.addEventListener("submit", replyToMessageThread);
+    panel.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  } catch (error) { panel.innerHTML = empty("notice", "Conversation unavailable", error.message); }
+}
+
+async function createConversation(event) {
+  event.preventDefault();
+  const form = event.currentTarget, data = new FormData(form), button = $('button[type="submit"]', form);
+  button.disabled = true;
+  $("#conversation-create-error").classList.add("hidden");
+  try {
+    const detail = await api("/api/communication/threads", { method: "POST", body: JSON.stringify({ subjectId: String(data.get("subjectId") || "") || null, topic: String(data.get("topic") || "").trim(), body: String(data.get("body") || "").trim() }) });
+    form.reset(); form.classList.add("hidden");
+    await loadCommunication(true); await openMessageThread(detail.id); toast("Message sent.");
+  } catch (error) { messageError("#conversation-create-error", error); }
+  finally { button.disabled = false; }
+}
+
+async function replyToMessageThread(event) {
+  event.preventDefault();
+  const form = event.currentTarget, data = new FormData(form), button = $('button[type="submit"]', form), threadId = form.dataset.threadId;
+  button.disabled = true; $("#message-reply-error").classList.add("hidden");
+  try {
+    await api(`/api/communication/threads/${encodeURIComponent(threadId)}/messages`, { method: "POST", body: JSON.stringify({ body: String(data.get("body") || "").trim() }) });
+    await loadCommunication(true); await openMessageThread(threadId);
+  } catch (error) { messageError("#message-reply-error", error); button.disabled = false; }
+}
+
 function renderMore() {
   const { profile, examinations, notices } = state.data;
   const upcomingExams = (examinations || []).filter((item) => item.status === "scheduled" && asInstant(item.scheduledAt).getTime() >= Date.now()).length;
@@ -732,6 +800,9 @@ function bindEvents() {
   $("#signout-button").addEventListener("click", logout);
   $("#sidebar-signout").addEventListener("click", logout);
   $("#profile-button").addEventListener("click", () => showView("profile"));
+  $("#new-conversation").addEventListener("click", () => $("#conversation-create-form").classList.toggle("hidden"));
+  $("#cancel-conversation").addEventListener("click", () => $("#conversation-create-form").classList.add("hidden"));
+  $("#conversation-create-form").addEventListener("submit", createConversation);
   window.addEventListener("popstate", () => state.data && showView(hashView(), false));
   window.addEventListener("online", () => setConnectionState(true));
   window.addEventListener("offline", () => setConnectionState(false));
@@ -748,6 +819,8 @@ function bindEvents() {
       event.preventDefault();
       showView(view);
     }
+    const messageThread = event.target.closest("[data-message-thread]");
+    if (messageThread) openMessageThread(messageThread.dataset.messageThread);
     const scheduleButton = event.target.closest("[data-schedule-date]");
     if (scheduleButton) {
       state.scheduleDate = scheduleButton.dataset.scheduleDate;

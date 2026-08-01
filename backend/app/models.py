@@ -582,6 +582,40 @@ class Notice(TimestampMixin, Base):
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
 
 
+class CommunicationThread(TimestampMixin, Base):
+    """A student-linked conversation with Operations or assigned faculty."""
+
+    __tablename__ = "communication_threads"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("thread"))
+    student_id: Mapped[str] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"),
+        index=True,
+    )
+    subject_id: Mapped[str | None] = mapped_column(ForeignKey("subjects.id"), index=True)
+    topic: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(24), default="open", index=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class CommunicationMessage(Base):
+    """Text-only message storage keeps portal communication auditable and compact."""
+
+    __tablename__ = "communication_messages"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("msg"))
+    thread_id: Mapped[str] = mapped_column(
+        ForeignKey("communication_threads.id", ondelete="CASCADE"),
+        index=True,
+    )
+    sender_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=now,
+        nullable=False,
+        index=True,
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("aud"))

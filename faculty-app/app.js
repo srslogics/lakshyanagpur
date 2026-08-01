@@ -30,6 +30,7 @@ const state = {
   identity: (() => { try { return JSON.parse(localStorage.getItem("lakshya_faculty_user") || "null"); } catch { return null; } })(),
   loginMode: "mobile",
   data: null,
+  communication: null,
   view: "dashboard",
   assignmentFilter: "active",
   examinationFilter: "action",
@@ -41,8 +42,8 @@ const state = {
   lastFocus: null,
   online: navigator.onLine
 };
-const PORTAL_VIEWS = new Set(["dashboard", "assignments", "examinations", "schedule", "batches", "notices", "profile", "more"]);
-const OVERFLOW_VIEWS = new Set(["batches", "notices", "profile", "more"]);
+const PORTAL_VIEWS = new Set(["dashboard", "assignments", "examinations", "schedule", "batches", "messages", "notices", "profile", "more"]);
+const OVERFLOW_VIEWS = new Set(["batches", "messages", "notices", "profile", "more"]);
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -174,6 +175,7 @@ function clearSession() {
   state.token = null;
   state.identity = null;
   state.data = null;
+  state.communication = null;
   localStorage.removeItem("lakshya_faculty_token");
   localStorage.removeItem("lakshya_faculty_user");
 }
@@ -474,11 +476,12 @@ function showView(view, updateHash = true) {
     node.classList.toggle("active", active);
     active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current");
   });
-  const titles = {dashboard:"Today", assignments:"Assignments", examinations:"Examinations", schedule:"Schedule", batches:"Batches", notices:"Notices", profile:"Profile", more:"More"};
+  const titles = {dashboard:"Today", assignments:"Assignments", examinations:"Examinations", schedule:"Schedule", batches:"Batches", messages:"Messages", notices:"Notices", profile:"Profile", more:"More"};
   $("#header-title").textContent = titles[view];
   if (updateHash && location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
   $("#faculty-main").focus({preventScroll:true});
   window.scrollTo({top:0, behavior:reducedMotion() ? "auto" : "smooth"});
+  if (view === "messages") loadCommunication();
 }
 
 function renderAll() {
@@ -724,6 +727,53 @@ function renderNotices() {
     metric("Latest", notices[0] ? dateText(notices[0].publishedAt) : "None")
   ].join("");
   $("#notice-list").innerHTML = notices.length ? notices.map(noticeCard).join("") : empty("notice", "No notices published", "Faculty and batch announcements will appear here.");
+}
+
+async function loadCommunication(force = false) {
+  if (state.communication && !force) return renderCommunication();
+  $("#conversation-list").innerHTML = empty("clock", "Loading conversations");
+  try {
+    state.communication = await api("/api/communication/inbox");
+    renderCommunication();
+  } catch (error) { $("#conversation-list").innerHTML = empty("notice", "Messages unavailable", error.message); }
+}
+
+function renderCommunication() {
+  const inbox = state.communication || { threads: [], subjects: [] };
+  const open = inbox.threads.filter(item => item.status === "open").length;
+  $("#message-metrics").innerHTML = [metric("Open", String(open)), metric("Conversations", String(inbox.threads.length)), metric("Assigned subjects", String(inbox.subjects.length))].join("");
+  $("#more-message-copy").textContent = open ? `${open} open ${open === 1 ? "conversation" : "conversations"}` : "Assigned subjects only";
+  $("#conversation-list").innerHTML = inbox.threads.length ? inbox.threads.map(item => `<button class="message-thread" type="button" data-message-thread="${esc(item.id)}"><span class="message-thread-icon">${icon("notice")}</span><span><strong>${esc(item.studentName)}</strong><small>${esc(item.subject)} · ${esc(item.admissionNumber)}</small><b>${esc(item.topic)}</b><p>${esc(item.lastMessage)}</p></span><time>${dateText(item.lastMessageAt)}</time></button>`).join("") : empty("notice", "No student conversations", "Only messages for your assigned batches and subjects will appear here.");
+  injectIcons($("#messages"));
+}
+
+function messageError(error) {
+  const node = $("#message-reply-error");
+  node.textContent = error.message;
+  node.classList.remove("hidden");
+}
+
+async function openMessageThread(threadId) {
+  const panel = $("#conversation-detail");
+  panel.classList.remove("hidden");
+  panel.innerHTML = empty("clock", "Loading conversation");
+  try {
+    const detail = await api(`/api/communication/threads/${encodeURIComponent(threadId)}`);
+    panel.innerHTML = `<div class="message-detail-head"><div><p class="eyebrow">${esc(detail.subject)}</p><h2>${esc(detail.topic)}</h2><small>${esc(detail.studentName)} · ${esc(detail.admissionNumber)}</small></div><button class="message-detail-close" type="button" aria-label="Close conversation">×</button></div><div class="message-log">${detail.messages.map(item => `<article class="message-bubble ${item.senderId === state.identity?.id ? "mine" : ""}"><header><strong>${esc(item.senderName)}</strong><time>${dateText(item.createdAt)} · ${timeText(item.createdAt)}</time></header><p>${esc(item.body)}</p></article>`).join("")}</div>${detail.canReply ? `<form class="message-reply-form" id="message-reply-form" data-thread-id="${esc(threadId)}"><label><span>Reply as subject faculty</span><textarea name="body" rows="3" maxlength="3000" required></textarea></label><div class="form-error hidden" id="message-reply-error" role="alert"></div><button class="primary-button" type="submit">Send reply</button></form>` : `<p class="message-closed">Operations has closed this conversation.</p>`}`;
+    $(".message-detail-close", panel).addEventListener("click", () => panel.classList.add("hidden"));
+    $("#message-reply-form")?.addEventListener("submit", replyToMessageThread);
+    panel.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  } catch (error) { panel.innerHTML = empty("notice", "Conversation unavailable", error.message); }
+}
+
+async function replyToMessageThread(event) {
+  event.preventDefault();
+  const form = event.currentTarget, data = new FormData(form), button = $('button[type="submit"]', form), threadId = form.dataset.threadId;
+  button.disabled = true; $("#message-reply-error").classList.add("hidden");
+  try {
+    await api(`/api/communication/threads/${encodeURIComponent(threadId)}/messages`, { method: "POST", body: JSON.stringify({ body: String(data.get("body") || "").trim() }) });
+    await loadCommunication(true); await openMessageThread(threadId);
+  } catch (error) { messageError(error); button.disabled = false; }
 }
 
 function renderProfile() {
@@ -1056,6 +1106,8 @@ function bindEvents() {
   document.addEventListener("click", event => {
     const view = event.target.closest("[data-view]")?.dataset.view || event.target.closest("[data-go]")?.dataset.go;
     if (view) showView(view);
+    const messageThread = event.target.closest("[data-message-thread]");
+    if (messageThread) openMessageThread(messageThread.dataset.messageThread);
 
     const assignmentTrigger = event.target.closest("[data-open-assignment]");
     if (assignmentTrigger) openAssignmentModal(assignmentTrigger);

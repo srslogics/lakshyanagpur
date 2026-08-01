@@ -352,6 +352,10 @@ function stateLabel(value, item) {
 }
 
 function renderDesk() {
+  const notices = state.data.notices || [];
+  const announcements = $("#desk-announcements");
+  announcements.classList.toggle("hidden", !notices.length);
+  announcements.innerHTML = notices.length ? `<strong>Institute announcement</strong><div>${notices.map(item => `<article><span>${esc(item.title)}</span><p>${esc(item.body)}</p></article>`).join("")}</div>` : "";
   const summary = state.data.summary;
   $("#metric-grid").innerHTML = [
     metric("Scheduled", String(summary.scheduled)),
@@ -363,8 +367,28 @@ function renderDesk() {
   renderSessions();
 }
 
-function optionMarkup(rows, placeholder) {
-  return `<option value="">${esc(placeholder)}</option>${rows.map(item => `<option value="${esc(item.name)}">${esc(item.name)} · ${item.studentCount}</option>`).join("")}`;
+function manualGroups() {
+  const catalogGroups = state.data?.catalog?.groups || [];
+  return ["Tatva", "Essential"]
+    .map(name => catalogGroups.find(item => item.name === name))
+    .filter(Boolean);
+}
+
+function choiceMarkup(rows, selected, kind, emptyLabel) {
+  if (!rows.length) return `<p class="roster-empty">${esc(emptyLabel)}</p>`;
+  return rows.map(item => {
+    const active = item.name === selected;
+    const count = Number(item.studentCount || 0);
+    return `<button class="roster-choice" type="button" data-manual-choice="${kind}" data-value="${esc(item.name)}" aria-pressed="${active}"><strong>${esc(item.name)}</strong><small>${count} ${count === 1 ? "student" : "students"}</small></button>`;
+  }).join("");
+}
+
+function setManualStep(stepId, enabled, complete) {
+  const step = $(stepId);
+  step.disabled = !enabled;
+  step.classList.toggle("is-disabled", !enabled);
+  step.classList.toggle("is-complete", complete);
+  step.classList.toggle("is-active", enabled && !complete);
 }
 
 function manualSelection() {
@@ -377,38 +401,43 @@ function manualSelection() {
 function updateManualSummary() {
   const {group, stream, subject} = manualSelection();
   const summary = $("#manual-roster-summary");
+  const panel = $("#manual-roster-panel");
+  const stateLabel = $("#manual-roster-state");
   const button = $("#open-manual-register");
-  summary.className = "quick-register-status";
-  if (!(state.data?.catalog?.groups || []).length) {
+  panel.className = "roster-ready-panel";
+  stateLabel.textContent = "Selection";
+  if (!manualGroups().length) {
     summary.textContent = "Academic student data is not loaded.";
-    summary.classList.add("error");
+    panel.classList.add("error");
+    stateLabel.textContent = "Unavailable";
     button.disabled = true;
-    button.textContent = "Load roster";
+    button.textContent = "Open roster";
     return;
   }
   if (subject) {
-    summary.textContent = `${subject.studentCount} students · ${group.name} · ${stream.name} · ${subject.name}`;
-    summary.classList.add("ready");
+    summary.textContent = `${group.name} · ${stream.name} · ${subject.name} · ${subject.studentCount} students`;
+    panel.classList.add("ready");
+    stateLabel.textContent = "Roster ready";
     button.disabled = false;
-    button.textContent = `Load ${subject.studentCount} students`;
+    button.textContent = `Open roster`;
     return;
   }
   summary.textContent = stream
-    ? "Select a subject."
+    ? "Choose a subject to finish."
     : group
-      ? "Select a course and subject."
-      : "Select a group, course and subject.";
+      ? "Choose a course to continue."
+      : "Choose a student group to begin.";
   button.disabled = true;
-  button.textContent = "Load roster";
+  button.textContent = "Open roster";
 }
 
 function populateManualSubjects(preferred = "") {
   const {stream} = manualSelection();
   const select = $("#manual-subject");
   const rows = stream?.subjects || [];
-  select.innerHTML = optionMarkup(rows, "Select subject");
-  select.disabled = !rows.length;
-  if (rows.some(item => item.name === preferred)) select.value = preferred;
+  select.value = rows.some(item => item.name === preferred) ? preferred : "";
+  $("#manual-subject-options").innerHTML = choiceMarkup(rows, select.value, "subject", stream ? "No subjects are assigned to this course." : "Choose a course first.");
+  setManualStep("#manual-subject-step", Boolean(stream && rows.length), Boolean(stream && select.value));
   updateManualSummary();
 }
 
@@ -416,9 +445,9 @@ function populateManualStreams(preferredStream = "", preferredSubject = "") {
   const group = (state.data?.catalog?.groups || []).find(item => item.name === $("#manual-batch").value);
   const select = $("#manual-stream");
   const rows = group?.streams || [];
-  select.innerHTML = optionMarkup(rows, "Select course");
-  select.disabled = !rows.length;
-  if (rows.some(item => item.name === preferredStream)) select.value = preferredStream;
+  select.value = rows.some(item => item.name === preferredStream) ? preferredStream : "";
+  $("#manual-stream-options").innerHTML = choiceMarkup(rows, select.value, "stream", group ? "No courses are assigned to this group." : "Choose a student group first.");
+  setManualStep("#manual-stream-step", Boolean(group && rows.length), Boolean(group && select.value));
   populateManualSubjects(preferredSubject);
 }
 
@@ -428,12 +457,11 @@ function renderManualPicker() {
     stream: $("#manual-stream").value,
     subject: $("#manual-subject").value
   };
-  const catalog = state.data?.catalog || {studentCount:0, groups:[]};
-  $("#catalog-student-count").textContent = `${catalog.studentCount || 0} students`;
-  $("#manual-batch").innerHTML = optionMarkup(catalog.groups || [], "Select group");
-  if ((catalog.groups || []).some(item => item.name === previous.batch)) {
-    $("#manual-batch").value = previous.batch;
-  }
+  const groups = manualGroups();
+  $("#catalog-student-count").textContent = `${groups.reduce((total, item) => total + Number(item.studentCount || 0), 0)} students`;
+  $("#manual-batch").value = groups.some(item => item.name === previous.batch) ? previous.batch : "";
+  $("#manual-group-options").innerHTML = choiceMarkup(groups, $("#manual-batch").value, "group", "No student groups are available.");
+  setManualStep("#manual-group-step", true, Boolean($("#manual-batch").value));
   populateManualStreams(previous.stream, previous.subject);
 }
 
@@ -540,7 +568,8 @@ async function openManualRegister(event) {
   } catch (error) {
     const summary = $("#manual-roster-summary");
     summary.textContent = error.message;
-    summary.className = "quick-register-status error";
+    $("#manual-roster-state").textContent = "Could not open roster";
+    $("#manual-roster-panel").className = "roster-ready-panel error";
   } finally {
     button.disabled = false;
     button.textContent = idle;
@@ -698,9 +727,6 @@ function bindEvents() {
   $("#today-button").addEventListener("click", () => setDate(localDateKey()));
   $("#working-date").addEventListener("change", event => { if (event.target.value) setDate(event.target.value); });
   $("#manual-register-form").addEventListener("submit", openManualRegister);
-  $("#manual-batch").addEventListener("change", () => populateManualStreams());
-  $("#manual-stream").addEventListener("change", () => populateManualSubjects());
-  $("#manual-subject").addEventListener("change", updateManualSummary);
   window.addEventListener("online", () => setConnectionState(true));
   window.addEventListener("offline", () => setConnectionState(false));
   $("#class-search").addEventListener("input", event => { state.search = event.target.value; renderSessions(); });
@@ -716,6 +742,27 @@ function bindEvents() {
   });
   document.addEventListener("click", event => {
     if (!event.target.closest(".operator")) closeAccountMenu();
+    const manualChoice = event.target.closest("[data-manual-choice]");
+    if (manualChoice && !manualChoice.disabled) {
+      const kind = manualChoice.dataset.manualChoice;
+      const select = kind === "group" ? $("#manual-batch") : kind === "stream" ? $("#manual-stream") : $("#manual-subject");
+      select.value = manualChoice.dataset.value;
+      if (kind === "group") {
+        $("#manual-group-options").innerHTML = choiceMarkup(manualGroups(), select.value, "group", "No student groups are available.");
+        setManualStep("#manual-group-step", true, true);
+        populateManualStreams();
+      } else if (kind === "stream") {
+        const {group} = manualSelection();
+        $("#manual-stream-options").innerHTML = choiceMarkup(group?.streams || [], select.value, "stream", "No courses are assigned to this group.");
+        setManualStep("#manual-stream-step", true, true);
+        populateManualSubjects();
+      } else {
+        const {stream} = manualSelection();
+        $("#manual-subject-options").innerHTML = choiceMarkup(stream?.subjects || [], select.value, "subject", "No subjects are assigned to this course.");
+        setManualStep("#manual-subject-step", true, true);
+        updateManualSummary();
+      }
+    }
     const filter = event.target.closest("[data-filter]")?.dataset.filter;
     if (filter) {
       state.filter = filter;

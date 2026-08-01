@@ -14,7 +14,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
-  <link rel="stylesheet" href="./styles.css?v=10">
+  <link rel="stylesheet" href="./styles.css?v=11">
   <link rel="stylesheet" href="../auth-shared.css?v=7">
 </head>
 <body>
@@ -111,6 +111,7 @@
         <button type="button" data-view="schedule"><span data-icon="calendar"></span><em>Schedule</em></button>
         <span class="sidebar-section-label">Faculty services</span>
         <button type="button" data-view="batches"><span data-icon="users"></span><em>Batches</em></button>
+        <button type="button" data-view="messages"><span data-icon="notice"></span><em>Student messages</em></button>
         <button type="button" data-view="notices"><span data-icon="notice"></span><em>Notices</em></button>
         <button type="button" data-view="profile"><span data-icon="user"></span><em>Profile</em></button>
       </nav>
@@ -205,6 +206,12 @@
         <section class="panel notice-module"><div class="notice-list" id="notice-list"></div></section>
       </section>
 
+      <section class="app-view" id="messages" aria-labelledby="messages-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">STUDENT SUPPORT</p><h1 id="messages-heading">Messages</h1><p>Reply only to students in your assigned batches and subjects.</p></div></div>
+        <div class="module-metrics" id="message-metrics"></div>
+        <div class="message-layout"><section class="panel message-inbox"><div class="section-head"><div><h2>Subject conversations</h2><p>Global announcements remain controlled by Operations.</p></div></div><div class="message-thread-list" id="conversation-list"></div></section><section class="panel message-detail hidden" id="conversation-detail"></section></div>
+      </section>
+
       <section class="app-view" id="profile" aria-labelledby="profile-heading">
         <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">ACCOUNT</p><h1 id="profile-heading">Profile</h1><p>Your faculty identity, portal login and teaching summary.</p></div></div>
         <article class="profile-card" id="profile-card"></article>
@@ -215,6 +222,7 @@
         <div class="view-heading"><div><p class="eyebrow">FACULTY SERVICES</p><h1 id="more-heading">More</h1><p>Batches, notices, profile and account access.</p></div></div>
         <div class="service-grid">
           <button class="service-card" type="button" data-go="batches"><span class="service-icon" data-icon="users"></span><span><strong>Batches</strong><small id="more-batch-copy">Teaching assignments</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
+          <button class="service-card" type="button" data-go="messages"><span class="service-icon" data-icon="notice"></span><span><strong>Student messages</strong><small id="more-message-copy">Assigned subjects only</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="notices"><span class="service-icon" data-icon="notice"></span><span><strong>Notices</strong><small id="more-notice-copy">Institute announcements</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="profile"><span class="service-icon" data-icon="user"></span><span><strong>Profile</strong><small id="more-profile-copy">Faculty and login details</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
         </div>
@@ -284,6 +292,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=14" defer></script>
+  <script src="./app.js?v=15" defer></script>
 </body>
 </html>

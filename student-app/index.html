@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
   <link rel="stylesheet" href="../portal-shared.css?v=4">
-  <link rel="stylesheet" href="./styles.css?v=13">
+  <link rel="stylesheet" href="./styles.css?v=14">
   <link rel="stylesheet" href="../auth-shared.css?v=7">
 </head>
 <body>
@@ -78,6 +78,7 @@
         <button type="button" data-view="examinations"><span data-icon="exam"></span><em>Examinations</em><i id="sidebar-examination-badge" class="nav-badge hidden">0</i></button>
         <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em></button>
         <span class="sidebar-section-label">Student services</span>
+        <button type="button" data-view="messages"><span data-icon="notice"></span><em>Messages</em></button>
         <button type="button" data-view="notices"><span data-icon="notice"></span><em>Notices</em></button>
         <button type="button" data-view="profile"><span data-icon="user"></span><em>Profile</em></button>
       </nav>
@@ -152,6 +153,18 @@
         <section class="content-block module-panel"><div class="notice-list full-notice-list" id="notice-list"></div></section>
       </section>
 
+      <section class="portal-view" id="messages" aria-labelledby="messages-heading">
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">SUPPORT</p><h1 id="messages-heading">Messages</h1><p>Contact the institute office or the faculty assigned to your subject.</p></div><button class="primary-compact" id="new-conversation" type="button"><span data-icon="plus"></span>New conversation</button></div>
+        <form class="message-compose hidden" id="conversation-create-form">
+          <label><span>Recipient</span><select name="subjectId" id="conversation-subject"><option value="">Institute office</option></select></label>
+          <label><span>Topic</span><input name="topic" maxlength="255" required></label>
+          <label><span>Message</span><textarea name="body" rows="4" maxlength="3000" required></textarea></label>
+          <div class="form-error hidden" id="conversation-create-error" role="alert"></div>
+          <div class="message-form-actions"><button class="secondary-button" id="cancel-conversation" type="button">Cancel</button><button class="primary-button" type="submit">Send message</button></div>
+        </form>
+        <div class="message-layout"><section class="content-block message-inbox"><div class="section-head"><h2>Conversations</h2><span class="record-note" id="conversation-count">0 open</span></div><div class="message-thread-list" id="conversation-list"></div></section><section class="content-block message-detail hidden" id="conversation-detail"></section></div>
+      </section>
+
       <section class="portal-view" id="profile" aria-labelledby="profile-heading">
         <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">ACCOUNT</p><h1 id="profile-heading">Profile</h1><p>Your student record and portal account details.</p></div></div>
         <article class="profile-card" id="profile-card"></article>
@@ -161,6 +174,7 @@
       <section class="portal-view" id="more" aria-labelledby="more-heading">
         <div class="view-heading"><p class="eyebrow">STUDENT SERVICES</p><h1 id="more-heading">More</h1><p>Examinations, notices, profile, and account access.</p></div>
         <div class="service-grid">
+          <button class="service-card" type="button" data-go="messages"><span class="service-icon" data-icon="notice"></span><span><strong>Messages</strong><small id="more-message-copy">Contact Operations or faculty</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="examinations"><span class="service-icon" data-icon="exam"></span><span><strong>Examinations</strong><small id="more-examination-copy">Schedules and results</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="notices"><span class="service-icon" data-icon="notice"></span><span><strong>Notices</strong><small id="more-notice-copy">Institute announcements</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
           <button class="service-card" type="button" data-go="profile"><span class="service-icon" data-icon="user"></span><span><strong>Profile</strong><small id="more-profile-copy">Student and login details</small></span><span class="service-arrow" data-icon="chevron-right"></span></button>
@@ -179,6 +193,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=17" defer></script>
+  <script src="./app.js?v=18" defer></script>
 </body>
 </html>

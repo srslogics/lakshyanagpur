@@ -289,8 +289,8 @@ def test_operator_selects_group_course_and_subject_for_manual_attendance(
     catalog = bootstrap.json()["catalog"]
     assert catalog["studentCount"] == 3
     assert [item["name"] for item in catalog["groups"]] == [
-        "Essential",
         "Tatva",
+        "Essential",
     ]
     tatva = next(item for item in catalog["groups"] if item["name"] == "Tatva")
     assert tatva["studentCount"] == 2
@@ -366,6 +366,10 @@ def test_attendance_app_is_served(client):
     assert 'id="manual-batch"' in response.text
     assert 'id="manual-stream"' in response.text
     assert 'id="manual-subject"' in response.text
+    assert 'id="manual-group-options"' in response.text
+    assert 'id="manual-stream-options"' in response.text
+    assert 'id="manual-subject-options"' in response.text
+    assert "Choose a roster" in response.text
 
 
 def test_legacy_attendance_links_redirect_to_the_attendance_app(client):

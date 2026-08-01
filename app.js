@@ -35,7 +35,7 @@ const cachedUser = (() => {
   try { return JSON.parse(sessionStorage.getItem("lakshya_user") || "null"); }
   catch { return null; }
 })();
-const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], conversations: { threads: [], subjects: [], canCreate: false, canAnnounce: true }, inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 const loadedResources = new Set();
 const resourceLoads = new Map();
 const ROLE_VIEWS = {
@@ -219,7 +219,7 @@ function clearSession() {
   state.view = "dashboard";
   loadedResources.clear();
   resourceLoads.clear();
-  Object.assign(state, { students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
+  Object.assign(state, { students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], conversations: { threads: [], subjects: [], canCreate: false, canAnnounce: true }, inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
   sessionStorage.removeItem("lakshya_user");
 }
@@ -346,6 +346,7 @@ async function loadResource(resource) {
     else if (resource === "examinations") state.examinations = await api("/api/examinations");
     else if (resource === "attendance") state.attendanceSessions = await api("/api/attendance/sessions");
     else if (resource === "notices") state.notices = await api("/api/communication/notices");
+    else if (resource === "conversations") state.conversations = await api("/api/communication/inbox");
     else if (resource === "inventory") state.inventory = await api("/api/inventory/bootstrap");
     else if (resource === "reports") state.report = await api("/api/reports/overview");
     else if (resource === "masters") state.masters = await api("/api/settings/bootstrap");
@@ -363,7 +364,7 @@ async function loadViewResources(view) {
     academics: ["timetable", "assignments"],
     examinations: ["timetable", "examinations"],
     attendance: ["attendance"],
-    communication: ["timetable", "notices"],
+    communication: ["timetable", "notices", "conversations"],
     inventory: ["inventory"],
     reports: ["reports"],
     settings: ["timetable", "masters", "audit"],
@@ -395,7 +396,7 @@ function renderResource(resource) {
     $("#nav-examinations-count").textContent = state.examinations.length;
     renderExaminations();
   } else if (resource === "attendance") renderAttendance();
-  else if (resource === "notices") renderCommunication();
+  else if (resource === "notices" || resource === "conversations") renderCommunication();
   else if (resource === "inventory") {
     $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
     renderInventory();
@@ -884,8 +885,63 @@ function renderAttendance() {
 }
 
 function renderCommunication() {
-  $("#communication-metrics").innerHTML = compactMetrics([{ label: "Notices", value: String(state.notices.length) }, { label: "Published", value: String(state.notices.filter(item => item.status === "published").length) }, { label: "Batch", value: String(state.notices.filter(item => item.audience === "batch").length) }, { label: "Channels", value: String(new Set(state.notices.map(item => item.channel)).size) }]);
+  const threads = state.conversations?.threads || [];
+  const openThreads = threads.filter(item => item.status === "open");
+  const parentThreads = threads.filter(item => item.originRole === "parent");
+  const subjectThreads = threads.filter(item => item.subjectId);
+  $("#communication-metrics").innerHTML = compactMetrics([{ label: "Open conversations", value: String(openThreads.length) }, { label: "From parents", value: String(parentThreads.length) }, { label: "Subject conversations", value: String(subjectThreads.length) }, { label: "Published announcements", value: String(state.notices.filter(item => item.status === "published").length) }]);
+  $("#communication-thread-count").textContent = `${openThreads.length} open`;
+  $("#communication-thread-list").innerHTML = threads.length ? threads.map(item => `<button class="communication-thread" type="button" data-conversation-id="${esc(item.id)}">
+    <span class="thread-avatar">${esc(initials(item.studentName))}</span>
+    <span class="thread-copy"><span><strong>${esc(item.studentName)}</strong><em>${esc(item.subject)}</em></span><b>${esc(item.topic)}</b><small>${esc(item.lastSender)} · ${esc(item.lastMessage || "Conversation started")}</small></span>
+    <span class="thread-meta">${status(item.status)}<time>${formatDateTime(item.lastMessageAt)}</time></span>
+  </button>`).join("") : emptyState("message", "No conversations", "Student and parent messages will appear here.");
   $("#notice-list").innerHTML = state.notices.length ? state.notices.map(item => `<article class="surface notice-card"><div class="notice-card-head"><span class="icon-tile">${icon("message")}</span><div class="cell-actions">${status(item.deliveryStatus || item.status)}${ownerEditButton("notice", item.id)}</div></div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer><span>${esc(item.batch ? `${item.batch} · ${item.program}` : item.audience)}</span><span>${esc(item.channel.replaceAll("_", " "))}</span><time>${formatDateTime(item.publishedAt || item.createdAt)}</time></footer></article>`).join("") : emptyState("message", "No notices");
+}
+
+async function refreshConversations() {
+  state.conversations = await api("/api/communication/inbox");
+  renderCommunication();
+}
+
+function conversationMarkup(detail) {
+  const messages = detail.messages.map(item => `<article class="conversation-message ${item.senderId === state.user?.id ? "is-mine" : ""}"><header><strong>${esc(item.senderName)}</strong><span>${esc(item.senderRole.replaceAll("_", " "))}</span><time>${formatDateTime(item.createdAt)}</time></header><p>${esc(item.body)}</p></article>`).join("");
+  return `<div class="conversation-context"><span>${icon(detail.subjectId ? "book" : "building")}</span><div><strong>${esc(detail.studentName)}</strong><small>${esc(detail.admissionNumber)} · ${esc(detail.subject)}</small></div>${status(detail.status)}</div>
+    <div class="conversation-messages">${messages}</div>
+    ${detail.canReply ? `<form class="auth-form conversation-reply" id="conversation-reply-form" data-thread-id="${esc(detail.id)}"><label class="field"><span>Reply</span><textarea name="body" rows="4" maxlength="3000" placeholder="Write a clear reply…" required></textarea></label>${formError("conversation-reply-error")}<button class="button button-primary button-large" type="submit">${icon("message")}Send reply</button></form>` : `<div class="inline-notice">${icon("shield")}<span>This conversation is closed.</span></div>`}
+    ${detail.canClose ? `<button class="button button-secondary button-large conversation-status-button" type="button" data-thread-status="${detail.status === "open" ? "closed" : "open"}" data-thread-id="${esc(detail.id)}">${detail.status === "open" ? "Close conversation" : "Reopen conversation"}</button>` : ""}`;
+}
+
+async function openConversation(threadId) {
+  openDrawer("Conversation", '<div class="skeleton-line"></div>');
+  try {
+    const detail = await api(`/api/communication/threads/${encodeURIComponent(threadId)}`);
+    $("#drawer-title").textContent = detail.topic;
+    $("#detail-drawer-body").innerHTML = conversationMarkup(detail);
+    injectIcons($("#detail-drawer-body"));
+    $("#conversation-reply-form")?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.currentTarget, button = $('button[type="submit"]', form), body = String(new FormData(form).get("body") || "").trim();
+      if (!body) return;
+      button.disabled = true;
+      try {
+        await api(`/api/communication/threads/${encodeURIComponent(threadId)}/messages`, { method: "POST", body: JSON.stringify({ body }) });
+        await refreshConversations();
+        await openConversation(threadId);
+      } catch (error) { showFormError("#conversation-reply-error", error); button.disabled = false; }
+    });
+    $("[data-thread-status]")?.addEventListener("click", async event => {
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await api(`/api/communication/threads/${encodeURIComponent(threadId)}/status`, { method: "PATCH", body: JSON.stringify({ status: button.dataset.threadStatus }) });
+        await refreshConversations();
+        await openConversation(threadId);
+      } catch (error) { toast(error.message, "error"); button.disabled = false; }
+    });
+  } catch (error) {
+    $("#detail-drawer-body").innerHTML = emptyState("alert", "Could not open conversation", error.message);
+  }
 }
 
 function inventoryCategory(value) {
@@ -2122,6 +2178,8 @@ function bindEvents() {
     if (ledgerButton) openStudentLedger(ledgerButton.dataset.openLedger, ledgerButton);
     const examinationButton = event.target.closest("[data-examination-open]");
     if (examinationButton) openExamination(examinationButton.dataset.examinationOpen);
+    const conversationButton = event.target.closest("[data-conversation-id]");
+    if (conversationButton) openConversation(conversationButton.dataset.conversationId);
     const examinationEdit = event.target.closest("[data-examination-edit]");
     if (examinationEdit) {
       const item = state.examinations.find(row => row.id === examinationEdit.dataset.examinationEdit);

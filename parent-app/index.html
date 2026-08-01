@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
   <link rel="stylesheet" href="../portal-shared.css?v=4">
-  <link rel="stylesheet" href="./styles.css?v=4">
+  <link rel="stylesheet" href="./styles.css?v=5">
   <link rel="stylesheet" href="../auth-shared.css?v=7">
 </head>
 <body>
@@ -81,6 +81,7 @@
         <button type="button" data-view="attendance"><span data-icon="check"></span><em>Attendance</em></button>
         <button type="button" data-view="academics"><span data-icon="book"></span><em>Academics</em><i id="sidebar-work-badge" class="nav-badge hidden">0</i></button>
         <button type="button" data-view="fees"><span data-icon="wallet"></span><em>Fees</em></button>
+        <button type="button" data-view="messages"><span data-icon="notice"></span><em>Messages</em></button>
         <button type="button" data-view="more"><span data-icon="more"></span><em>Account</em></button>
       </nav>
       <div class="sidebar-account">
@@ -128,12 +129,19 @@
         <section class="panel"><div class="section-head"><div><h2>Payment history</h2></div></div><div class="payment-list" id="payment-list"></div></section>
       </section>
 
+      <section class="app-view" id="messages" aria-labelledby="messages-heading">
+        <div class="view-heading"><p class="eyebrow">SUPPORT</p><h1 id="messages-heading">Messages</h1><p>Contact the institute office or your child’s assigned subject faculty.</p><button class="primary-compact" id="new-conversation" type="button">New conversation</button></div>
+        <form class="message-compose hidden" id="conversation-create-form"><label><span>Recipient</span><select name="subjectId" id="conversation-subject"><option value="">Institute office</option></select></label><label><span>Topic</span><input name="topic" maxlength="255" required></label><label><span>Message</span><textarea name="body" rows="4" maxlength="3000" required></textarea></label><div class="form-error hidden" id="conversation-create-error" role="alert"></div><div class="message-form-actions"><button class="secondary-button" id="cancel-conversation" type="button">Cancel</button><button class="primary-button" type="submit">Send message</button></div></form>
+        <div class="message-layout"><section class="panel message-inbox"><div class="section-head"><div><h2>Conversations</h2></div><span class="record-note" id="conversation-count">0 open</span></div><div class="message-thread-list" id="conversation-list"></div></section><section class="panel message-detail hidden" id="conversation-detail"></section></div>
+      </section>
+
       <section class="app-view" id="more" aria-labelledby="more-heading">
         <div class="view-heading"><p class="eyebrow">ACCOUNT</p><h1 id="more-heading">More</h1><p>Linked student details and institute notices.</p></div>
         <div class="account-grid">
           <article class="profile-card" id="account-card"></article>
           <article class="profile-card linked-student-card" id="profile-card"></article>
         </div>
+        <button class="parent-message-entry" type="button" data-go="messages"><span class="row-icon" data-icon="notice"></span><span><strong>Messages</strong><small>Contact Operations or assigned faculty</small></span><span>Open</span></button>
         <section class="panel"><div class="section-head"><div><h2>Notices</h2></div></div><div class="notice-list" id="notice-list"></div></section>
         <button class="signout-button" id="signout-button" type="button"><span data-icon="logout"></span>Sign out</button>
       </section>
@@ -149,6 +157,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=10" defer></script>
+  <script src="./app.js?v=11" defer></script>
 </body>
 </html>

@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <link rel="icon" href="../pwa-icon-192.png">
   <link rel="stylesheet" href="../auth-shared.css?v=7">
-  <link rel="stylesheet" href="./styles.css?v=3">
+  <link rel="stylesheet" href="./styles.css?v=5">
 </head>
 <body>
   <a class="skip-link" href="#attendance-main">Skip to attendance</a>
@@ -97,20 +97,43 @@
         </div>
       </section>
 
+      <section class="desk-announcements hidden" id="desk-announcements" aria-label="Institute announcements"></section>
+
       <section class="metric-grid" id="metric-grid" aria-label="Daily attendance summary"></section>
 
       <section class="quick-register" aria-labelledby="quick-register-heading">
         <div class="quick-register-head">
-          <div><p class="eyebrow">NEW REGISTER</p><h2 id="quick-register-heading">Select student roster</h2></div>
+          <div>
+            <p class="eyebrow">NEW REGISTER</p>
+            <h2 id="quick-register-heading">Choose a roster</h2>
+            <p>Pick the group, course and subject. The correct student list loads automatically.</p>
+          </div>
           <span id="catalog-student-count">0 students</span>
         </div>
         <form class="quick-register-form" id="manual-register-form">
-          <label for="manual-batch"><span>Student group</span><select id="manual-batch" name="batch" required><option value="">Select group</option></select></label>
-          <label for="manual-stream"><span>Course</span><select id="manual-stream" name="stream" required disabled><option value="">Select course</option></select></label>
-          <label for="manual-subject"><span>Subject</span><select id="manual-subject" name="subject" required disabled><option value="">Select subject</option></select></label>
-          <button class="primary-button" id="open-manual-register" type="submit" disabled>Load roster</button>
+          <fieldset class="roster-step is-active" id="manual-group-step">
+            <legend><span>1</span><strong>Student group</strong><small>Start with the batch.</small></legend>
+            <div class="roster-choices roster-choices-groups" id="manual-group-options" aria-label="Student group options"></div>
+          </fieldset>
+          <fieldset class="roster-step is-disabled" id="manual-stream-step" disabled>
+            <legend><span>2</span><strong>Course</strong><small>Choose the course.</small></legend>
+            <div class="roster-choices" id="manual-stream-options" aria-label="Course options"></div>
+          </fieldset>
+          <fieldset class="roster-step is-disabled" id="manual-subject-step" disabled>
+            <legend><span>3</span><strong>Subject</strong><small>Choose the class subject.</small></legend>
+            <div class="roster-choices" id="manual-subject-options" aria-label="Subject options"></div>
+          </fieldset>
+          <input id="manual-batch" name="batch" type="hidden">
+          <input id="manual-stream" name="stream" type="hidden">
+          <input id="manual-subject" name="subject" type="hidden">
+          <div class="roster-ready-panel" id="manual-roster-panel">
+            <div>
+              <span id="manual-roster-state">Selection</span>
+              <strong class="quick-register-status" id="manual-roster-summary" role="status" aria-live="polite">Choose a student group to begin.</strong>
+            </div>
+            <button class="primary-button" id="open-manual-register" type="submit" disabled>Open roster</button>
+          </div>
         </form>
-        <div class="quick-register-status" id="manual-roster-summary" role="status" aria-live="polite">Select a group, course and subject.</div>
       </section>
 
       <section class="workspace" aria-labelledby="registers-heading">
@@ -163,6 +186,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=8" defer></script>
+  <script src="./app.js?v=12" defer></script>
 </body>
 </html>

@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=42">
+  <link rel="stylesheet" href="./styles.css?v=43">
   <link rel="stylesheet" href="./auth-shared.css?v=7">
 </head>
 <body>
@@ -274,8 +274,13 @@
         </section>
 
         <section class="app-view" id="communication" aria-labelledby="communication-heading">
-          <div class="page-heading"><h2 id="communication-heading">Communication</h2><button class="button button-primary" id="new-notice" type="button"><span data-icon="plus"></span>New notice</button></div>
+          <div class="page-heading"><div><h2 id="communication-heading">Communication</h2><p class="page-heading-copy">Reply to student and parent conversations, and publish institute announcements.</p></div><button class="button button-primary" id="new-notice" type="button"><span data-icon="plus"></span>New announcement</button></div>
           <div class="compact-metrics" id="communication-metrics"></div>
+          <article class="surface communication-inbox">
+            <div class="surface-head"><div><h3>Student &amp; parent inbox</h3><p>Every conversation is linked to a student record. Subject conversations are also visible to assigned faculty.</p></div><span class="count-badge" id="communication-thread-count">0 open</span></div>
+            <div class="communication-thread-list" id="communication-thread-list"></div>
+          </article>
+          <div class="section-heading"><div><h3>Announcements</h3><p>Global and audience-specific notices published by Operations.</p></div></div>
           <div class="notice-grid" id="notice-list"></div>
         </section>
 
@@ -329,6 +334,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=53" defer></script>
+  <script src="./app.js?v=54" defer></script>
 </body>
 </html>
