@@ -2052,6 +2052,11 @@ function applyRoleUI() {
     node.disabled = !visible;
   });
   const actionRoles = {
+    "#quick-new-lead": ["owner","admissions_manager","counsellor","front_desk"],
+    "#quick-new-student": ["owner"],
+    "#quick-new-payment": ["owner","accounts","admissions_manager"],
+    "#quick-new-session": ["owner","academic_coordinator"],
+    "#quick-new-notice": ["owner","admissions_manager","academic_coordinator","front_desk"],
     "#new-lead-button": ["owner","admissions_manager","counsellor","front_desk"],
     "#new-student": ["owner"],
     "#new-future-payment": ["owner","accounts","admissions_manager"],
@@ -2072,6 +2077,8 @@ function applyRoleUI() {
     const node = $(selector);
     if (node) node.hidden = !roles.includes(role);
   });
+  const quickActionPanel = $("#dashboard-quick-actions");
+  if (quickActionPanel) quickActionPanel.hidden = !$$('[data-dashboard-action]', quickActionPanel).some(node => !node.hidden);
   $$("[data-owner-edit]").forEach(node => {
     const kind = node.dataset.ownerEdit;
     const roles = ["agreement","payment"].includes(kind) ? ["owner","accounts","admissions_manager"] : ["session","assignment"].includes(kind) ? ["owner","academic_coordinator"] : ["owner"];
@@ -2162,6 +2169,12 @@ function bindEvents() {
   $(".password-toggle").addEventListener("click", event => { const field = $("#auth-password"), visible = field.type === "text"; field.type = visible ? "password" : "text"; event.currentTarget.setAttribute("aria-label", visible ? "Show password" : "Hide password"); });
   document.addEventListener("click", event => {
     const view = event.target.closest("[data-view], [data-view-target]")?.dataset; if (view) showView(view.view || view.viewTarget);
+    const dashboardAction = event.target.closest("[data-dashboard-action]")?.dataset.dashboardAction;
+    if (dashboardAction === "lead") openLeadForm();
+    else if (dashboardAction === "student") openStudentCreateForm();
+    else if (dashboardAction === "payment") openPaymentForm();
+    else if (dashboardAction === "session") openSessionForm();
+    else if (dashboardAction === "notice") openNoticeForm();
     const treeButton = event.target.closest("[data-student-tree-toggle]"), treeToggle = treeButton?.dataset.studentTreeToggle;
     if (treeButton && treeToggle) {
       const expanded = treeButton.getAttribute("aria-expanded") !== "true";

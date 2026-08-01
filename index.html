@@ -28,7 +28,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=43">
+  <link rel="stylesheet" href="./styles.css?v=45">
   <link rel="stylesheet" href="./auth-shared.css?v=7">
 </head>
 <body>
@@ -101,23 +101,24 @@
 
       <div class="branch-switcher">
         <span class="branch-icon" data-icon="building"></span>
-        <span><strong>Sadar · Nagpur</strong></span>
-        <span data-icon="chevron-down"></span>
+        <span><small>Current branch</small><strong>Sadar · Nagpur</strong></span>
       </div>
 
       <nav class="primary-nav" aria-label="Application navigation">
-        <p class="nav-label">Workspace</p>
+        <p class="nav-label">Daily work</p>
         <button class="nav-item active" type="button" data-view="dashboard"><span data-icon="grid"></span><span>Overview</span></button>
         <button class="nav-item" type="button" data-view="admissions"><span data-icon="spark"></span><span>Admissions</span><em id="nav-leads-count">0</em></button>
         <button class="nav-item" type="button" data-view="students"><span data-icon="users"></span><span>Students</span><em id="nav-students-count">64</em></button>
         <button class="nav-item" type="button" data-view="finance"><span data-icon="wallet"></span><span>Fees &amp; finance</span><em id="nav-finance-count">3</em></button>
         <button class="nav-item" type="button" data-view="attendance"><span data-icon="calendar-check"></span><span>Attendance</span></button>
+        <button class="nav-item" type="button" data-view="communication"><span data-icon="message"></span><span>Communication</span></button>
+
+        <p class="nav-label nav-label-spaced">Academics</p>
         <button class="nav-item" type="button" data-view="academics"><span data-icon="book"></span><span>Academics</span></button>
         <button class="nav-item" type="button" data-view="examinations"><span data-icon="exam"></span><span>Examinations</span><em id="nav-examinations-count">0</em></button>
         <button class="nav-item" type="button" data-view="timetable"><span data-icon="clock"></span><span>Faculty &amp; timetable</span></button>
 
-        <p class="nav-label nav-label-spaced">Control</p>
-        <button class="nav-item" type="button" data-view="communication"><span data-icon="message"></span><span>Communication</span></button>
+        <p class="nav-label nav-label-spaced">Administration</p>
         <button class="nav-item" type="button" data-view="inventory"><span data-icon="inventory"></span><span>Inventory</span><em id="nav-inventory-count">0</em></button>
         <button class="nav-item" type="button" data-view="reports"><span data-icon="chart"></span><span>Reports</span></button>
         <button class="nav-item" type="button" data-view="settings"><span data-icon="settings"></span><span>Settings &amp; audit</span></button>
@@ -150,8 +151,18 @@
         <section class="app-view active" id="dashboard" aria-labelledby="dashboard-heading">
           <div class="welcome-row">
             <div><p class="overline" id="dashboard-date"></p><h2 id="dashboard-heading">Overview</h2></div>
-            <button class="button button-primary" type="button" data-view-target="admissions"><span data-icon="plus"></span>Create enquiry</button>
           </div>
+
+          <section class="dashboard-quick-actions" id="dashboard-quick-actions" aria-labelledby="quick-actions-heading">
+            <div class="quick-actions-heading"><span class="quick-actions-icon" data-icon="spark"></span><span><strong id="quick-actions-heading">Quick actions</strong><small>Open a common task without navigating through a module.</small></span></div>
+            <div class="quick-actions-grid">
+              <button class="quick-action" id="quick-new-lead" type="button" data-dashboard-action="lead"><span data-icon="spark"></span><span><strong>New enquiry</strong><small>Record a prospective student</small></span></button>
+              <button class="quick-action" id="quick-new-student" type="button" data-dashboard-action="student"><span data-icon="users"></span><span><strong>Add student</strong><small>Create admission and fee profile</small></span></button>
+              <button class="quick-action" id="quick-new-payment" type="button" data-dashboard-action="payment"><span data-icon="receipt"></span><span><strong>Record payment</strong><small>Post payment and issue receipt</small></span></button>
+              <button class="quick-action" id="quick-new-session" type="button" data-dashboard-action="session"><span data-icon="calendar-check"></span><span><strong>Schedule class</strong><small>Create a timetable session</small></span></button>
+              <button class="quick-action" id="quick-new-notice" type="button" data-dashboard-action="notice"><span data-icon="message"></span><span><strong>Announcement</strong><small>Publish an institute update</small></span></button>
+            </div>
+          </section>
 
           <div class="metric-grid" id="dashboard-metrics" aria-label="Institution summary">
             <article class="metric-card metric-card-featured skeleton-card"></article>
@@ -334,6 +345,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=54" defer></script>
+  <script src="./app.js?v=55" defer></script>
 </body>
 </html>

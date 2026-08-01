@@ -122,6 +122,19 @@ def test_allowlisted_root_assets_remain_public(client):
         assert client.get(path).status_code == 200
 
 
+def test_operations_home_exposes_role_aware_quick_actions(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'id="dashboard-quick-actions"' in response.text
+    assert 'data-dashboard-action="lead"' in response.text
+    assert 'data-dashboard-action="student"' in response.text
+    assert 'data-dashboard-action="payment"' in response.text
+    assert 'data-dashboard-action="session"' in response.text
+    assert 'data-dashboard-action="notice"' in response.text
+    assert "Daily work" in response.text
+    assert "Administration" in response.text
+
+
 def test_every_application_uses_a_mobile_login_field(client):
     for path in ("/", "/student-app/", "/parent-app/", "/faculty-app/", "/attendance-app/"):
         response = client.get(path)
