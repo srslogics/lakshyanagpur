@@ -8,6 +8,7 @@ from app.models import (
     Batch,
     FacultyTeachingAssignment,
     InventoryItem,
+    Student,
     Subject,
     User,
 )
@@ -128,6 +129,8 @@ def test_owner_can_record_inventory_quantity_without_changing_source_name(
         "quantityPending": 6,
         "lowStock": 0,
         "categories": 3,
+        "issuedToStudents": 0,
+        "studentsWithItems": 0,
     }
     item = next(
         row for row in bootstrap.json()["items"]
@@ -212,6 +215,130 @@ def test_inventory_issue_return_and_negative_stock_control(
     )
     assert blocked.status_code == 409
     assert blocked.json()["detail"]["code"] == "INSUFFICIENT_STOCK"
+
+
+def test_student_inventory_register_updates_stock_and_blocks_excess_return(
+    client,
+    database,
+    owner_headers,
+):
+    sync_client_master_data(database)
+    student = Student(
+        admission_number="LI-2026-00999",
+        full_name="Inventory Student",
+        mobile="9000000998",
+        status="active",
+        data_quality_status="ready",
+    )
+    database.add(student)
+    database.commit()
+    item = next(
+        row
+        for row in client.get(
+            "/api/inventory/bootstrap",
+            headers=owner_headers,
+        ).json()["items"]
+        if row["sku"] == "ESS-MATH-B1"
+    )
+    opened = client.patch(
+        f"/api/inventory/items/{item['id']}",
+        headers=owner_headers,
+        json={
+            "name": item["name"],
+            "category": item["category"],
+            "unit": "booklet",
+            "quantityOnHand": 10,
+            "reorderLevel": 2,
+            "notes": "Opening count",
+            "isActive": True,
+        },
+    )
+    assert opened.status_code == 200
+    issued = client.post(
+        f"/api/inventory/items/{item['id']}/movements",
+        headers=owner_headers,
+        json={
+            "movementType": "issue",
+            "quantity": 2,
+            "occurredOn": "2026-08-03",
+            "targetType": "student",
+            "studentId": student.id,
+            "reference": "KIT-001",
+            "reason": "Issued from the student profile",
+        },
+    )
+    assert issued.status_code == 201
+    assert issued.json()["balanceAfter"] == 8
+
+    register = client.get(
+        f"/api/inventory/students/{student.id}",
+        headers=owner_headers,
+    )
+    assert register.status_code == 200
+    assert register.json()["summary"] == {
+        "itemTypes": 1,
+        "issuedUnits": 2,
+        "transactions": 1,
+    }
+    assert register.json()["holdings"] == [{
+        "itemId": item["id"],
+        "itemName": item["name"],
+        "sku": item["sku"],
+        "category": "book",
+        "unit": "booklet",
+        "quantityIssued": 2,
+        "lastIssuedOn": "2026-08-03",
+    }]
+    inventory = client.get(
+        "/api/inventory/bootstrap",
+        headers=owner_headers,
+    ).json()
+    assert inventory["summary"]["issuedToStudents"] == 2
+    assert inventory["summary"]["studentsWithItems"] == 1
+
+    returned = client.post(
+        f"/api/inventory/items/{item['id']}/movements",
+        headers=owner_headers,
+        json={
+            "movementType": "return",
+            "quantity": 1,
+            "occurredOn": "2026-08-04",
+            "targetType": "student",
+            "studentId": student.id,
+            "reason": "One booklet returned",
+        },
+    )
+    assert returned.status_code == 201
+    assert returned.json()["balanceAfter"] == 9
+    assert client.get(
+        f"/api/inventory/students/{student.id}",
+        headers=owner_headers,
+    ).json()["holdings"][0]["quantityIssued"] == 1
+
+    blocked = client.post(
+        f"/api/inventory/items/{item['id']}/movements",
+        headers=owner_headers,
+        json={
+            "movementType": "return",
+            "quantity": 2,
+            "occurredOn": "2026-08-04",
+            "targetType": "student",
+            "studentId": student.id,
+            "reason": "Return more than issued",
+        },
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == (
+        "RETURN_EXCEEDS_STUDENT_BALANCE"
+    )
+    unchanged = client.get(
+        f"/api/inventory/students/{student.id}",
+        headers=owner_headers,
+    ).json()
+    assert unchanged["holdings"][0]["quantityIssued"] == 1
+    assert next(
+        row for row in unchanged["availableItems"] if row["id"] == item["id"]
+    )["quantityOnHand"] == 9
 
 
 def test_non_inventory_role_cannot_read_inventory(client, parent_headers):

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -56,6 +57,72 @@ def _movement(row: InventoryMovement, item: InventoryItem, actor: User):
     }
 
 
+def _student_stock(db: Session, student: Student):
+    rows = (
+        db.query(InventoryMovement, InventoryItem, User)
+        .join(InventoryItem, InventoryItem.id == InventoryMovement.item_id)
+        .join(User, User.id == InventoryMovement.created_by)
+        .filter(
+            InventoryMovement.student_id == student.id,
+            InventoryMovement.movement_type.in_(("issue", "return")),
+        )
+        .order_by(
+            InventoryMovement.occurred_on.desc(),
+            InventoryMovement.created_at.desc(),
+        )
+        .all()
+    )
+    holdings = {}
+    for movement, item, _ in rows:
+        holding = holdings.setdefault(
+            item.id,
+            {
+                "itemId": item.id,
+                "itemName": item.name,
+                "sku": item.sku,
+                "category": item.category,
+                "unit": item.unit,
+                "quantityIssued": 0,
+                "lastIssuedOn": None,
+            },
+        )
+        holding["quantityIssued"] -= movement.quantity_delta
+        if movement.movement_type == "issue" and (
+            holding["lastIssuedOn"] is None
+            or movement.occurred_on > holding["lastIssuedOn"]
+        ):
+            holding["lastIssuedOn"] = movement.occurred_on
+    active_holdings = sorted(
+        (
+            holding
+            for holding in holdings.values()
+            if holding["quantityIssued"] > 0
+        ),
+        key=lambda holding: (holding["category"], holding["itemName"]),
+    )
+    available = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.is_active.is_(True))
+        .order_by(InventoryItem.category, InventoryItem.name)
+        .all()
+    )
+    return {
+        "studentId": student.id,
+        "studentName": student.full_name,
+        "admissionNumber": student.admission_number,
+        "holdings": active_holdings,
+        "history": [_movement(*row) for row in rows],
+        "availableItems": [_serialize(row) for row in available],
+        "summary": {
+            "itemTypes": len(active_holdings),
+            "issuedUnits": sum(
+                holding["quantityIssued"] for holding in active_holdings
+            ),
+            "transactions": len(rows),
+        },
+    }
+
+
 @router.get("/bootstrap")
 def bootstrap(
     db: Session = Depends(get_db),
@@ -74,6 +141,23 @@ def bootstrap(
         .limit(20)
         .all()
     )
+    student_balances = (
+        db.query(
+            InventoryMovement.student_id,
+            InventoryMovement.item_id,
+            func.sum(InventoryMovement.quantity_delta),
+        )
+        .filter(
+            InventoryMovement.student_id.is_not(None),
+            InventoryMovement.movement_type.in_(("issue", "return")),
+        )
+        .group_by(InventoryMovement.student_id, InventoryMovement.item_id)
+        .all()
+    )
+    issued_balances = [
+        (student_id, max(0, -int(balance or 0)))
+        for student_id, _, balance in student_balances
+    ]
     return {
         "items": [_serialize(row) for row in rows],
         "studentTargets": [
@@ -102,8 +186,28 @@ def bootstrap(
                 for row in active
             ),
             "categories": len({row.category for row in active}),
+            "issuedToStudents": sum(
+                balance for _, balance in issued_balances
+            ),
+            "studentsWithItems": len({
+                student_id
+                for student_id, balance in issued_balances
+                if balance > 0
+            }),
         },
     }
+
+
+@router.get("/students/{student_id}")
+def student_stock(
+    student_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*READ_ROLES)),
+):
+    student = db.get(Student, student_id)
+    if not student or student.is_test_account:
+        raise HTTPException(404, "Student not found")
+    return _student_stock(db, student)
 
 
 @router.post("/items", status_code=201)
@@ -256,11 +360,16 @@ def create_movement(
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles(*WRITE_ROLES)),
 ):
-    item = db.get(InventoryItem, item_id)
+    item = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.id == item_id)
+        .with_for_update()
+        .one_or_none()
+    )
     if not item or not item.is_active:
         raise HTTPException(404, "Active inventory item not found")
     student = db.get(Student, payload.studentId) if payload.studentId else None
-    if payload.studentId and not student:
+    if payload.studentId and (not student or student.is_test_account):
         raise HTTPException(404, "Student not found")
     direction = {
         "inward": 1,
@@ -273,6 +382,30 @@ def create_movement(
         if payload.movementType == "adjustment"
         else abs(payload.quantity) * direction
     )
+    if student and payload.movementType == "return":
+        student_balance = (
+            db.query(
+                func.coalesce(func.sum(InventoryMovement.quantity_delta), 0)
+            )
+            .filter(
+                InventoryMovement.item_id == item.id,
+                InventoryMovement.student_id == student.id,
+                InventoryMovement.movement_type.in_(("issue", "return")),
+            )
+            .scalar()
+        )
+        outstanding = max(0, -int(student_balance or 0))
+        if payload.quantity > outstanding:
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "RETURN_EXCEEDS_STUDENT_BALANCE",
+                    "message": (
+                        f"Only {outstanding} {item.unit} are currently issued "
+                        f"to {student.full_name}"
+                    ),
+                },
+            )
     current = item.quantity_on_hand or 0
     balance = current + delta
     if balance < 0:

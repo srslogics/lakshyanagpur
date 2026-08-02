@@ -334,11 +334,13 @@ class InventoryMovementCreate(BaseModel):
                 "quantity must be positive except for an adjustment",
             )
         if self.targetType == "student" and not self.studentId:
-            raise ValueError("studentId is required for a student issue")
+            raise ValueError("studentId is required for a student movement")
         if self.studentId and self.targetType != "student":
             raise ValueError(
                 "studentId is allowed only when targetType is student",
             )
+        if self.studentId and self.movementType not in ("issue", "return"):
+            raise ValueError("student stock can only be issued or returned")
         return self
 
 
@@ -426,8 +428,8 @@ class AttendanceSave(BaseModel):
 class ManualAttendanceRegisterOpen(BaseModel):
     date: date
     batch: str = Field(min_length=1, max_length=120)
-    stream: str = Field(min_length=1, max_length=120)
-    subject: str = Field(min_length=1, max_length=120)
+    stream: str | None = Field(default=None, min_length=1, max_length=120)
+    subject: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class AttendanceCorrection(BaseModel):

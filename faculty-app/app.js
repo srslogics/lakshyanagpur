@@ -187,6 +187,7 @@ function showLogin(message = "") {
   $("#faculty-shell").classList.add("hidden");
   $("#login-screen").classList.remove("hidden");
   $("#login-password").value = "";
+  resetPasswordVisibility($("#login-screen"));
   setLoginMode(state.loginMode);
   if (message) {
     $("#login-error").textContent = message;
@@ -220,6 +221,7 @@ function showMobileSetup(identity) {
   $("#mobile-setup-identity").textContent = identity.email || identity.fullName;
   $("#mobile-setup-error").classList.add("hidden");
   $("#faculty-mobile").value = "";
+  resetPasswordVisibility($("#mobile-setup-screen"));
   requestAnimationFrame(() => $("#faculty-mobile").focus());
 }
 
@@ -231,6 +233,7 @@ function showFacultyPasswordChange(identity) {
   $("#faculty-shell").classList.add("hidden");
   $("#faculty-password-change-screen").classList.remove("hidden");
   $("#faculty-password-change-form").reset();
+  resetPasswordVisibility($("#faculty-password-change-screen"));
   $("#faculty-password-change-error").classList.add("hidden");
   requestAnimationFrame(() => $("[name=currentPassword]", $("#faculty-password-change-form")).focus());
 }
@@ -1062,15 +1065,28 @@ async function saveExaminationResults(publish = false) {
   }
 }
 
-function togglePassword() {
-  const field = $("#login-password");
-  const button = $("#password-toggle");
-  const glyph = $("[data-icon]", button);
+function togglePassword(button) {
+  const field = $("input", button.closest(".password-field"));
+  if (!field) return;
   const show = field.type === "password";
   field.type = show ? "text" : "password";
-  button.setAttribute("aria-label", show ? "Hide password" : "Show password");
-  glyph.dataset.icon = show ? "eye-off" : "eye";
+  button.setAttribute("aria-pressed", String(show));
+  button.setAttribute("aria-label", `${show ? "Hide" : "Show"} ${button.dataset.passwordLabel || "password"}`);
+  const glyph = $("[data-icon]", button);
+  if (glyph) glyph.dataset.icon = show ? "eye-off" : "eye";
   injectIcons(button);
+}
+
+function resetPasswordVisibility(root = document) {
+  $$("[data-password-toggle]", root).forEach(button => {
+    const field = $("input", button.closest(".password-field"));
+    if (field) field.type = "password";
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", `Show ${button.dataset.passwordLabel || "password"}`);
+    const glyph = $("[data-icon]", button);
+    if (glyph) glyph.dataset.icon = "eye";
+    injectIcons(button);
+  });
 }
 
 function bindEvents() {
@@ -1082,7 +1098,6 @@ function bindEvents() {
   });
   $("#mobile-setup-form").addEventListener("submit", activateMobile);
   $("#faculty-password-change-form").addEventListener("submit", changeFacultyPassword);
-  $("#password-toggle").addEventListener("click", togglePassword);
   $("#signout-button").addEventListener("click", logout);
   $("#sidebar-signout").addEventListener("click", logout);
   $("#profile-button").addEventListener("click", () => showView("profile"));
@@ -1104,6 +1119,11 @@ function bindEvents() {
     if (!graded) marks.value = "";
   });
   document.addEventListener("click", event => {
+    const passwordToggle = event.target.closest("[data-password-toggle]");
+    if (passwordToggle) {
+      togglePassword(passwordToggle);
+      return;
+    }
     const view = event.target.closest("[data-view]")?.dataset.view || event.target.closest("[data-go]")?.dataset.go;
     if (view) showView(view);
     const messageThread = event.target.closest("[data-message-thread]");

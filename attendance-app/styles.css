@@ -105,6 +105,7 @@ svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-li
 .roster-step legend strong{font-size:.78rem}
 .roster-step legend small{color:var(--muted);font-size:.68rem;font-weight:700}
 .roster-choices{display:flex;flex-wrap:wrap;gap:9px;margin-top:14px}
+.roster-step-single .roster-choices{margin-top:0}
 .roster-choices-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 .roster-choice{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border:1px solid var(--line);border-radius:14px;color:var(--ink);background:#fff;text-align:left;transition:border-color .18s var(--ease),background .18s var(--ease),box-shadow .18s var(--ease),transform .18s var(--ease)}
 .roster-choice:hover{border-color:rgba(39,45,112,.38);transform:translateY(-1px)}

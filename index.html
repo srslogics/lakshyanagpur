@@ -28,7 +28,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="/styles.css?v=47">
+  <link rel="stylesheet" href="/styles.css?v=49">
   <link rel="stylesheet" href="/auth-shared.css?v=7">
 </head>
 <body>
@@ -75,7 +75,7 @@
             <span>Password</span>
             <span class="password-control">
               <input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
-              <button class="icon-button password-toggle" type="button" aria-label="Show password" data-icon="eye"></button>
+              <button class="icon-button password-toggle" type="button" data-password-toggle data-password-label="password" aria-label="Show password" aria-pressed="false" data-icon="eye"></button>
             </span>
             <small class="field-help" id="password-help">Use at least 8 characters.</small>
             <small class="field-error" data-error-for="password"></small>
@@ -312,9 +312,14 @@
         </section>
 
         <section class="app-view" id="settings" aria-labelledby="settings-heading">
-          <div class="page-heading settings-page-heading"><h2 id="settings-heading">Settings &amp; audit</h2><div class="heading-actions settings-heading-actions"><button class="button button-secondary" id="new-student-access" type="button"><span data-icon="plus"></span>Student access</button><button class="button button-secondary" id="new-parent-access" type="button"><span data-icon="plus"></span>Parent access</button><button class="button button-secondary" id="new-faculty-access" type="button"><span data-icon="plus"></span>Faculty access</button><button class="button button-secondary" id="new-attendance-access" type="button"><span data-icon="plus"></span>Attendance access</button><button class="button button-secondary" id="new-user" type="button"><span data-icon="plus"></span>Other user</button><button class="button button-primary" id="new-master" type="button"><span data-icon="plus"></span>Academic setup</button></div></div>
-          <div class="compact-metrics" id="settings-metrics"></div>
-          <div class="settings-grid"><article class="surface"><div class="surface-head"><h3>All users</h3></div><div class="master-list" id="settings-users"></div></article><article class="surface"><div class="surface-head"><h3>Student portal</h3><span class="count-badge" id="student-access-count">0 / 100</span></div><div class="master-list" id="settings-student-access"></div></article><article class="surface"><div class="surface-head"><h3>Parent portal</h3><span class="count-badge" id="parent-access-count">0</span></div><div class="master-list" id="settings-parent-access"></div></article><article class="surface"><div class="surface-head"><h3>Faculty portal</h3><span class="count-badge" id="faculty-access-count">0</span></div><div class="master-list" id="settings-faculty-access"></div></article><article class="surface"><div class="surface-head"><h3>Attendance desk</h3><span class="count-badge" id="attendance-access-count">0</span></div><div class="master-list" id="settings-attendance-access"></div></article><article class="surface"><div class="surface-head"><h3>Academic data</h3><span class="count-badge" id="academic-import-status">Not loaded</span></div><div class="master-list" id="settings-academic-import"></div><label class="button button-secondary button-small import-file-button" for="academic-import-file">Import reviewed data</label><input class="hidden" id="academic-import-file" type="file" accept=".json,application/json"><p class="settings-helper" id="academic-import-message">Owner-only import. Source rows remain auditable.</p></article><article class="surface"><div class="surface-head"><h3>Batches</h3></div><div class="master-list" id="settings-batches"></div></article><article class="surface"><div class="surface-head"><h3>Subjects</h3></div><div class="master-list" id="settings-subjects"></div></article><article class="surface"><div class="surface-head"><h3>Rooms</h3></div><div class="master-list" id="settings-rooms"></div></article><article class="surface settings-audit"><div class="surface-head"><h3>Audit trail</h3></div><div class="audit-list" id="settings-audit"></div></article></div>
+          <div class="page-heading settings-page-heading"><div><h2 id="settings-heading">Settings</h2><p>Manage access, academic records and activity history.</p></div><div class="heading-actions settings-heading-actions"><button class="button button-secondary" id="settings-add-account" type="button"><span data-icon="plus"></span>Add account</button><button class="button button-primary" id="new-master" type="button"><span data-icon="plus"></span>Academic setup</button></div></div>
+          <div class="settings-tabs" role="tablist" aria-label="Settings sections"><button class="active" id="settings-accounts-tab" type="button" role="tab" data-settings-section="accounts" aria-controls="settings-accounts-panel" aria-selected="true">Accounts</button><button id="settings-academics-tab" type="button" role="tab" data-settings-section="academics" aria-controls="settings-academics-panel" aria-selected="false">Academic setup</button><button id="settings-audit-tab" type="button" role="tab" data-settings-section="audit" aria-controls="settings-audit-panel" aria-selected="false">Audit trail</button></div>
+          <section class="settings-panel" id="settings-accounts-panel" data-settings-panel="accounts" role="tabpanel" aria-labelledby="settings-accounts-tab">
+            <div class="compact-metrics" id="settings-metrics"></div>
+            <article class="surface settings-account-surface"><div class="surface-head"><div><h3>Account directory</h3><p>One record per login across every Lakshya portal.</p></div><span class="count-badge" id="settings-account-count" role="status" aria-live="polite">0 accounts</span></div><div class="toolbar settings-account-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="settings-account-search" type="search" placeholder="Search name, mobile or admission ID" aria-label="Search accounts"></label><select id="settings-account-filter" aria-label="Filter accounts by access type"><option value="all">All accounts</option><option value="student">Students</option><option value="parent">Parents</option><option value="faculty">Faculty</option><option value="attendance">Attendance</option><option value="staff">Other staff</option></select></div><div class="settings-account-head" aria-hidden="true"><span>Account</span><span>Access</span><span>Login</span><span>Status</span><span></span></div><div class="settings-account-list" id="settings-users"></div></article>
+          </section>
+          <section class="settings-panel" id="settings-academics-panel" data-settings-panel="academics" role="tabpanel" aria-labelledby="settings-academics-tab" hidden><div class="settings-grid settings-setup-grid"><article class="surface"><div class="surface-head"><h3>Academic data</h3><span class="count-badge" id="academic-import-status">Not loaded</span></div><div class="master-list" id="settings-academic-import"></div><label class="button button-secondary button-small import-file-button" for="academic-import-file">Import reviewed data</label><input class="hidden" id="academic-import-file" type="file" accept=".json,application/json"><p class="settings-helper" id="academic-import-message">Owner-only import. Source rows remain auditable.</p></article><article class="surface"><div class="surface-head"><h3>Batches</h3></div><div class="master-list" id="settings-batches"></div></article><article class="surface"><div class="surface-head"><h3>Subjects</h3></div><div class="master-list" id="settings-subjects"></div></article><article class="surface"><div class="surface-head"><h3>Rooms</h3></div><div class="master-list" id="settings-rooms"></div></article></div></section>
+          <section class="settings-panel" id="settings-audit-panel" data-settings-panel="audit" role="tabpanel" aria-labelledby="settings-audit-tab" hidden><article class="surface settings-audit"><div class="surface-head"><div><h3>Audit trail</h3><p>Recent changes made across the workspace.</p></div></div><div class="audit-list" id="settings-audit"></div></article></section>
         </section>
       </div>
     </main>
@@ -343,6 +348,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="/app.js?v=58" defer></script>
+  <script src="/app.js?v=62" defer></script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 
 const icons = {
   eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
+  "eye-off": '<path d="m3 3 18 18M10.6 5.2A11.4 11.4 0 0 1 12 5c6.5 0 10 7 10 7a16 16 0 0 1-2.1 3.2M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.1-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   "arrow-right": '<path d="M5 12h14M13 6l6 6-6 6"/>',
   shield: '<path d="M12 3 5 6v5c0 4.5 2.8 8.1 7 10 4.2-1.9 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>',
   building: '<path d="M4 21V5l8-3 8 3v16M8 9h2m4 0h2M8 13h2m4 0h2M9 21v-4h6v4M2 21h20"/>',
@@ -54,6 +55,9 @@ let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
 let detailReturnFocus = null;
 let detailRouteStudentId = "";
+let settingsAccountSearch = "";
+let settingsAccountFilter = "all";
+let settingsSection = "accounts";
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
 const RECONCILIATION_ACTION_STATES = new Set(["review", "needs_date", "needs_mode"]);
@@ -126,6 +130,32 @@ const status = value => `<span class="status status-${normalize(value) || "neutr
 
 function injectIcons(root = document) {
   $$('[data-icon]', root).forEach(node => { if (icons[node.dataset.icon]) node.innerHTML = icon(node.dataset.icon); });
+}
+
+function passwordControl(name, { label = "password", autocomplete = "new-password", minlength = 10, required = false } = {}) {
+  return `<span class="password-control"><input name="${esc(name)}" type="password" minlength="${minlength}" autocomplete="${esc(autocomplete)}"${required ? " required" : ""}><button class="icon-button password-toggle" type="button" data-password-toggle data-password-label="${esc(label)}" aria-label="Show ${esc(label)}" aria-pressed="false" data-icon="eye"></button></span>`;
+}
+
+function togglePassword(button) {
+  const field = $("input", button.closest(".password-control"));
+  if (!field) return;
+  const show = field.type === "password";
+  field.type = show ? "text" : "password";
+  button.setAttribute("aria-pressed", String(show));
+  button.setAttribute("aria-label", `${show ? "Hide" : "Show"} ${button.dataset.passwordLabel || "password"}`);
+  button.dataset.icon = show ? "eye-off" : "eye";
+  injectIcons(button);
+}
+
+function resetPasswordVisibility(root = document) {
+  $$("[data-password-toggle]", root).forEach(button => {
+    const field = $("input", button.closest(".password-control"));
+    if (field) field.type = "password";
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-label", `Show ${button.dataset.passwordLabel || "password"}`);
+    button.dataset.icon = "eye";
+    injectIcons(button);
+  });
 }
 
 async function api(path, options = {}) {
@@ -242,8 +272,7 @@ function clearSession() {
 
 function resetAuthForm() {
   $("#auth-password").value = "";
-  $("#auth-password").type = "password";
-  $(".password-toggle").setAttribute("aria-label", "Show password");
+  resetPasswordVisibility($("#auth-screen"));
   $$(".field-error").forEach(node => node.textContent = "");
   $("#auth-error").classList.add("hidden");
 }
@@ -477,6 +506,7 @@ function studentPrimary(name, detail = "") { return `<div class="table-primary">
 function emptyState(iconName, title, copy = "") { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3>${copy ? `<p>${esc(copy)}</p>` : ""}</div></div>`; }
 function isOwner() { return state.user?.role === "owner"; }
 function canManageFinance() { return ["owner", "accounts"].includes(state.user?.role); }
+function canReadInventory() { return ["owner", "storekeeper", "accounts"].includes(state.user?.role); }
 function canManageInventory() { return ["owner", "storekeeper"].includes(state.user?.role); }
 function canConvertAdmissions() { return ["owner", "admissions_manager"].includes(state.user?.role); }
 function ownerEditButton(kind, id, label = "Edit") {
@@ -956,10 +986,10 @@ function renderInventory() {
   );
   $("#new-inventory-item").classList.toggle("hidden", !canManageInventory());
   $("#inventory-metrics").innerHTML = compactMetrics([
-    { label: "Active items", value: String(summary.activeItems || 0) },
+    { label: "Stock items", value: String(summary.activeItems || 0) },
+    { label: "Units issued", value: String(summary.issuedToStudents || 0) },
+    { label: "Students supplied", value: String(summary.studentsWithItems || 0) },
     { label: "Low stock", value: String(summary.lowStock || 0) },
-    { label: "Stock recorded", value: String(summary.knownQuantities || 0) },
-    { label: "Quantity pending", value: String(summary.quantityPending || 0) }
   ]);
   $("#inventory-result-summary").textContent = `${rows.length} of ${(inventory.items || []).length} items`;
   const actions = item => canManageInventory() ? `<div class="cell-actions"><button class="button button-primary button-small" type="button" data-inventory-movement="${esc(item.id)}">${icon("inventory")}Movement</button><button class="button button-secondary button-small" type="button" data-inventory-edit="${esc(item.id)}">${icon("edit")}Edit</button></div>` : "";
@@ -968,7 +998,7 @@ function renderInventory() {
   $("#inventory-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.name, item.vendorReference || item.sourceNote || "ERP entry")}</td><td><strong>${esc(item.sku)}</strong></td><td>${esc(inventoryCategory(item.category))}</td><td>${esc(item.unit)}</td><td><span class="inventory-quantity">${quantity(item)}</span></td><td>${status(stockState(item))}</td><td>${actions(item)}</td></tr>`).join("") : `<tr><td colspan="7">${emptyState("inventory", "No matching inventory items", "Clear a filter or add a new item.")}</td></tr>`;
   $("#inventory-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(stockState(item))}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Quantity pending" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Reorder level</span><strong>${esc(item.reorderLevel || 0)} ${esc(item.unit)}</strong></div></div>${actions(item)}</article>`).join("") : emptyState("inventory", "No matching inventory items");
   const movements = inventory.recentMovements || [];
-  $("#inventory-movement-list").innerHTML = movements.length ? movements.map(item => `<div class="audit-row"><span class="icon-tile">${icon("inventory")}</span><span><strong>${esc(item.itemName)} · ${esc(item.movementType.replaceAll("_", " "))}</strong><small>${esc(item.createdBy)} · ${formatDate(item.occurredOn)} · ${esc(item.reason)}</small></span><em>${item.quantityDelta > 0 ? "+" : ""}${esc(item.quantityDelta)} · ${esc(item.balanceAfter)} left</em></div>`).join("") : emptyState("inventory", "No stock movements", "Record opening stock or an inward, issue, return or adjustment.");
+  $("#inventory-movement-list").innerHTML = movements.length ? movements.map(item => `<div class="audit-row"><span class="icon-tile">${icon("inventory")}</span><span><strong>${esc(item.itemName)} · ${esc(item.movementType.replaceAll("_", " "))}</strong><small>${esc(item.createdBy)} · ${formatDate(item.occurredOn)}${item.targetReference ? ` · ${esc(item.targetReference)}` : ""} · ${esc(item.reason)}</small></span><em>${item.quantityDelta > 0 ? "+" : ""}${esc(item.quantityDelta)} · ${esc(item.balanceAfter)} left</em></div>`).join("") : emptyState("inventory", "No stock movements", "Record opening stock or an inward, issue, return or adjustment.");
 }
 
 function renderReports() {
@@ -1021,20 +1051,73 @@ function renderBars(selector, rows, labelKey) {
 
 function auditRows(rows) { return rows.length ? rows.map(item => `<div class="audit-row"><span class="icon-tile">${icon("shield")}</span><span><strong>${esc(item.action.replaceAll(".", " "))}</strong><small>${esc(item.actor || "System")} · ${formatDateTime(item.createdAt)}</small></span><em>${esc(item.entityType || "record")}</em></div>`).join("") : emptyState("shield", "No activity"); }
 
+function settingsAccountGroup(role = "") {
+  if (["student", "parent_student"].includes(role)) return "student";
+  if (role === "parent") return "parent";
+  if (role === "faculty") return "faculty";
+  if (role === "attendance_operator") return "attendance";
+  return "staff";
+}
+
+function settingsAccountLabel(role = "") {
+  const labels = {
+    student: "Student portal",
+    parent_student: "Student portal",
+    parent: "Parent portal",
+    faculty: "Faculty portal",
+    attendance_operator: "Attendance desk",
+    owner: "Owner",
+    academic_coordinator: "Academic coordinator",
+    admissions_manager: "Admissions manager",
+    counsellor: "Counsellor",
+    front_desk: "Front desk",
+    accounts: "Accounts",
+    storekeeper: "Storekeeper",
+  };
+  return labels[role] || String(role || "Staff").replaceAll("_", " ");
+}
+
+function renderSettingsAccounts() {
+  const masters = state.masters;
+  const studentLinks = new Map((masters.studentAccess || []).map(item => [item.userId, item]));
+  const parentLinks = new Map((masters.parentAccess || []).map(item => [item.userId, item]));
+  const query = settingsAccountSearch.trim().toLowerCase();
+  const rows = (masters.users || []).filter(item => {
+    const group = settingsAccountGroup(item.role);
+    const student = studentLinks.get(item.id);
+    const parent = parentLinks.get(item.id);
+    const searchable = [item.fullName, item.mobile, item.email, item.role, student?.admissionNumber, parent?.admissionNumber, parent?.studentName].filter(Boolean).join(" ").toLowerCase();
+    return (settingsAccountFilter === "all" || group === settingsAccountFilter) && (!query || searchable.includes(query));
+  });
+  $("#settings-account-count").textContent = `${rows.length} of ${(masters.users || []).length} accounts`;
+  $("#settings-users").innerHTML = rows.length ? rows.map(item => {
+    const student = studentLinks.get(item.id);
+    const parent = parentLinks.get(item.id);
+    const context = student?.admissionNumber || (parent ? `${parent.studentName} · ${parent.admissionNumber}` : item.email || "Institute account");
+    return `<div class="settings-account-row"><span class="settings-account-identity"><i>${esc(initials(item.fullName))}</i><span><strong>${esc(item.fullName)}</strong><small>${esc(context)}</small></span></span><span class="settings-account-access"><strong>${esc(settingsAccountLabel(item.role))}</strong><small>${esc(settingsAccountGroup(item.role) === "staff" ? "Operations" : "Portal access")}</small></span><span class="settings-account-login"><strong>${esc(mobileLabel(item.mobile))}</strong><small>${item.mobile ? "Mobile login" : "Setup required"}</small></span><span class="settings-account-status">${status(item.isActive ? "active" : "inactive")}</span><span class="settings-account-edit">${ownerEditButton("user", item.id)}</span></div>`;
+  }).join("") : emptyState("search", "No matching accounts", "Try another name, mobile number or access type.");
+}
+
+function showSettingsSection(section = "accounts") {
+  settingsSection = ["accounts", "academics", "audit"].includes(section) ? section : "accounts";
+  $$('[data-settings-section]').forEach(button => {
+    const active = button.dataset.settingsSection === settingsSection;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+  });
+  $$('[data-settings-panel]').forEach(panel => { panel.hidden = panel.dataset.settingsPanel !== settingsSection; });
+}
+
 function renderSettings() {
   const masters = state.masters;
   const facultyAccess = (masters.users || []).filter(item => item.role === "faculty");
   const attendanceAccess = (masters.users || []).filter(item => item.role === "attendance_operator");
-  $("#settings-metrics").innerHTML = compactMetrics([{ label: "Users", value: String(masters.users?.length || 0) }, { label: "Batches", value: String(masters.batches?.length || 0) }, { label: "Subjects", value: String(masters.subjects?.length || 0) }, { label: "Rooms", value: String(masters.rooms?.length || 0) }]);
-  $("#settings-users").innerHTML = masterRows(masters.users || [], item => [item.fullName, `${mobileLabel(item.mobile)} · ${item.role.replaceAll("_", " ")}`, item.isActive ? "active" : "inactive"], "user");
-  $("#student-access-count").textContent = `${masters.studentAccess?.length || 0} / 100`;
-  $("#settings-student-access").innerHTML = masterRows(masters.studentAccess || [], item => [item.fullName, `${item.admissionNumber} · ${mobileLabel(item.mobile)}`, item.isActive ? "active" : "inactive"], "access-user", "userId");
-  $("#parent-access-count").textContent = `${masters.parentAccess?.length || 0}`;
-  $("#settings-parent-access").innerHTML = masterRows(masters.parentAccess || [], item => [`${item.fullName} → ${item.studentName}`, `${item.admissionNumber} · ${mobileLabel(item.mobile)}`, item.contactType === "secondary_contact" ? "secondary" : "primary"], "access-user", "userId");
-  $("#faculty-access-count").textContent = `${facultyAccess.length}`;
-  $("#settings-faculty-access").innerHTML = masterRows(facultyAccess, item => [item.fullName, mobileLabel(item.mobile), item.isActive ? "active" : "inactive"], "user");
-  $("#attendance-access-count").textContent = `${attendanceAccess.length}`;
-  $("#settings-attendance-access").innerHTML = masterRows(attendanceAccess, item => [item.fullName, mobileLabel(item.mobile), item.isActive ? "active" : "inactive"], "user");
+  const staffAccess = (masters.users || []).filter(item => settingsAccountGroup(item.role) === "staff");
+  $("#settings-metrics").innerHTML = compactMetrics([{ label: "All accounts", value: String(masters.users?.length || 0) }, { label: "Students", value: String(masters.studentAccess?.length || 0) }, { label: "Parents", value: String(masters.parentAccess?.length || 0) }, { label: "Staff", value: String(staffAccess.length + facultyAccess.length + attendanceAccess.length) }]);
+  $("#settings-account-search").value = settingsAccountSearch;
+  $("#settings-account-filter").value = settingsAccountFilter;
+  renderSettingsAccounts();
   const academicImport = masters.academicImports?.[0];
   $("#academic-import-status").textContent = academicImport ? "Loaded" : "Not loaded";
   $("#academic-import-message").textContent = academicImport
@@ -1048,6 +1131,11 @@ function renderSettings() {
   $("#settings-subjects").innerHTML = masterRows(masters.subjects || [], item => [item.name, `${item.code} · ${item.program}`, item.isActive ? "active" : "inactive"], "subject");
   $("#settings-rooms").innerHTML = masterRows(masters.rooms || [], item => [item.name, `${item.capacity} seats`, item.isActive ? "active" : "inactive"], "room");
   $("#settings-audit").innerHTML = auditRows(state.audit);
+  showSettingsSection(settingsSection);
+}
+
+function openSettingsAccountPicker() {
+  openDrawer("Add account", `<div class="settings-access-picker"><p>Choose where this person will sign in.</p><button type="button" data-settings-account-type="student"><span>${icon("users")}</span><span><strong>Student</strong><small>Link an enrolled student to the Student portal.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="parent"><span>${icon("shield")}</span><span><strong>Parent</strong><small>Link a parent or contact to one student.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="faculty"><span>${icon("book")}</span><span><strong>Faculty</strong><small>Create access for a teacher or professor.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="attendance"><span>${icon("calendar-check")}</span><span><strong>Attendance desk</strong><small>Create access for the attendance operator.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="staff"><span>${icon("building")}</span><span><strong>Other staff</strong><small>Admissions, accounts, front desk or administration.</small></span>${icon("chevron-right")}</button></div>`);
 }
 
 async function importAcademicData(event) {
@@ -1097,18 +1185,153 @@ async function openStudent(studentId, updateRoute = true) {
   body.innerHTML = '<div class="skeleton-line"></div>';
   setTimeout(() => $("#detail-close").focus(), 10);
   try {
-    const student = await api(`/api/students/${encodeURIComponent(studentId)}`); $("#drawer-title").textContent = student.fullName;
+    const [student, inventory] = await Promise.all([
+      api(`/api/students/${encodeURIComponent(studentId)}`),
+      canReadInventory()
+        ? api(`/api/inventory/students/${encodeURIComponent(studentId)}`)
+        : Promise.resolve(null),
+    ]); $("#drawer-title").textContent = student.fullName;
     const issues = student.migration?.issues || [];
     const academic = student.academicProfile;
     body.innerHTML = `<div class="profile-hero"><span class="record-avatar">${initials(student.fullName)}</span><h3>${esc(student.fullName)}</h3><p>${esc(student.admissionNumber)} · ${esc(student.enrollment?.program || "Program not assigned")}</p></div>
       ${isOwner() ? `<div class="owner-record-actions">${ownerEditButton("student", student.id, "Edit student")}</div>` : ""}
       <section class="detail-section"><h4>Student &amp; enrollment</h4><div class="detail-grid">${detailField("Primary mobile", student.mobile)}${detailField("Secondary mobile", student.secondaryMobile)}${detailField("Previous school", student.previousSchool)}${detailField("Enrollment date", formatDate(student.enrollment?.enrollmentDate))}${detailField("Batch", student.enrollment?.batch)}${detailField("Status", student.status)}</div></section>
       <section class="detail-section"><h4>Academic profile</h4><div class="detail-grid">${detailField("Source student ID", academic?.sourceStudentCode)}${detailField("Mentor", academic?.mentorName)}${detailField("Workbook stream", academic?.sourceStream)}${detailField("Workbook school", academic?.sourceSchoolName)}${detailField("Selected subjects", academic?.subjects?.join(", "))}${detailField("Workbook contact", [academic?.sourcePrimaryMobile, academic?.sourceSecondaryMobile].filter(Boolean).join(", "))}</div></section>
+      ${studentInventoryMarkup(student, inventory)}
       <section class="detail-section"><h4>Fee agreement</h4><div class="detail-grid">${detailField("Agreed amount", money(student.feeAgreement?.agreedAmount))}${detailField("Registration", money(student.feeAgreement?.legacyRegistrationTotal))}${detailField("Agreement status", student.feeAgreement?.status)}${detailField("Currency", student.feeAgreement?.currency || "INR")}</div></section>
       <section class="detail-section"><h4>Migration trace</h4><div class="detail-grid">${detailField("Source row", student.migration?.sourceRow)}${detailField("Import readiness", student.migration?.readiness)}</div>${issues.length ? `<div class="issue-list">${issues.map(issue => `<div>${icon("alert")}<span>${esc(typeof issue === "string" ? issue : issue.message || JSON.stringify(issue))}</span></div>`).join("")}</div>` : ""}</section>`;
   } catch (error) { body.innerHTML = emptyState("alert", "Could not open this record", error.message); }
 }
 function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
+
+function studentInventoryMarkup(student, inventory) {
+  if (!inventory) return "";
+  const holdings = inventory.holdings || [];
+  const history = inventory.history || [];
+  const summary = inventory.summary || {};
+  const holdingRows = holdings.length
+    ? holdings.map(item => `<article class="student-stock-item">
+        <span class="student-stock-icon">${icon("inventory")}</span>
+        <span class="student-stock-copy"><strong>${esc(item.itemName)}</strong><small>${esc(item.sku)} · ${esc(inventoryCategory(item.category))} · issued ${formatDate(item.lastIssuedOn)}</small></span>
+        <span class="student-stock-quantity"><strong>${esc(item.quantityIssued)}</strong><small>${esc(item.unit)}</small></span>
+        ${canManageInventory() ? `<button class="button button-secondary button-small" type="button" data-student-inventory-return="${esc(item.itemId)}" data-inventory-student-id="${esc(student.id)}">Return</button>` : ""}
+      </article>`).join("")
+    : `<div class="student-stock-empty">${icon("inventory")}<span><strong>No items currently issued</strong><small>Books, bags and apparel issued to this student will appear here.</small></span></div>`;
+  const historyRows = history.slice(0, 12).map(item => {
+    const issued = item.movementType === "issue";
+    return `<div class="student-stock-history-row"><span class="student-stock-history-mark ${issued ? "is-issue" : "is-return"}">${issued ? "−" : "+"}</span><span><strong>${issued ? "Issued" : "Returned"} · ${esc(item.itemName)}</strong><small>${formatDate(item.occurredOn)} · ${esc(item.createdBy)}${item.reference ? ` · ${esc(item.reference)}` : ""}</small></span><em>${esc(Math.abs(item.quantityDelta))} ${esc((inventory.availableItems || []).find(row => row.id === item.itemId)?.unit || "piece")}</em></div>`;
+  }).join("");
+  return `<section class="detail-section student-stock-section">
+    <div class="detail-section-heading"><div><h4>Inventory issued</h4><p>Student issues automatically update available stock.</p></div>${canManageInventory() ? `<button class="button button-primary button-small" type="button" data-student-inventory-issue="${esc(student.id)}">${icon("plus")}Issue item</button>` : ""}</div>
+    <div class="student-stock-summary"><span><strong>${esc(summary.itemTypes || 0)}</strong><small>Item types</small></span><span><strong>${esc(summary.issuedUnits || 0)}</strong><small>Units with student</small></span><span><strong>${esc(summary.transactions || 0)}</strong><small>Transactions</small></span></div>
+    <div class="student-stock-list">${holdingRows}</div>
+    ${historyRows ? `<details class="student-stock-history"><summary>Transaction history <span>${esc(history.length)}</span></summary><div>${historyRows}</div></details>` : ""}
+  </section>`;
+}
+
+async function refreshStudentInventory(studentId) {
+  state.inventory = await api("/api/inventory/bootstrap");
+  loadedResources.add("inventory");
+  $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
+  renderInventory();
+  injectIcons($("#inventory"));
+  await openStudent(studentId, false);
+}
+
+async function openStudentInventoryIssue(studentId) {
+  if (!canManageInventory()) { toast("Inventory access is required.", "error"); return; }
+  try {
+    const inventory = await api(`/api/inventory/students/${encodeURIComponent(studentId)}`);
+    const issuable = (inventory.availableItems || []).filter(item => item.isActive && Number(item.quantityOnHand || 0) > 0);
+    if (!issuable.length) {
+      openDrawer("Issue inventory", `<div class="student-stock-unavailable">${icon("inventory")}<h3>No stock is ready to issue</h3><p>Record opening quantities or receive stock in the Inventory module first.</p><button class="button button-primary button-large" type="button" data-view-target="inventory">Open inventory</button></div>`);
+      return;
+    }
+    openDrawer(`Issue inventory · ${inventory.studentName}`, `<form class="auth-form" id="student-inventory-issue-form">
+      <div class="inline-notice">${icon("inventory")}<span>This creates an auditable student issue and reduces available inventory immediately.</span></div>
+      <label class="field"><span>Item</span><select name="itemId" required><option value="">Select an item</option>${issuable.map(item => `<option value="${esc(item.id)}" data-balance="${esc(item.quantityOnHand)}">${esc(item.name)} · ${esc(item.quantityOnHand)} ${esc(item.unit)} available</option>`).join("")}</select></label>
+      <div class="form-pair"><label class="field"><span>Quantity</span><input name="quantity" type="number" min="1" step="1" value="1" inputmode="numeric" required></label><label class="field"><span>Issue date</span><input name="occurredOn" type="date" value="${dateInputValue()}" required></label></div>
+      <label class="field"><span>Reference <small>(optional)</small></span><input name="reference" maxlength="255" placeholder="Receipt or kit reference"></label>
+      <label class="field"><span>Notes</span><textarea name="reason" rows="3" minlength="3" maxlength="2000" required>Issued to student</textarea></label>
+      ${formError("student-inventory-issue-error")}
+      <button class="button button-primary button-large" type="submit">${icon("inventory")}Issue and update stock</button>
+    </form>`);
+    const form = $("#student-inventory-issue-form");
+    const syncMaximum = () => {
+      const selectedOption = form.elements.itemId.selectedOptions[0];
+      form.elements.quantity.max = selectedOption?.dataset.balance || "";
+    };
+    form.elements.itemId.addEventListener("change", syncMaximum);
+    syncMaximum();
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const data = new FormData(form), button = $('button[type="submit"]', form);
+      button.disabled = true;
+      try {
+        await api(`/api/inventory/items/${encodeURIComponent(data.get("itemId"))}/movements`, {
+          method: "POST",
+          body: JSON.stringify({
+            movementType: "issue",
+            quantity: Number(data.get("quantity")),
+            occurredOn: data.get("occurredOn"),
+            targetType: "student",
+            studentId,
+            reference: String(data.get("reference") || "").trim() || null,
+            reason: String(data.get("reason") || "").trim(),
+          }),
+        });
+        await refreshStudentInventory(studentId);
+        toast("Item issued and stock updated.");
+      } catch (error) {
+        showFormError("#student-inventory-issue-error", error);
+        button.disabled = false;
+      }
+    });
+  } catch (error) { toast(error.message, "error"); }
+}
+
+async function openStudentInventoryReturn(studentId, itemId) {
+  if (!canManageInventory()) { toast("Inventory access is required.", "error"); return; }
+  try {
+    const inventory = await api(`/api/inventory/students/${encodeURIComponent(studentId)}`);
+    const holding = (inventory.holdings || []).find(item => item.itemId === itemId);
+    if (!holding) { toast("This item is no longer issued to the student.", "error"); await openStudent(studentId, false); return; }
+    openDrawer(`Return inventory · ${holding.itemName}`, `<form class="auth-form" id="student-inventory-return-form">
+      <div class="inline-notice">${icon("inventory")}<span><strong>${esc(holding.quantityIssued)} ${esc(holding.unit)}</strong> currently ${holding.quantityIssued === 1 ? "is" : "are"} with ${esc(inventory.studentName)}. The return will restore available stock.</span></div>
+      <div class="form-pair"><label class="field"><span>Return quantity</span><input name="quantity" type="number" min="1" max="${esc(holding.quantityIssued)}" step="1" value="1" inputmode="numeric" required></label><label class="field"><span>Return date</span><input name="occurredOn" type="date" value="${dateInputValue()}" required></label></div>
+      <label class="field"><span>Reference <small>(optional)</small></span><input name="reference" maxlength="255" placeholder="Return receipt or correction reference"></label>
+      <label class="field"><span>Reason</span><textarea name="reason" rows="3" minlength="3" maxlength="2000" required>Returned by student</textarea></label>
+      ${formError("student-inventory-return-error")}
+      <button class="button button-primary button-large" type="submit">${icon("refresh")}Return and restore stock</button>
+    </form>`);
+    const form = $("#student-inventory-return-form");
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const data = new FormData(form), button = $('button[type="submit"]', form);
+      button.disabled = true;
+      try {
+        await api(`/api/inventory/items/${encodeURIComponent(itemId)}/movements`, {
+          method: "POST",
+          body: JSON.stringify({
+            movementType: "return",
+            quantity: Number(data.get("quantity")),
+            occurredOn: data.get("occurredOn"),
+            targetType: "student",
+            studentId,
+            reference: String(data.get("reference") || "").trim() || null,
+            reason: String(data.get("reason") || "").trim(),
+          }),
+        });
+        await refreshStudentInventory(studentId);
+        toast("Return recorded and stock restored.");
+      } catch (error) {
+        showFormError("#student-inventory-return-error", error);
+        button.disabled = false;
+      }
+    });
+  } catch (error) { toast(error.message, "error"); }
+}
+
 function closeDetail(restoreFocus = true, updateRoute = true) {
   const drawer = $("#detail-drawer");
   const wasOpen = drawer.classList.contains("open");
@@ -1278,6 +1501,7 @@ function openDrawer(title, html, wide = false) {
   drawer.setAttribute("aria-hidden", "false");
   $("#drawer-title").textContent = title;
   $("#detail-drawer-body").innerHTML = html;
+  injectIcons($("#detail-drawer-body"));
   syncBodyScrollLock();
   setTimeout(() => {
     const firstControl = $('#detail-drawer-body input:not([disabled]), #detail-drawer-body select:not([disabled]), #detail-drawer-body textarea:not([disabled]), #detail-drawer-body button:not([disabled])');
@@ -1964,19 +2188,19 @@ function openUserForm(presetRole = "") {
   const title = accessConfig?.title || "New user";
   const buttonLabel = accessConfig?.button || "Create user";
   const successMessage = accessConfig?.success || "User created.";
-  openDrawer(title, `<form class="auth-form" id="user-form">${roleField}<label class="field"><span>Full name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("user-form-error")}<button class="button button-primary button-large" type="submit">${icon("user")}${esc(buttonLabel)}</button></form>`);
+  openDrawer(title, `<form class="auth-form" id="user-form">${roleField}<label class="field"><span>Full name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label><label class="field"><span>Temporary password</span>${passwordControl("password", { label: "temporary password", required: true })}</label>${formError("user-form-error")}<button class="button button-primary button-large" type="submit">${icon("user")}${esc(buttonLabel)}</button></form>`);
   $("#user-form").addEventListener("submit", async event => { event.preventDefault(); const form = new FormData(event.currentTarget), button = $('button[type="submit"]', event.currentTarget); button.disabled = true; try { await api("/api/settings/users", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) }); state.masters = await api("/api/settings/bootstrap"); closeDetail(); renderSettings(); toast(successMessage); } catch (error) { showFormError("#user-form-error", error); button.disabled = false; } });
 }
 
 function openStudentAccessForm() {
   const linked = new Set((state.masters.studentAccess || []).map(item => item.studentId));
   const available = state.students.filter(item => !linked.has(item.id));
-  openDrawer("Student portal access", `<form class="auth-form" id="student-access-form"><div class="inline-notice">${icon("shield")}<span>${state.masters.studentAccess?.length || 0} of 100 accounts active</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(available, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Login mobile</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("student-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create student access</button></form>`);
+  openDrawer("Student portal access", `<form class="auth-form" id="student-access-form"><div class="inline-notice">${icon("shield")}<span>${state.masters.studentAccess?.length || 0} of 100 accounts active</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(available, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Login mobile</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Temporary password</span>${passwordControl("password", { label: "temporary password", required: true })}</label>${formError("student-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create student access</button></form>`);
   $("#student-access-form").addEventListener("submit", async event => { event.preventDefault(); const form=new FormData(event.currentTarget),button=$("button[type=submit]",event.currentTarget);button.disabled=true;try{await api("/api/settings/student-access",{method:"POST",body:JSON.stringify(Object.fromEntries(form.entries()))});state.masters=await api("/api/settings/bootstrap");closeDetail();renderSettings();toast("Student portal access created.");}catch(error){showFormError("#student-access-error",error);button.disabled=false;} });
 }
 
 function openParentAccessForm() {
-  openDrawer("Parent portal access", `<form class="auth-form" id="parent-access-form"><div class="inline-notice">${icon("shield")}<span>Create a separate parent login linked to one student record. A mobile number can belong to only one login.</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(state.students, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Contact name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Contact type</span><select name="contactType"><option value="primary_contact">Primary contact</option><option value="secondary_contact">Secondary contact</option></select></label><label class="field"><span>Login mobile</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Temporary password</span><input name="password" type="password" minlength="10" autocomplete="new-password" required></label>${formError("parent-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create parent access</button></form>`);
+  openDrawer("Parent portal access", `<form class="auth-form" id="parent-access-form"><div class="inline-notice">${icon("shield")}<span>Create a separate parent login linked to one student record. A mobile number can belong to only one login.</span></div><label class="field"><span>Student</span><select name="studentId" required><option value="">Select student</option>${options(state.students, item => `${item.fullName} · ${item.admissionNumber}`)}</select></label><label class="field"><span>Contact name</span><input name="fullName" autocomplete="name" required></label><label class="field"><span>Contact type</span><select name="contactType"><option value="primary_contact">Primary contact</option><option value="secondary_contact">Secondary contact</option></select></label><label class="field"><span>Login mobile</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Temporary password</span>${passwordControl("password", { label: "temporary password", required: true })}</label>${formError("parent-access-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create parent access</button></form>`);
   $("#parent-access-form").addEventListener("submit", async event => { event.preventDefault(); const form = new FormData(event.currentTarget), button = $("button[type=submit]", event.currentTarget); button.disabled = true; try { await api("/api/settings/parent-access", { method: "POST", body: JSON.stringify(Object.fromEntries(form.entries())) }); state.masters = await api("/api/settings/bootstrap"); closeDetail(); renderSettings(); toast("Parent portal access created."); } catch (error) { showFormError("#parent-access-error", error); button.disabled = false; } });
 }
 
@@ -2050,7 +2274,7 @@ async function openOwnerEdit(kind, id) {
     fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><label class="field"><span>Message</span><textarea name="body" required>${esc(item.body)}</textarea></label><div class="form-pair"><label class="field"><span>Audience</span><select name="audience">${ownerStatusOptions(["all","parents","students","faculty","batch"], item.audience)}</select></label><label class="field"><span>Channel</span><select name="channel">${ownerStatusOptions(["in_app","email","sms","whatsapp"], item.channel)}</select></label></div><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
   } else if (kind === "user" || kind === "access-user") {
     title = "Edit user access";
-    fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" value="${esc(item.mobile || "")}" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional contact only)</small></span><input name="email" type="email" autocomplete="email" value="${esc(item.email || "")}"></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","attendance_operator","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span><input name="password" type="password" minlength="10" autocomplete="new-password"><small>Leave blank to keep the existing password.</small></label>`;
+    fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" value="${esc(item.mobile || "")}" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional contact only)</small></span><input name="email" type="email" autocomplete="email" value="${esc(item.email || "")}"></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","attendance_operator","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span>${passwordControl("password", { label: "new password" })}<small>Leave blank to keep the existing password.</small></label>`;
   } else if (kind === "batch") {
     title = "Edit batch"; fields = `<label class="field"><span>Name</span><input name="name" value="${esc(item.name)}" required></label><label class="field"><span>Program</span><input name="program" value="${esc(item.program)}" required></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Batch active</span></label>`;
   } else if (kind === "subject") {
@@ -2196,11 +2420,7 @@ function applyRoleUI() {
     "#new-examination": ["owner","academic_coordinator"],
     "#new-notice": ["owner","admissions_manager","academic_coordinator","front_desk"],
     "#new-inventory-item": ["owner","storekeeper"],
-    "#new-user": ["owner"],
-    "#new-student-access": ["owner"],
-    "#new-parent-access": ["owner"],
-    "#new-faculty-access": ["owner"],
-    "#new-attendance-access": ["owner"],
+    "#settings-add-account": ["owner"],
     "#new-master": ["owner"]
   };
   Object.entries(actionRoles).forEach(([selector, roles]) => {
@@ -2296,8 +2516,12 @@ function bindEvents() {
     setLegacyLoginMode(!state.legacyEmailLogin);
     $("#auth-mobile").focus();
   });
-  $(".password-toggle").addEventListener("click", event => { const field = $("#auth-password"), visible = field.type === "text"; field.type = visible ? "password" : "text"; event.currentTarget.setAttribute("aria-label", visible ? "Show password" : "Hide password"); });
   document.addEventListener("click", event => {
+    const passwordToggle = event.target.closest("[data-password-toggle]");
+    if (passwordToggle) {
+      togglePassword(passwordToggle);
+      return;
+    }
     const view = event.target.closest("[data-view], [data-view-target]")?.dataset; if (view) showView(view.view || view.viewTarget);
     const dashboardAction = event.target.closest("[data-dashboard-action]")?.dataset.dashboardAction;
     if (dashboardAction === "lead") openLeadForm();
@@ -2305,6 +2529,14 @@ function bindEvents() {
     else if (dashboardAction === "payment") openPaymentForm();
     else if (dashboardAction === "session") openSessionForm();
     else if (dashboardAction === "notice") openNoticeForm();
+    const settingsTab = event.target.closest("[data-settings-section]");
+    if (settingsTab) showSettingsSection(settingsTab.dataset.settingsSection);
+    const settingsAccountType = event.target.closest("[data-settings-account-type]")?.dataset.settingsAccountType;
+    if (settingsAccountType === "student") openStudentAccessForm();
+    else if (settingsAccountType === "parent") openParentAccessForm();
+    else if (settingsAccountType === "faculty") openUserForm("faculty");
+    else if (settingsAccountType === "attendance") openUserForm("attendance_operator");
+    else if (settingsAccountType === "staff") openUserForm();
     const batchButton = event.target.closest("[data-student-batch]");
     if (batchButton) {
       studentHierarchyState.batch = batchButton.dataset.studentBatch;
@@ -2336,6 +2568,10 @@ function bindEvents() {
       const item = (state.timetable.teachingAssignments || []).find(row => row.id === teachingAssignmentEdit.dataset.teachingAssignmentEdit);
       if (item) openTeachingAssignmentForm(item);
     }
+    const studentInventoryIssue = event.target.closest("[data-student-inventory-issue]");
+    if (studentInventoryIssue) openStudentInventoryIssue(studentInventoryIssue.dataset.studentInventoryIssue);
+    const studentInventoryReturn = event.target.closest("[data-student-inventory-return]");
+    if (studentInventoryReturn) openStudentInventoryReturn(studentInventoryReturn.dataset.inventoryStudentId, studentInventoryReturn.dataset.studentInventoryReturn);
     const inventoryEdit = event.target.closest("[data-inventory-edit]");
     if (inventoryEdit) {
       const item = (state.inventory.items || []).find(row => row.id === inventoryEdit.dataset.inventoryEdit);
@@ -2389,7 +2625,7 @@ function bindEvents() {
   $("#print-student-ledger").addEventListener("click", () => window.print());
   $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#new-student").addEventListener("click", openStudentCreateForm); $("#export-students").addEventListener("click", exportStudents);
-  $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#new-user").addEventListener("click", () => openUserForm()); $("#new-student-access").addEventListener("click", openStudentAccessForm); $("#new-parent-access").addEventListener("click", openParentAccessForm); $("#new-faculty-access").addEventListener("click", () => openUserForm("faculty")); $("#new-attendance-access").addEventListener("click", () => openUserForm("attendance_operator")); $("#new-master").addEventListener("click", openMasterForm);
+  $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#settings-add-account").addEventListener("click", openSettingsAccountPicker); $("#new-master").addEventListener("click", openMasterForm);
   $("#new-inventory-item").addEventListener("click", () => openInventoryItemForm());
   $("#new-future-payment").addEventListener("click", () => openFuturePaymentForm());
   $("#new-payment").addEventListener("click", openPaymentForm);
@@ -2400,6 +2636,17 @@ function bindEvents() {
   $("#examination-search").addEventListener("input", renderExaminations);
   $("#examination-status-filter").addEventListener("change", renderExaminations);
   $("#academic-import-file").addEventListener("change", importAcademicData);
+  $("#settings-account-search").addEventListener("input", event => { settingsAccountSearch = event.target.value; renderSettingsAccounts(); });
+  $("#settings-account-filter").addEventListener("change", event => { settingsAccountFilter = event.target.value; renderSettingsAccounts(); });
+  $(".settings-tabs").addEventListener("keydown", event => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const tabs = $$("[data-settings-section]");
+    const current = Math.max(0, tabs.indexOf(document.activeElement));
+    const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    showSettingsSection(tabs[next].dataset.settingsSection);
+    tabs[next].focus();
+  });
   $("#refresh-attendance").addEventListener("click", async () => { try { state.attendanceSessions = await api("/api/attendance/sessions"); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
   $$("[data-report-export]").forEach(button => button.addEventListener("click", () => downloadReport(button.dataset.reportExport, button)));

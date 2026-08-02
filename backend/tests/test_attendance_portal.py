@@ -277,7 +277,7 @@ def setup_manual_attendance_catalog(database):
     return operator, students
 
 
-def test_operator_selects_group_course_and_subject_for_manual_attendance(
+def test_operator_selects_only_group_for_manual_attendance(
     client,
     database,
 ):
@@ -305,8 +305,6 @@ def test_operator_selects_group_course_and_subject_for_manual_attendance(
     selection = {
         "date": date.today().isoformat(),
         "batch": "Tatva",
-        "stream": "JEE",
-        "subject": "Physics",
     }
     opened = client.post(
         "/api/attendance/manual-registers",
@@ -316,10 +314,13 @@ def test_operator_selects_group_course_and_subject_for_manual_attendance(
     assert opened.status_code == 200
     payload = opened.json()
     assert payload["session"]["registerKind"] == "manual"
-    assert payload["session"]["studentCount"] == 1
-    assert [item["studentId"] for item in payload["entries"]] == [
+    assert payload["session"]["studentCount"] == 2
+    assert payload["session"]["stream"] == ""
+    assert payload["session"]["subject"] == "Attendance"
+    assert {item["studentId"] for item in payload["entries"]} == {
         students[0].id,
-    ]
+        students[1].id,
+    }
 
     reopened = client.post(
         "/api/attendance/manual-registers",
@@ -333,11 +334,18 @@ def test_operator_selects_group_course_and_subject_for_manual_attendance(
         f"/api/attendance/manual-registers/{payload['session']['id']}/submit",
         headers=headers,
         json={
-            "entries": [{
-                "studentId": students[0].id,
-                "status": "present",
-                "reason": "",
-            }],
+            "entries": [
+                {
+                    "studentId": students[0].id,
+                    "status": "present",
+                    "reason": "",
+                },
+                {
+                    "studentId": students[1].id,
+                    "status": "present",
+                    "reason": "",
+                },
+            ],
         },
     )
     assert submitted.status_code == 200
@@ -345,8 +353,8 @@ def test_operator_selects_group_course_and_subject_for_manual_attendance(
     assert register.class_session_id is None
     assert register.register_kind == "manual"
     assert register.batch_name == "Tatva"
-    assert register.stream_name == "JEE"
-    assert register.subject_name == "Physics"
+    assert register.stream_name == "__all__"
+    assert register.subject_name == "Attendance"
     assert register.status == "submitted"
     from app.routers.portal import attendance_rows
     student_attendance = attendance_rows(database, students[0])
@@ -354,7 +362,7 @@ def test_operator_selects_group_course_and_subject_for_manual_attendance(
         item for item in student_attendance
         if item["source"] == "manual_register"
     )
-    assert manual_row["subject"] == "Physics"
+    assert manual_row["subject"] == "Attendance"
     assert manual_row["status"] == "present"
 
 
@@ -364,11 +372,9 @@ def test_attendance_app_is_served(client):
     assert "Attendance Desk" in response.text
     assert 'id="manual-register-form"' in response.text
     assert 'id="manual-batch"' in response.text
-    assert 'id="manual-stream"' in response.text
-    assert 'id="manual-subject"' in response.text
     assert 'id="manual-group-options"' in response.text
-    assert 'id="manual-stream-options"' in response.text
-    assert 'id="manual-subject-options"' in response.text
+    assert 'id="manual-stream-options"' not in response.text
+    assert 'id="manual-subject-options"' not in response.text
     assert "Choose a roster" in response.text
 
 

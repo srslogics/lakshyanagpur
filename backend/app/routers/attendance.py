@@ -31,6 +31,8 @@ from ..services import audit
 router = APIRouter(prefix="/api/attendance", tags=["attendance"])
 ROLES = ("owner", "academic_coordinator", "attendance_operator")
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
+BATCH_WIDE_STREAM = "__all__"
+BATCH_WIDE_SUBJECT = "Attendance"
 
 
 def _aware(value: datetime) -> datetime:
@@ -69,29 +71,32 @@ def _eligible_manual_students(
     stream_name: str,
     subject_name: str,
 ):
-    return (
+    query = (
         db.query(Student)
         .join(Enrollment, Enrollment.student_id == Student.id)
         .join(
             StudentAcademicProfile,
             StudentAcademicProfile.student_id == Student.id,
         )
-        .join(
-            StudentSubjectSelection,
-            StudentSubjectSelection.student_id == Student.id,
-        )
         .filter(
             Student.status == "active",
             Enrollment.is_active.is_(True),
             Enrollment.batch == batch_name,
             StudentAcademicProfile.batch_name == batch_name,
-            StudentAcademicProfile.source_stream == stream_name,
-            StudentSubjectSelection.subject_name == subject_name,
         )
-        .distinct()
-        .order_by(Student.full_name)
-        .all()
     )
+    if stream_name != BATCH_WIDE_STREAM:
+        query = (
+            query.join(
+                StudentSubjectSelection,
+                StudentSubjectSelection.student_id == Student.id,
+            )
+            .filter(
+                StudentAcademicProfile.source_stream == stream_name,
+                StudentSubjectSelection.subject_name == subject_name,
+            )
+        )
+    return query.distinct().order_by(Student.full_name).all()
 
 
 def _attendance_catalog(db: Session):
@@ -336,6 +341,7 @@ def _manual_register_summary(
     student_count: int,
     marked_count: int,
 ):
+    batch_wide = register.stream_name == BATCH_WIDE_STREAM
     starts_at = datetime.combine(
         register.attendance_date,
         time.min,
@@ -345,10 +351,10 @@ def _manual_register_summary(
         "id": register.id,
         "registerKind": "manual",
         "batch": register.batch_name,
-        "stream": register.stream_name,
-        "subject": register.subject_name,
+        "stream": "" if batch_wide else register.stream_name,
+        "subject": BATCH_WIDE_SUBJECT if batch_wide else register.subject_name,
         "faculty": "Attendance Desk",
-        "room": register.stream_name,
+        "room": "Attendance Desk" if batch_wide else register.stream_name,
         "startsAt": starts_at,
         "endsAt": starts_at,
         "status": "scheduled",
@@ -404,8 +410,10 @@ def open_manual_register(
     if payload.date > datetime.now(INDIA_TZ).date():
         raise HTTPException(409, "Attendance cannot be opened for a future date")
     batch_name = payload.batch.strip()
-    stream_name = payload.stream.strip()
-    subject_name = payload.subject.strip()
+    if batch_name not in {"Tatva", "Essential"}:
+        raise HTTPException(422, "Choose either Tatva or Essential")
+    stream_name = payload.stream.strip() if payload.stream else BATCH_WIDE_STREAM
+    subject_name = payload.subject.strip() if payload.subject else BATCH_WIDE_SUBJECT
     students = _eligible_manual_students(
         db,
         batch_name,

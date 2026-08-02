@@ -59,10 +59,10 @@ def test_frontend_shell_is_served(client):
     assert response.status_code == 200
     assert '<h2 id="auth-title">Sign in</h2>' in response.text
     assert "Students" in response.text
-    assert 'id="new-faculty-access"' in response.text
-    assert 'id="new-attendance-access"' in response.text
-    assert 'id="settings-faculty-access"' in response.text
-    assert 'id="settings-attendance-access"' in response.text
+    assert 'id="settings-add-account"' in response.text
+    assert 'id="settings-account-filter"' in response.text
+    assert 'id="settings-accounts-panel"' in response.text
+    assert 'id="settings-academics-panel"' in response.text
     assert 'property="og:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=2"' in response.text
 
     share_card = client.get("/share-card.png")
@@ -159,6 +159,29 @@ def test_every_application_uses_a_mobile_login_field(client):
         assert 'name="mobile"' in response.text
         assert 'inputmode="tel"' in response.text
         assert "Email address" not in response.text
+
+
+def test_every_password_field_has_an_accessible_visibility_control(client):
+    app_paths = ("/", "/student-app/", "/parent-app/", "/faculty-app/", "/attendance-app/")
+    script_paths = (
+        "/app.js",
+        "/student-app/app.js",
+        "/parent-app/app.js",
+        "/faculty-app/app.js",
+        "/attendance-app/app.js",
+    )
+
+    for path in app_paths:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.text.count('type="password"') == response.text.count("data-password-toggle")
+        assert response.text.count('aria-pressed="false"') >= response.text.count('type="password"')
+
+    for path in script_paths:
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "function togglePassword" in response.text
+        assert 'closest("[data-password-toggle]")' in response.text
 
 
 def test_portal_service_workers_only_delete_their_own_old_caches(client):
