@@ -71,7 +71,7 @@ const VIEW_PATHS = {
   reports: "/operations/reports",
   settings: "/operations/settings",
 };
-const studentHierarchyState = { open: new Set(["batch:Essential", "batch:Tatva"]) };
+const studentHierarchyState = { batch: "Essential", program: "" };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
@@ -498,98 +498,71 @@ function studentProgramKey(program) {
 }
 
 function filteredStudents() {
-  const search = $("#student-search").value.trim().toLowerCase(), program = $("#student-program-filter").value, quality = $("#student-quality-filter").value;
-  return state.students.filter(item => (!search || [item.fullName, item.mobile, item.admissionNumber, item.previousSchool, item.batch, item.program].some(value => String(value || "").toLowerCase().includes(search))) && (!program || studentProgramKey(item.program) === program) && (!quality || item.dataQualityStatus === quality));
+  const search = $("#student-search").value.trim().toLowerCase();
+  const quality = $("#student-quality-filter").value;
+  return state.students.filter(item =>
+    (!search || [item.fullName, item.mobile, item.admissionNumber, item.previousSchool, item.batch, item.program].some(value => String(value || "").toLowerCase().includes(search)))
+    && (!quality || item.dataQualityStatus === quality)
+    && studentBatchKey(item.batch) === studentHierarchyState.batch
+    && (!studentHierarchyState.program || studentProgramKey(item.program) === studentHierarchyState.program)
+  );
 }
 
 function renderStudents() {
-  const programFilter = $("#student-program-filter"); const current = programFilter.value;
-  programFilter.innerHTML = `<option value="">All programs</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${program}">${program}</option>`).join("")}`; programFilter.value = current;
   $("#new-student").classList.toggle("hidden", !isOwner());
-  const essential = state.students.filter(item => studentBatchKey(item.batch) === "Essential").length;
-  const tatva = state.students.filter(item => studentBatchKey(item.batch) === "Tatva").length;
-  const review = state.students.length - essential - tatva;
-  $("#student-metrics").innerHTML = compactMetrics([
-    { label: "Essential", value: String(essential) }, { label: "Tatva", value: String(tatva) },
-    { label: "Programs", value: String(STUDENT_PROGRAM_ORDER.length) }, { label: "Records for review", value: String(review) }
-  ]);
   renderStudentRows();
 }
 
-function studentTreeDomId(value) {
-  return `student-tree-${String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-}
-
-function renderStudentLeaf(student) {
-  const contact = student.mobile || "Contact not captured";
-  const school = student.previousSchool || "School not captured";
-  return `<button class="student-tree-student" type="button" data-student-id="${esc(student.id)}" aria-label="Open ${esc(student.fullName)}">
+function renderStudentDirectoryRow(student) {
+  const contact = student.mobile ? mobileLabel(student.mobile) : "Contact missing";
+  const school = student.previousSchool || "School not recorded";
+  return `<button class="student-directory-row" type="button" data-student-id="${esc(student.id)}" aria-label="Open ${esc(student.fullName)}">
     <span class="record-avatar">${initials(student.fullName)}</span>
-    <span class="student-tree-student-copy"><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)} · ${esc(contact)}</small><small>${esc(school)}</small></span>
-    ${status(student.dataQualityStatus)}
-    <span class="student-tree-open" aria-hidden="true">${icon("chevron-right")}</span>
+    <span class="student-directory-identity"><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span>
+    <span class="student-directory-context"><strong>${esc(studentProgramKey(student.program))}</strong><small>${esc(school)}</small></span>
+    <span class="student-directory-contact"><strong>${esc(contact)}</strong><small>${esc(student.batch || "Batch not assigned")}</small></span>
+    <span class="student-directory-status">${status(student.dataQualityStatus)}</span>
+    <span class="student-directory-open" aria-hidden="true">${icon("chevron-right")}</span>
   </button>`;
 }
 
-function renderStudentProgram(batchName, programName, rows, forceOpen = false) {
-  const key = `program:${batchName}:${programName}`, contentId = studentTreeDomId(key);
-  const expanded = forceOpen || studentHierarchyState.open.has(key);
-  const sorted = [...rows].sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
-  return `<section class="student-program-group">
-    <button class="student-program-trigger" type="button" data-student-tree-toggle="${esc(key)}" aria-expanded="${expanded}" aria-controls="${contentId}">
-      <span class="student-program-marker" aria-hidden="true"></span>
-      <span class="student-tree-label"><strong>${esc(programName)}</strong><small>${sorted.length ? `${sorted.length} ${sorted.length === 1 ? "student" : "students"}` : "No students assigned"}</small></span>
-      <span class="student-tree-count">${sorted.length}</span>
-      <span class="student-tree-chevron" aria-hidden="true">${icon("chevron-down")}</span>
-    </button>
-    <div class="student-program-content" id="${contentId}" ${expanded ? "" : "hidden"}>
-      ${sorted.length ? `<div class="student-leaf-grid">${sorted.map(renderStudentLeaf).join("")}</div>` : `<p class="student-tree-empty">No students in this program.</p>`}
-    </div>
-  </section>`;
-}
-
-function renderStudentBatch(batchName, rows, { review = false, searchActive = false, selectedProgram = "" } = {}) {
-  const key = `batch:${batchName}`, contentId = studentTreeDomId(key);
-  const expanded = searchActive || studentHierarchyState.open.has(key);
-  const availablePrograms = review
-    ? [...new Set(rows.map(item => studentProgramKey(item.program)))].sort((a, b) => {
-      const aIndex = STUDENT_PROGRAM_ORDER.indexOf(a), bIndex = STUDENT_PROGRAM_ORDER.indexOf(b);
-      return (aIndex < 0 ? 99 : aIndex) - (bIndex < 0 ? 99 : bIndex) || a.localeCompare(b);
-    })
-    : STUDENT_PROGRAM_ORDER;
-  const programs = selectedProgram ? availablePrograms.filter(program => program === selectedProgram) : availablePrograms;
-  const subtitle = review ? "Batch assignment required" : `${programs.filter(program => rows.some(item => studentProgramKey(item.program) === program)).length} active programs`;
-  return `<section class="student-batch-group${review ? " student-batch-review" : ""}">
-    <button class="student-batch-trigger" type="button" data-student-tree-toggle="${esc(key)}" aria-expanded="${expanded}" aria-controls="${contentId}">
-      <span class="student-batch-icon" aria-hidden="true">${review ? icon("alert") : esc(batchName.charAt(0))}</span>
-      <span class="student-tree-label"><strong>${esc(batchName)}</strong><small>${esc(subtitle)}</small></span>
-      <span class="student-tree-count">${rows.length}</span>
-      <span class="student-tree-chevron" aria-hidden="true">${icon("chevron-down")}</span>
-    </button>
-    <div class="student-batch-content" id="${contentId}" ${expanded ? "" : "hidden"}>
-      ${programs.length ? programs.map(program => renderStudentProgram(batchName, program, rows.filter(item => studentProgramKey(item.program) === program), searchActive)).join("") : `<p class="student-tree-empty">No matching students in this group.</p>`}
-    </div>
-  </section>`;
-}
-
 function renderStudentRows() {
-  const rows = filteredStudents(), searchActive = Boolean($("#student-search").value.trim()), selectedProgram = $("#student-program-filter").value;
-  const assignedCount = rows.filter(item => STUDENT_BATCH_ORDER.includes(studentBatchKey(item.batch))).length;
-  $("#student-result-count").textContent = rows.length === state.students.length
-    ? `${rows.length} students · ${assignedCount} assigned to Essential or Tatva`
-    : `${rows.length} of ${state.students.length} students`;
-  if (!rows.length) {
-    $("#student-hierarchy").innerHTML = emptyState("search", "No matching students", "Try clearing one of the directory filters.");
-    return;
+  const search = $("#student-search").value.trim().toLowerCase();
+  const quality = $("#student-quality-filter").value;
+  const baseRows = state.students.filter(item =>
+    (!search || [item.fullName, item.mobile, item.admissionNumber, item.previousSchool, item.batch, item.program].some(value => String(value || "").toLowerCase().includes(search)))
+    && (!quality || item.dataQualityStatus === quality)
+  );
+  const batchNames = [...STUDENT_BATCH_ORDER, "Records for review"].filter(batch =>
+    batch !== "Records for review" || baseRows.some(item => studentBatchKey(item.batch) === batch)
+  );
+  if (!batchNames.includes(studentHierarchyState.batch)) {
+    studentHierarchyState.batch = batchNames[0] || "Essential";
+    studentHierarchyState.program = "";
   }
-  const groups = STUDENT_BATCH_ORDER.map(batch => renderStudentBatch(
-    batch,
-    rows.filter(item => studentBatchKey(item.batch) === batch),
-    { searchActive, selectedProgram }
-  ));
-  const reviewRows = rows.filter(item => studentBatchKey(item.batch) === "Records for review");
-  if (reviewRows.length) groups.push(renderStudentBatch("Records for review", reviewRows, { review: true, searchActive, selectedProgram }));
-  $("#student-hierarchy").innerHTML = groups.join("");
+  const batchRows = baseRows.filter(item => studentBatchKey(item.batch) === studentHierarchyState.batch);
+  const programCounts = new Map(STUDENT_PROGRAM_ORDER.map(program => [program, batchRows.filter(item => studentProgramKey(item.program) === program).length]));
+  if (studentHierarchyState.batch === "Records for review") {
+    batchRows.forEach(item => {
+      const program = studentProgramKey(item.program);
+      if (!programCounts.has(program)) programCounts.set(program, batchRows.filter(row => studentProgramKey(row.program) === program).length);
+    });
+  }
+  if (studentHierarchyState.program && !programCounts.get(studentHierarchyState.program)) studentHierarchyState.program = "";
+  const rows = [...batchRows]
+    .filter(item => !studentHierarchyState.program || studentProgramKey(item.program) === studentHierarchyState.program)
+    .sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
+  const batchTabs = batchNames.map(batch => {
+    const count = baseRows.filter(item => studentBatchKey(item.batch) === batch).length;
+    const label = batch === "Records for review" ? "Needs assignment" : batch;
+    const active = studentHierarchyState.batch === batch;
+    return `<button type="button" role="tab" aria-selected="${active}" class="student-batch-tab${active ? " active" : ""}${batch === "Records for review" ? " review" : ""}" data-student-batch="${esc(batch)}"><span>${esc(label)}</span><strong>${count}</strong></button>`;
+  }).join("");
+  const programTabs = [["", "All", batchRows.length], ...[...programCounts.entries()].filter(([, count]) => count > 0).map(([program, count]) => [program, program, count])]
+    .map(([value, label, count]) => `<button type="button" class="student-program-chip${studentHierarchyState.program === value ? " active" : ""}" data-student-program="${esc(value)}"><span>${esc(label)}</span><strong>${count}</strong></button>`).join("");
+  const resultLabel = `${rows.length} ${rows.length === 1 ? "student" : "students"}`;
+  $("#student-result-count").textContent = resultLabel;
+  $("#student-hierarchy").innerHTML = `<div class="student-batch-tabs" role="tablist" aria-label="Student batches">${batchTabs}</div><div class="student-directory-bar"><div class="student-program-chips" aria-label="Filter by program">${programTabs}</div></div><div class="student-directory-list" role="list">${rows.length ? rows.map(renderStudentDirectoryRow).join("") : emptyState("search", "No students here", "Choose another batch or clear the filters.")}</div>`;
 }
 
 function studentPayments(studentId) {
@@ -631,11 +604,8 @@ function accountBalance(value) {
 }
 
 function reconciliationBadge(account) {
-  if (!account.needsReconciliation) return `<span class="status status-ready">Matched</span>`;
-  const difference = account.difference
-    ? `${money(Math.abs(account.difference))} ${account.difference < 0 ? "below" : "above"}`
-    : `${account.reviewCount} review`;
-  return `<span class="status status-review">${esc(difference)}</span>`;
+  if (!account.needsReconciliation) return `<span class="status status-ready">Complete</span>`;
+  return `<span class="status status-review">${account.reviewCount ? "Needs input" : "Check import"}</span>`;
 }
 
 function renderFinance() {
@@ -670,11 +640,11 @@ function renderAgreementRows() {
   });
   const visibleOutstanding = rows.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
   $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
-  const openLedgerButton = (item, compact = false) => `<button class="button button-primary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}${compact ? "Ledger" : "Open ledger"}</button>`;
+  const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}View</button>`;
   const editAccountButton = item => isOwner() ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
   const balanceBadge = item => `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
-  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName)}</td><td class="receivable-admission">${esc(item.admissionNumber)}</td><td class="currency receivable-number">${money(item.agreed)}</td><td class="currency receivable-number">${money(item.paid)}</td><td class="receivable-outstanding"><strong class="currency">${accountBalance(item.balance)}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item, true)}${editAccountButton(item)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.")}</td></tr>`;
-  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed fee</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Outstanding</span><strong>${accountBalance(item.balance)}</strong></div><div><span>Reconciliation</span><strong>${item.needsReconciliation ? "Review" : "Matched"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.");
+  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="currency receivable-number">${money(item.agreed)}</td><td class="currency receivable-number">${money(item.paid)}</td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.")}</td></tr>`;
+  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? (item.reviewCount ? "Needs input" : "Check import") : "Complete"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.");
 }
 
 function renderPaymentRows() {
@@ -1197,8 +1167,8 @@ async function createStudent(event) {
     state.students = await fetchAll("/api/students");
     state.agreements = await fetchAll("/api/finance/agreements");
     state.report = await optional(() => api("/api/reports/overview"), state.report);
-    studentHierarchyState.open.add(`batch:${student.batch}`);
-    studentHierarchyState.open.add(`program:${student.batch}:${student.program}`);
+    studentHierarchyState.batch = studentBatchKey(student.batch);
+    studentHierarchyState.program = studentProgramKey(student.program);
     closeDetail();
     renderAll();
     toast(`Student added · ${student.admissionNumber}`);
@@ -2335,13 +2305,16 @@ function bindEvents() {
     else if (dashboardAction === "payment") openPaymentForm();
     else if (dashboardAction === "session") openSessionForm();
     else if (dashboardAction === "notice") openNoticeForm();
-    const treeButton = event.target.closest("[data-student-tree-toggle]"), treeToggle = treeButton?.dataset.studentTreeToggle;
-    if (treeButton && treeToggle) {
-      const expanded = treeButton.getAttribute("aria-expanded") !== "true";
-      if (expanded) studentHierarchyState.open.add(treeToggle); else studentHierarchyState.open.delete(treeToggle);
-      const content = document.getElementById(treeButton.getAttribute("aria-controls"));
-      treeButton.setAttribute("aria-expanded", String(expanded));
-      if (content) content.hidden = !expanded;
+    const batchButton = event.target.closest("[data-student-batch]");
+    if (batchButton) {
+      studentHierarchyState.batch = batchButton.dataset.studentBatch;
+      studentHierarchyState.program = "";
+      renderStudentRows();
+    }
+    const programButton = event.target.closest("[data-student-program]");
+    if (programButton) {
+      studentHierarchyState.program = programButton.dataset.studentProgram;
+      renderStudentRows();
     }
     const ownerEdit = event.target.closest("[data-owner-edit]");
     if (ownerEdit) openOwnerEdit(ownerEdit.dataset.ownerEdit, ownerEdit.dataset.editId);
@@ -2408,7 +2381,7 @@ function bindEvents() {
   $("#theme-toggle").addEventListener("click", toggleTheme);
   [$("#user-menu-button"), $("#topbar-profile-button")].forEach(button => button.addEventListener("click", event => toggleAccountMenu(event.currentTarget)));
   $("#logout-button").addEventListener("click", () => logout());
-  $("#student-search").addEventListener("input", renderStudentRows); $("#student-program-filter").addEventListener("change", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
+  $("#student-search").addEventListener("input", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
   $("#agreement-search").addEventListener("input", renderAgreementRows); $("#agreement-balance-filter").addEventListener("change", renderAgreementRows); $("#payment-search").addEventListener("input", renderPaymentRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
   $("#clear-payment-student-filter").addEventListener("click", () => { financeStudentFilter = ""; renderPaymentRows(); });
   $("#ledger-back").addEventListener("click", () => closeStudentLedger());
