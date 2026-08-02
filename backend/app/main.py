@@ -26,6 +26,7 @@ STUDENT_APP_DIR = FRONTEND_DIR / "student-app"
 PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
 FACULTY_APP_DIR = FRONTEND_DIR / "faculty-app"
 ATTENDANCE_APP_DIR = FRONTEND_DIR / "attendance-app"
+LAKSHYA_SITE_DIR = FRONTEND_DIR / "lakshya-site"
 PUBLIC_ROOT_FILES = frozenset({
     "app.js",
     "apple-touch-icon.png",
@@ -87,14 +88,14 @@ async def request_context(request: Request, call_next):
             "default-src 'self'; "
             "base-uri 'self'; "
             "connect-src 'self'; "
-            "font-src 'self'; "
+            "font-src 'self' https://fonts.gstatic.com; "
             "form-action 'self'; "
             "frame-ancestors 'none'; "
             "img-src 'self' data:; "
             "manifest-src 'self'; "
             "object-src 'none'; "
             "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "worker-src 'self'"
         ),
     })
@@ -167,6 +168,9 @@ if FACULTY_APP_DIR.exists():
 
 if ATTENDANCE_APP_DIR.exists():
     app.mount("/attendance-app", StaticFiles(directory=ATTENDANCE_APP_DIR, html=True), name="attendance-app")
+
+if LAKSHYA_SITE_DIR.exists():
+    app.mount("/lakshya-site", StaticFiles(directory=LAKSHYA_SITE_DIR, html=True), name="lakshya-site")
 
 @app.get("/attendence", include_in_schema=False)
 @app.get("/attendence/", include_in_schema=False)
