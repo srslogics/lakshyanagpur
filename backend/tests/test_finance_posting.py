@@ -154,6 +154,14 @@ def test_imported_payment_does_not_affect_ledger_until_owner_confirms_it(
     )
     assert incomplete.status_code == 422
 
+    classified = client.patch(
+        f"/api/finance/staged-payments/{payment.id}/review",
+        json={"reconciliationStatus": "needs_date"},
+        headers=owner_headers,
+    )
+    assert classified.status_code == 200
+    assert classified.json()["reconciliationStatus"] == "needs_date"
+
     confirmed = client.patch(
         f"/api/finance/staged-payments/{payment.id}/review",
         json={

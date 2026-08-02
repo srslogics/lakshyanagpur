@@ -106,6 +106,22 @@ def test_unknown_and_sensitive_frontend_paths_return_not_found(client):
         assert response.status_code == 404
 
 
+def test_allowlisted_operations_routes_serve_the_app_shell(client):
+    for path in (
+        "/operations",
+        "/operations/students",
+        "/operations/finance",
+        "/operations/students/stu_example",
+        "/operations/finance/ledger/stu_example",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert '<div class="app-shell hidden" id="app-shell">' in response.text
+
+    assert client.get("/operations/not-a-module").status_code == 404
+    assert client.get("/operations/students/stu_example/private").status_code == 404
+
+
 def test_allowlisted_root_assets_remain_public(client):
     for path in (
         "/index.html",
@@ -160,6 +176,10 @@ def test_portal_service_workers_only_delete_their_own_old_caches(client):
 
 
 def test_portal_manifests_keep_installations_inside_their_app(client):
+    operations_manifest = client.get("/manifest.webmanifest").json()
+    assert operations_manifest["start_url"] == "/operations"
+    assert operations_manifest["scope"] == "/"
+
     expected_scopes = {
         "/student-app/manifest.webmanifest": "/student-app/",
         "/parent-app/manifest.webmanifest": "/parent-app/",

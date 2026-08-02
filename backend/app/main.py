@@ -41,6 +41,19 @@ PUBLIC_ROOT_FILES = frozenset({
     "styles.css",
     "sw.js",
 })
+OPERATIONS_VIEWS = frozenset({
+    "admissions",
+    "students",
+    "finance",
+    "attendance",
+    "academics",
+    "examinations",
+    "timetable",
+    "communication",
+    "inventory",
+    "reports",
+    "settings",
+})
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.include_router(auth.router)
@@ -122,7 +135,7 @@ def health(db=Depends(get_db)):
         db.execute(text("SELECT 1"))
         if settings.is_render or settings.environment in {"production", "prod"}:
             revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-            if revision != "e42b6c91a730":
+            if revision != "f63a1d9b7e20":
                 raise HTTPException(
                     503,
                     detail={
@@ -164,6 +177,33 @@ def attendance_app_redirect():
 
 @app.get("/", include_in_schema=False)
 def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/operations", include_in_schema=False)
+@app.get("/operations/", include_in_schema=False)
+def operations_index():
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/operations/{view}", include_in_schema=False)
+def operations_view(view: str):
+    if view not in OPERATIONS_VIEWS:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/operations/students/{student_id}", include_in_schema=False)
+def operations_student(student_id: str):
+    if not student_id or "/" in student_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/operations/finance/ledger/{student_id}", include_in_schema=False)
+def operations_student_ledger(student_id: str):
+    if not student_id or "/" in student_id:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(FRONTEND_DIR / "index.html")
 
 @app.get("/{file_path:path}", include_in_schema=False)
 def frontend_routes(file_path: str):

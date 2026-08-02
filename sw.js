@@ -1,12 +1,12 @@
-const CACHE_NAME = "lakshya-erp-app-v74";
+const CACHE_NAME = "lakshya-erp-app-v75";
 const ASSETS = [
-  "./",
-  "./styles.css?v=45",
-  "./auth-shared.css?v=7",
-  "./app.js?v=56",
-  "./manifest.webmanifest",
-  "./lakshya-logo-576.png",
-  "./pwa-icon-192.png"
+  "/operations",
+  "/styles.css?v=46",
+  "/auth-shared.css?v=7",
+  "/app.js?v=57",
+  "/manifest.webmanifest",
+  "/lakshya-logo-576.png",
+  "/pwa-icon-192.png"
 ];
 
 self.addEventListener("install", event => {
@@ -46,7 +46,7 @@ self.addEventListener("fetch", event => {
           return response;
         })
         .catch(async () => {
-          return (await caches.match(event.request)) || (await caches.match("./"));
+          return (await caches.match(event.request)) || (await caches.match("/operations"));
         })
     );
     return;

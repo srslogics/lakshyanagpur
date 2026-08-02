@@ -25,16 +25,16 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./pwa-icon-192.png" type="image/png">
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./styles.css?v=45">
-  <link rel="stylesheet" href="./auth-shared.css?v=7">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/pwa-icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css?v=46">
+  <link rel="stylesheet" href="/auth-shared.css?v=7">
 </head>
 <body>
   <div class="boot-screen" id="boot-screen" role="status" aria-live="polite">
     <div class="boot-card">
-      <div class="official-logo-card"><img src="./lakshya-logo-576.png" width="576" height="384" alt="Lakshya"></div>
+      <div class="official-logo-card"><img src="/lakshya-logo-576.png" width="576" height="384" alt="Lakshya"></div>
       <span class="boot-spinner" aria-hidden="true"></span>
       <strong id="boot-title">Opening workspace</strong>
       <p id="boot-message">Loading the latest institutional data.</p>
@@ -47,7 +47,7 @@
     <div class="auth-brand-panel">
       <div class="auth-brand-content">
         <div class="official-logo-card auth-official-logo">
-          <img src="./lakshya-logo-576.png" width="576" height="384" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
+          <img src="/lakshya-logo-576.png" width="576" height="384" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
         </div>
       </div>
       <div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div>
@@ -56,7 +56,7 @@
     <div class="auth-form-panel">
       <div class="auth-form-wrap">
         <div class="mobile-auth-brand official-logo-card">
-          <img src="./lakshya-logo-576.png" width="576" height="384" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
+          <img src="/lakshya-logo-576.png" width="576" height="384" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
         </div>
         <div class="auth-heading"><h2 id="auth-title">Sign in</h2></div>
         <form class="auth-form" id="auth-form" novalidate>
@@ -94,7 +94,7 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand-row">
         <div class="official-logo-card sidebar-official-logo">
-          <img src="./lakshya-logo-576.png" width="576" height="384" alt="Lakshya">
+          <img src="/lakshya-logo-576.png" width="576" height="384" alt="Lakshya">
         </div>
         <button class="icon-button sidebar-close" id="sidebar-close" type="button" aria-label="Close navigation" data-icon="x"></button>
       </div>
@@ -221,7 +221,7 @@
               <div class="mobile-records" id="agreements-mobile-list"></div>
             </article>
             <article class="surface table-surface finance-tab" id="finance-payments-panel" role="tabpanel" aria-labelledby="finance-payments-tab" hidden>
-              <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, receipt or reference" aria-label="Search payment entries"></label><select id="payment-status-filter" aria-label="Filter payment entry status"><option value="">All entry states</option><option value="payment">Payments</option><option value="refund">Refunds</option><option value="reversal">Reversals</option><option value="void">Voids</option><option value="ready">Imported · ready</option><option value="review">Imported · review</option><option value="scheduled">Scheduled</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option><option value="do_not_import">Do not import</option></select></div>
+              <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, receipt or reference" aria-label="Search payment entries"></label><select id="payment-status-filter" aria-label="Filter payment entry status"><option value="">All entry states</option><option value="payment">Payments</option><option value="refund">Refunds</option><option value="reversal">Reversals</option><option value="void">Voids</option><option value="ready">Imported · ready</option><option value="needs_date">Needs payment date</option><option value="needs_mode">Needs payment mode</option><option value="review">Other review</option><option value="scheduled">Scheduled</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option><option value="do_not_import">Excluded source notes</option></select></div>
               <div class="payment-student-filter hidden" id="payment-student-filter"><span>Entries for <strong id="payment-student-filter-name"></strong></span><button class="button button-secondary button-small" id="clear-payment-student-filter" type="button">Show all entries</button></div>
               <div class="table-meta"><span id="payment-result-summary">Loading payments…</span></div>
               <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Type</th><th>Date</th><th>Amount</th><th>Mode</th><th>Receipt / reference</th><th>Entry state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
@@ -345,6 +345,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=56" defer></script>
+  <script src="/app.js?v=57" defer></script>
 </body>
 </html>

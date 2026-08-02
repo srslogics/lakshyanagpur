@@ -119,7 +119,13 @@ class FeeAgreementCreate(BaseModel):
 
 
 class PaymentReviewUpdate(BaseModel):
-    reconciliation_status: Literal["ready", "review", "do_not_import"] = Field(alias="reconciliationStatus")
+    reconciliation_status: Literal[
+        "ready",
+        "needs_date",
+        "needs_mode",
+        "review",
+        "do_not_import",
+    ] = Field(alias="reconciliationStatus")
     transaction_date: date | None = Field(default=None, alias="transactionDate")
     method: Literal["cash", "upi", "bank_transfer", "cheque", "card", "other"] | None = None
     reference: str | None = Field(default=None, max_length=255)

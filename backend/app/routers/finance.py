@@ -437,6 +437,10 @@ def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Ses
             raise HTTPException(422, "Enter the confirmed payment date before marking this row ready")
         if row.method not in {"cash", "upi", "bank_transfer", "cheque", "card", "other"}:
             raise HTTPException(422, "Select the confirmed payment mode before marking this row ready")
+    if payload.reconciliation_status == "needs_date" and row.transaction_date is not None:
+        raise HTTPException(422, "This row already has a payment date; choose another review state")
+    if payload.reconciliation_status == "needs_mode" and row.method in {"cash", "upi", "bank_transfer", "cheque", "card", "other"}:
+        raise HTTPException(422, "This row already has a confirmed payment mode; choose another review state")
     row.reconciliation_status = payload.reconciliation_status
     after = {
         "reconciliationStatus": row.reconciliation_status,

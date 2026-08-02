@@ -53,8 +53,24 @@ let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
 let detailReturnFocus = null;
+let detailRouteStudentId = "";
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
+const RECONCILIATION_ACTION_STATES = new Set(["review", "needs_date", "needs_mode"]);
+const VIEW_PATHS = {
+  dashboard: "/operations",
+  admissions: "/operations/admissions",
+  students: "/operations/students",
+  finance: "/operations/finance",
+  attendance: "/operations/attendance",
+  academics: "/operations/academics",
+  examinations: "/operations/examinations",
+  timetable: "/operations/timetable",
+  communication: "/operations/communication",
+  inventory: "/operations/inventory",
+  reports: "/operations/reports",
+  settings: "/operations/settings",
+};
 const studentHierarchyState = { open: new Set(["batch:Essential", "batch:Tatva"]) };
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -198,7 +214,7 @@ async function initialize() {
 async function refreshServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   try {
-    const registration = await navigator.serviceWorker.register("./sw.js");
+    const registration = await navigator.serviceWorker.register("/sw.js");
     await registration.update();
   } catch {}
 }
@@ -299,8 +315,12 @@ async function enterWorkspace() {
   $("#auth-screen").classList.add("hidden");
   $("#app-shell").classList.remove("hidden");
   applyRoleUI();
-  const requestedView = location.hash.slice(1);
-  showView(allowedViews().has(requestedView) ? requestedView : "dashboard", false);
+  const route = currentOperationsRoute();
+  const requestedView = allowedViews().has(route.view) ? route.view : "dashboard";
+  showView(requestedView, false);
+  replaceOperationsRoute(requestedView, route.kind === "view" || route.view !== requestedView ? null : route);
+  if (route.kind === "student" && requestedView === "students") await openStudent(route.studentId, false);
+  else if (route.kind === "ledger" && requestedView === "finance") openStudentLedger(route.studentId, null, false);
 }
 
 async function fetchAll(path, pageSize = 100) {
@@ -381,7 +401,7 @@ async function loadViewResources(view) {
 
 function renderCore() {
   $("#nav-leads-count").textContent = state.leads.length;
-  const reviewCount = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
+  const reviewCount = state.payments.filter(item => item.status === "staged" && RECONCILIATION_ACTION_STATES.has(item.reconciliationStatus)).length;
   $("#nav-finance-count").textContent = state.payments.length + state.installments.filter(item => item.status !== "cancelled").length;
   $("#payment-review-count").textContent = reviewCount ? `${reviewCount} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !reviewCount);
@@ -434,7 +454,7 @@ function renderDashboard() {
   $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments");
 
   const quality = ["review", "blocked"].map(kind => ({ kind, count: activeStudents.filter(item => item.dataQualityStatus === kind).length })).filter(item => item.count);
-  const paymentReview = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
+  const paymentReview = state.payments.filter(item => item.status === "staged" && RECONCILIATION_ACTION_STATES.has(item.reconciliationStatus)).length;
   if (paymentReview) quality.push({ kind: "payment review", count: paymentReview });
   $("#attention-count").textContent = quality.reduce((sum, item) => sum + item.count, 0);
   $("#attention-list").innerHTML = quality.length ? quality.map(item => `<button class="attention-item" type="button" data-view-target="${item.kind === "payment review" ? "finance" : "students"}"><span>${icon("alert")}</span><strong>${esc(item.kind.replace(/\b\w/g, c => c.toUpperCase()))}</strong><em>${item.count}</em></button>`).join("") : `<div class="attention-item"><span>${icon("shield")}</span><strong>No review items</strong></div>`;
@@ -445,8 +465,11 @@ function renderDashboard() {
   const stagedRows = state.payments.filter(item => item.status === "staged");
   const stagedTotal = state.payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
   const readyPayments = stagedRows.filter(item => item.reconciliationStatus === "ready").length;
-  const readyPercent = stagedRows.length ? Math.round(readyPayments / stagedRows.length * 100) : 100;
-  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} ledger entries</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} imported ready</span><span>${stagedRows.length - readyPayments} review</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open receivables ${icon("arrow-right")}</button></div>`;
+  const actionPayments = stagedRows.filter(needsPaymentReview).length;
+  const excludedNotes = stagedRows.filter(item => item.reconciliationStatus === "do_not_import").length;
+  const classifiedPayments = readyPayments + actionPayments;
+  const readyPercent = classifiedPayments ? Math.round(readyPayments / classifiedPayments * 100) : 100;
+  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} ledger entries${excludedNotes ? ` · ${excludedNotes} excluded source notes` : ""}</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} imported ready</span><span>${actionPayments} need client input</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open receivables ${icon("arrow-right")}</button></div>`;
 }
 
 function compactMetrics(items) { return items.map(item => `<div class="compact-metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`).join(""); }
@@ -577,6 +600,8 @@ function studentPayments(studentId) {
   );
 }
 
+const needsPaymentReview = item => item.status === "staged" && RECONCILIATION_ACTION_STATES.has(item.reconciliationStatus);
+
 function studentAccount(agreement) {
   const payments = studentPayments(agreement.studentId);
   const paid = payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
@@ -584,7 +609,7 @@ function studentAccount(agreement) {
   const workbookControl = Number(agreement.legacyRegistrationTotal || 0);
   const balance = agreed - paid;
   const difference = paid - workbookControl;
-  const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && item.status === "staged" && item.reconciliationStatus !== "ready").length;
+  const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && needsPaymentReview(item)).length;
   return {
     ...agreement,
     payments,
@@ -619,7 +644,7 @@ function renderFinance() {
   const paymentTotal = accounts.reduce((sum, item) => sum + item.paid, 0);
   const outstanding = accounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
   const scheduledCount = state.installments.filter(item => item.status === "scheduled").length;
-  const review = state.payments.filter(item => item.status === "staged" && item.reconciliationStatus !== "ready").length;
+  const review = state.payments.filter(needsPaymentReview).length;
   const registerCount = state.payments.length + state.installments.length;
   $("#new-future-payment").classList.toggle("hidden", !isOwner());
   $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
@@ -779,9 +804,10 @@ function renderStudentLedger(studentId) {
   injectIcons($("#student-ledger-view"));
 }
 
-function openStudentLedger(studentId, trigger = null) {
+function openStudentLedger(studentId, trigger = null, updateRoute = true) {
   ledgerCurrentStudentId = studentId;
   ledgerReturnFocus = trigger;
+  if (updateRoute) writeOperationsRoute("finance", { kind: "ledger", studentId });
   renderStudentLedger(studentId);
   $("#finance-workspace").classList.add("hidden");
   $("#student-ledger-view").classList.remove("hidden");
@@ -789,13 +815,15 @@ function openStudentLedger(studentId, trigger = null) {
   setTimeout(() => $("#ledger-back").focus(), 10);
 }
 
-function closeStudentLedger(restoreFocus = true) {
+function closeStudentLedger(restoreFocus = true, updateRoute = true) {
   if (!ledgerCurrentStudentId && $("#student-ledger-view").classList.contains("hidden")) return;
+  const hadLedgerRoute = Boolean(ledgerCurrentStudentId);
   ledgerCurrentStudentId = "";
   $("#student-ledger-view").classList.add("hidden");
   $("#finance-workspace").classList.remove("hidden");
   if (restoreFocus && ledgerReturnFocus?.isConnected) ledgerReturnFocus.focus();
   ledgerReturnFocus = null;
+  if (hadLedgerRoute && updateRoute) writeOperationsRoute("finance");
 }
 
 function renderAdmissions() {
@@ -1088,7 +1116,10 @@ async function importAcademicData(event) {
 
 function masterRows(rows, map, editKind = "", idKey = "id") { return rows.length ? rows.map(item => { const [title, detail, stateValue] = map(item); return `<div class="master-row"><span><strong>${esc(title)}</strong><small>${esc(detail)}</small></span><div class="cell-actions">${status(stateValue)}${editKind && item[idKey] ? ownerEditButton(editKind, item[idKey]) : ""}</div></div>`; }).join("") : `<div class="master-empty">No records</div>`; }
 
-async function openStudent(studentId) {
+async function openStudent(studentId, updateRoute = true) {
+  if (state.view !== "students") showView("students", false);
+  detailRouteStudentId = studentId;
+  if (updateRoute) writeOperationsRoute("students", { kind: "student", studentId });
   const drawer = $("#detail-drawer"), body = $("#detail-drawer-body");
   if (!drawer.classList.contains("open")) detailReturnFocus = document.activeElement;
   drawer.classList.add("open"); $("#detail-overlay").classList.add("open"); drawer.setAttribute("aria-hidden", "false");
@@ -1108,15 +1139,18 @@ async function openStudent(studentId) {
   } catch (error) { body.innerHTML = emptyState("alert", "Could not open this record", error.message); }
 }
 function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
-function closeDetail() {
+function closeDetail(restoreFocus = true, updateRoute = true) {
   const drawer = $("#detail-drawer");
   const wasOpen = drawer.classList.contains("open");
+  const closedStudentRoute = detailRouteStudentId;
+  detailRouteStudentId = "";
   drawer.classList.remove("open", "detail-drawer-wide");
   $("#detail-overlay").classList.remove("open");
   drawer.setAttribute("aria-hidden", "true");
   syncBodyScrollLock();
-  if (wasOpen && detailReturnFocus?.isConnected) detailReturnFocus.focus();
+  if (wasOpen && restoreFocus && detailReturnFocus?.isConnected) detailReturnFocus.focus();
   detailReturnFocus = null;
+  if (closedStudentRoute && updateRoute) writeOperationsRoute("students");
 }
 
 function openStudentCreateForm() {
@@ -1295,25 +1329,85 @@ const options = (rows, label) => rows.map(item => `<option value="${esc(item.id)
 const formError = id => `<div class="auth-error hidden" id="${id}" role="alert"></div>`;
 function showFormError(id, error) { const node = $(id); node.textContent = error.message; node.classList.remove("hidden"); }
 
-let studentPickerSequence = 0;
 const studentPickerId = item => item.studentId || item.id;
 const studentPickerMobile = item => item.studentMobile || item.mobile || state.students.find(student => student.id === studentPickerId(item))?.mobile || "";
 const studentPickerLabel = item => [item.studentName || item.fullName, item.admissionNumber, studentPickerMobile(item) ? mobileLabel(studentPickerMobile(item)) : ""].filter(Boolean).join(" · ");
+let studentPickerSequence = 0;
 
-function studentPickerMarkup(rows, { label = "Student", preferredId = "", placeholder = "Search by name, admission ID or mobile" } = {}) {
-  const listId = `student-picker-options-${++studentPickerSequence}`;
-  const selectedItem = rows.find(item => studentPickerId(item) === preferredId);
-  return `<label class="field student-picker"><span>${esc(label)}</span><input type="search" data-student-picker-input list="${listId}" value="${esc(selectedItem ? studentPickerLabel(selectedItem) : "")}" placeholder="${esc(placeholder)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="${listId}" required><input type="hidden" name="studentId" data-student-picker-id value="${esc(selectedItem ? studentPickerId(selectedItem) : "")}"><datalist id="${listId}">${rows.map(item => `<option value="${esc(studentPickerLabel(item))}"></option>`).join("")}</datalist><small>Start typing a student name, admission ID or mobile number, then choose the matching record.</small></label>`;
+function studentPickerMarkup({ label = "Student", selectedItem = null, scope = "all", placeholder = "Search by name, admission ID or mobile" } = {}) {
+  const sequence = ++studentPickerSequence;
+  const inputId = `student-picker-input-${sequence}`;
+  const resultsId = `student-picker-results-${sequence}`;
+  const selectedId = selectedItem ? studentPickerId(selectedItem) : "";
+  const selectedLabel = selectedItem ? studentPickerLabel(selectedItem) : "";
+  return `<div class="field student-picker" data-student-picker data-picker-scope="${esc(scope)}"><label for="${inputId}">${esc(label)}</label><span class="student-picker-control"><input id="${inputId}" type="search" data-student-picker-input value="${esc(selectedLabel)}" placeholder="${esc(placeholder)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="${resultsId}" aria-expanded="false" required><input type="hidden" name="studentId" data-student-picker-id value="${esc(selectedId)}"><span class="student-picker-results" id="${resultsId}" data-student-picker-results role="listbox" hidden></span></span><small>Type a name, admission ID or mobile number and select one verified record.</small></div>`;
 }
 
-function bindStudentPicker(form, rows) {
+function bindStudentPicker(form) {
+  const picker = $("[data-student-picker]", form);
   const input = $("[data-student-picker-input]", form);
   const hidden = $("[data-student-picker-id]", form);
-  if (!input || !hidden) return;
+  const results = $("[data-student-picker-results]", form);
+  if (!picker || !input || !hidden || !results) return;
+  const scope = picker.dataset.pickerScope || "all";
+  let available = [];
+  let activeIndex = -1;
+  let timer = null;
+  let requestSequence = 0;
+  let chosenLabel = input.value.trim();
+
+  const closeResults = () => {
+    results.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const setActive = index => {
+    const buttons = $$("[data-student-picker-option]", results);
+    if (!buttons.length) return;
+    activeIndex = Math.max(0, Math.min(index, buttons.length - 1));
+    buttons.forEach((button, position) => button.classList.toggle("active", position === activeIndex));
+    input.setAttribute("aria-activedescendant", buttons[activeIndex].id);
+    buttons[activeIndex].scrollIntoView({ block: "nearest" });
+  };
+  const choose = item => {
+    hidden.value = studentPickerId(item);
+    input.value = studentPickerLabel(item);
+    chosenLabel = input.value.trim();
+    input.setCustomValidity("");
+    closeResults();
+  };
+  const renderResults = rows => {
+    available = rows;
+    results.innerHTML = rows.length
+      ? rows.map((item, index) => `<button class="student-picker-option" id="student-picker-option-${normalize(studentPickerId(item))}-${index}" type="button" role="option" data-student-picker-option="${esc(studentPickerId(item))}"><strong>${esc(item.fullName || item.studentName)}</strong><small>${esc([item.admissionNumber, studentPickerMobile(item) ? mobileLabel(studentPickerMobile(item)) : "Mobile not assigned"].filter(Boolean).join(" · "))}</small></button>`).join("")
+      : `<span class="student-picker-empty">No eligible students found.</span>`;
+    results.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    activeIndex = -1;
+  };
+  const load = async () => {
+    const sequence = ++requestSequence;
+    results.innerHTML = `<span class="student-picker-empty">Searching…</span>`;
+    results.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    try {
+      const response = await api(`/api/students/picker?scope=${encodeURIComponent(scope)}&limit=20&search=${encodeURIComponent(input.value.trim())}`);
+      if (sequence !== requestSequence) return;
+      renderResults(response.items || []);
+    } catch (error) {
+      if (sequence !== requestSequence) return;
+      results.innerHTML = `<span class="student-picker-empty">${esc(error.message || "Search unavailable")}</span>`;
+    }
+  };
   const resolve = () => {
     const query = input.value.trim().toLowerCase();
+    if (hidden.value && query === chosenLabel.toLowerCase()) {
+      input.setCustomValidity("");
+      return hidden.value;
+    }
     const mobile = normalizedMobile(input.value);
-    const matches = rows.filter(item => {
+    const matches = available.filter(item => {
       const candidateMobile = normalizedMobile(studentPickerMobile(item));
       return studentPickerLabel(item).toLowerCase() === query
         || String(item.admissionNumber || "").toLowerCase() === query
@@ -1321,12 +1415,34 @@ function bindStudentPicker(form, rows) {
         || (mobile && candidateMobile === mobile);
     });
     hidden.value = matches.length === 1 ? studentPickerId(matches[0]) : "";
-    input.setCustomValidity(query && matches.length !== 1 ? "Choose one student from the matching list." : "");
+    input.setCustomValidity(hidden.value ? "" : "Choose one student from the verified search results.");
     return hidden.value;
   };
-  input.addEventListener("input", resolve);
-  input.addEventListener("change", resolve);
-  input.addEventListener("blur", resolve);
+  input.addEventListener("focus", load);
+  input.addEventListener("input", () => {
+    hidden.value = "";
+    chosenLabel = "";
+    input.setCustomValidity("");
+    clearTimeout(timer);
+    timer = setTimeout(load, 180);
+  });
+  input.addEventListener("keydown", event => {
+    const buttons = $$("[data-student-picker-option]", results);
+    if (event.key === "ArrowDown" && buttons.length) { event.preventDefault(); setActive(activeIndex + 1); }
+    else if (event.key === "ArrowUp" && buttons.length) { event.preventDefault(); setActive(activeIndex <= 0 ? buttons.length - 1 : activeIndex - 1); }
+    else if (event.key === "Enter" && activeIndex >= 0 && available[activeIndex]) { event.preventDefault(); choose(available[activeIndex]); }
+    else if (event.key === "Escape") closeResults();
+  });
+  results.addEventListener("mousedown", event => event.preventDefault());
+  results.addEventListener("click", event => {
+    const button = event.target.closest("[data-student-picker-option]");
+    if (!button) return;
+    const item = available.find(row => studentPickerId(row) === button.dataset.studentPickerOption);
+    if (item) choose(item);
+  });
+  input.addEventListener("blur", () => {
+    setTimeout(() => { resolve(); closeResults(); }, 120);
+  });
   form.resolveStudentPicker = resolve;
 }
 
@@ -1495,9 +1611,10 @@ function openFuturePaymentForm(item = null) {
   const preferredStudent = financeStudentFilter && state.agreements.some(row => row.studentId === financeStudentFilter)
     ? financeStudentFilter
     : "";
+  const preferredAccount = state.agreements.find(row => row.studentId === preferredStudent) || null;
   const studentField = item
     ? `<div class="immutable-record-note">${icon("user")}<span>${esc(item.studentName)}<small>${esc(item.admissionNumber || "Student fee account")}</small></span></div>`
-    : studentPickerMarkup(state.agreements, { label: "Student account", preferredId: preferredStudent });
+    : studentPickerMarkup({ label: "Student account", selectedItem: preferredAccount, scope: "with_agreement" });
   const dueDate = item?.date || dateInputValue(new Date(Date.now() + 30 * 86400000));
   openDrawer(item ? "Edit future payment" : "Schedule future payment", `<form class="auth-form" id="future-payment-form" data-installment-id="${esc(item?.id || "")}">
     ${studentField}
@@ -1510,7 +1627,7 @@ function openFuturePaymentForm(item = null) {
     <button class="button button-primary button-large" type="submit">${icon(item ? "edit" : "calendar-check")}${item ? "Save future payment" : "Schedule payment"}</button>
   </form>`);
   const futurePaymentForm = $("#future-payment-form");
-  if (!item) bindStudentPicker(futurePaymentForm, state.agreements);
+  if (!item) bindStudentPicker(futurePaymentForm);
   futurePaymentForm.addEventListener("submit", submitFuturePayment);
 }
 
@@ -1531,9 +1648,10 @@ function openPaymentForm() {
   const preferredStudent = financeStudentFilter && state.agreements.some(row => row.studentId === financeStudentFilter)
     ? financeStudentFilter
     : "";
+  const preferredAccount = state.agreements.find(row => row.studentId === preferredStudent) || null;
   openDrawer("Record payment", `<form class="auth-form" id="payment-create-form">
     <div class="inline-notice">${icon("receipt")}<span>A numbered receipt is created immediately.<small>Posted entries cannot be edited or deleted; corrections use a reversal.</small></span></div>
-    ${studentPickerMarkup(state.agreements, { label: "Student account", preferredId: preferredStudent })}
+    ${studentPickerMarkup({ label: "Student account", selectedItem: preferredAccount, scope: "with_agreement" })}
     <div class="form-pair"><label class="field"><span>Payment date</span><input name="transactionDate" type="date" max="${dateInputValue()}" value="${dateInputValue()}" required></label><label class="field"><span>Amount received</span><input name="amount" type="number" min="1" step="1" inputmode="numeric" required></label></div>
     <label class="field"><span>Payment mode</span><select name="method" required><option value="">Select payment mode</option>${paymentMethodOptions()}</select></label>
     <label class="field"><span>Bank / UPI / cheque reference <small>(optional for cash)</small></span><input name="reference" maxlength="255"></label>
@@ -1542,7 +1660,7 @@ function openPaymentForm() {
     <button class="button button-primary button-large" type="submit">${icon("receipt")}Post payment &amp; issue receipt</button>
   </form>`);
   const paymentForm = $("#payment-create-form");
-  bindStudentPicker(paymentForm, state.agreements);
+  bindStudentPicker(paymentForm);
   paymentForm.addEventListener("submit", submitPayment);
 }
 
@@ -1621,14 +1739,14 @@ function openFeeAgreementForm() {
   const students = state.students.filter(row => ["active", "draft"].includes(row.status) && !existingIds.has(row.id));
   if (!students.length) { toast("Every student already has a fee agreement."); return; }
   openDrawer("Create fee agreement", `<form class="auth-form" id="fee-agreement-create-form">
-    ${studentPickerMarkup(students)}
+    ${studentPickerMarkup({ scope: "without_agreement" })}
     <label class="field"><span>Agreed course fee</span><input name="agreedAmount" type="number" min="0" step="1" inputmode="numeric" required></label>
     <div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="INR" readonly aria-readonly="true"></label><label class="field"><span>Status</span><select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label></div>
     ${formError("fee-agreement-create-error")}
     <button class="button button-primary button-large" type="submit">${icon("wallet")}Create fee agreement</button>
   </form>`);
   const feeAgreementForm = $("#fee-agreement-create-form");
-  bindStudentPicker(feeAgreementForm, students);
+  bindStudentPicker(feeAgreementForm);
   feeAgreementForm.addEventListener("submit", async event => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1950,7 +2068,7 @@ async function openOwnerEdit(kind, id) {
       <div class="form-pair"><label class="field"><span>Confirmed payment date</span><input name="transactionDate" type="date" value="${esc(item.date || "")}" max="${dateInputValue()}"></label><label class="field"><span>Confirmed payment mode</span><select name="method"><option value="">Select mode</option>${paymentMethodOptions(item.method)}</select></label></div>
       <label class="field"><span>Bank / UPI / cheque reference <small>(optional for cash)</small></span><input name="reference" value="${esc(item.reference || "")}" maxlength="255"></label>
       <label class="field"><span>Reconciliation note <small>(optional)</small></span><textarea name="notes" rows="3" maxlength="2000">${esc(item.notes || "")}</textarea></label>
-      <label class="field"><span>Review classification</span><select name="reconciliationStatus">${ownerStatusOptions(["ready","review","do_not_import"], item.reconciliationStatus)}</select><small>Only Ready rows contribute to recorded-payment totals.</small></label>`;
+      <label class="field"><span>Review classification</span><select name="reconciliationStatus">${ownerStatusOptions(["ready","needs_date","needs_mode","review","do_not_import"], item.reconciliationStatus)}</select><small>Only Ready rows contribute to recorded-payment totals. Excluded notes remain auditable without affecting balances.</small></label>`;
   } else if (kind === "session") {
     title = "Edit class";
     fields = `<label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label><div class="form-pair"><label class="field"><span>Faculty</span><select name="facultyId">${state.timetable.faculty.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.facultyId)}>${esc(row.fullName)}</option>`).join("")}</select></label><label class="field"><span>Room</span><select name="roomId">${state.timetable.rooms.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.roomId)}>${esc(row.name)}</option>`).join("")}</select></label></div><div class="form-pair"><label class="field"><span>Starts</span><input name="startsAt" type="datetime-local" value="${localInputValue(item.startsAt)}" required></label><label class="field"><span>Ends</span><input name="endsAt" type="datetime-local" value="${localInputValue(item.endsAt)}" required></label></div><div class="form-pair"><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["scheduled","completed","cancelled"], item.status)}</select></label><label class="check-field"><input name="allowOverride" type="checkbox"><span>Allow schedule override</span></label></div><label class="field"><span>Notes</span><textarea name="notes">${esc(item.notes || "")}</textarea></label><label class="field"><span>Override reason</span><textarea name="overrideReason">${esc(item.overrideReason || "")}</textarea></label>`;
@@ -2003,13 +2121,56 @@ async function submitOwnerEdit(event) {
 }
 
 const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", inventory: "Inventory", reports: "Reports", settings: "Settings & audit" };
-function showView(view, updateHash = true) {
+
+function currentOperationsRoute() {
+  const path = location.pathname.replace(/\/+$/, "") || "/";
+  const studentMatch = path.match(/^\/operations\/students\/([^/]+)$/);
+  if (studentMatch) return { kind: "student", view: "students", studentId: decodeURIComponent(studentMatch[1]) };
+  const ledgerMatch = path.match(/^\/operations\/finance\/ledger\/([^/]+)$/);
+  if (ledgerMatch) return { kind: "ledger", view: "finance", studentId: decodeURIComponent(ledgerMatch[1]) };
+  const entry = Object.entries(VIEW_PATHS).find(([, routePath]) => routePath === path);
+  if (entry) return { kind: "view", view: entry[0] };
+  const legacyView = location.hash.slice(1);
+  return { kind: "view", view: viewTitles[legacyView] ? legacyView : "dashboard" };
+}
+
+function operationsPath(view, detail = null) {
+  if (detail?.kind === "student" && detail.studentId) return `/operations/students/${encodeURIComponent(detail.studentId)}`;
+  if (detail?.kind === "ledger" && detail.studentId) return `/operations/finance/ledger/${encodeURIComponent(detail.studentId)}`;
+  return VIEW_PATHS[view] || VIEW_PATHS.dashboard;
+}
+
+function writeOperationsRoute(view, detail = null, replace = false) {
+  const path = operationsPath(view, detail);
+  if (`${location.pathname}${location.search}${location.hash}` === path) return;
+  history[replace ? "replaceState" : "pushState"]({ view, detail }, "", path);
+}
+
+function replaceOperationsRoute(view, detail = null) {
+  writeOperationsRoute(view, detail, true);
+}
+
+async function applyCurrentOperationsRoute() {
+  if (!state.token) return;
+  const route = currentOperationsRoute();
+  const view = allowedViews().has(route.view) ? route.view : "dashboard";
+  showView(view, false);
+  if (route.kind === "student" && view === "students") await openStudent(route.studentId, false);
+  else if (route.kind === "ledger" && view === "finance") openStudentLedger(route.studentId, null, false);
+  else {
+    if (detailRouteStudentId) closeDetail(false, false);
+    if (ledgerCurrentStudentId) closeStudentLedger(false, false);
+  }
+}
+
+function showView(view, updateRoute = true) {
   if (!$("#" + view) || !allowedViews().has(view)) return; state.view = view;
-  if (view === "finance") closeStudentLedger(false);
+  if (detailRouteStudentId && (view !== "students" || updateRoute)) closeDetail(false, false);
+  if (view === "finance") closeStudentLedger(false, false);
   $$(".app-view").forEach(node => node.classList.toggle("active", node.id === view));
   $$(".nav-item").forEach(node => { const active = node.dataset.view === view; node.classList.toggle("active", active); active ? node.setAttribute("aria-current", "page") : node.removeAttribute("aria-current"); });
   $("#page-title").textContent = viewTitles[view];
-  if (updateHash && location.hash !== `#${view}`) history.pushState(null, "", `#${view}`);
+  if (updateRoute) writeOperationsRoute(view);
   closeSidebar(); closeCommand(); $("#main-content").focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   loadViewResources(view).catch(error => {
     if (state.token && error.status !== 401) toast(error.message || "This module could not be loaded.", "error");
@@ -2291,8 +2452,9 @@ function bindEvents() {
     }
   });
   window.addEventListener("popstate", () => {
-    const view = location.hash.slice(1);
-    if (state.token && allowedViews().has(view)) showView(view, false);
+    applyCurrentOperationsRoute().catch(error => {
+      if (state.token && error.status !== 401) toast(error.message || "This record could not be opened.", "error");
+    });
   });
   mobileNavigation.addEventListener?.("change", syncSidebarAccessibility);
   syncSidebarAccessibility();

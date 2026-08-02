@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -75,6 +77,58 @@ def list_students(
         "total": total,
         "page": page,
         "pageSize": page_size,
+    }
+
+
+@router.get("/picker")
+def student_picker(
+    search: str = Query("", max_length=120),
+    scope: Literal["all", "with_agreement", "without_agreement"] = "all",
+    limit: int = Query(20, ge=1, le=30),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*READ_ROLES)),
+):
+    """Return a small, server-filtered result set for student comboboxes.
+
+    This endpoint intentionally returns only identity fields and never sends the
+    complete student directory to a form. Finance scopes also prevent a stale
+    browser list from offering an ineligible student.
+    """
+    query = db.query(Student).filter(
+        Student.is_test_account.is_(False),
+        Student.status.in_(("active", "draft")),
+    )
+    agreement_exists = db.query(FeeAgreement.id).filter(
+        FeeAgreement.student_id == Student.id,
+    ).exists()
+    if scope == "with_agreement":
+        query = query.filter(agreement_exists)
+    elif scope == "without_agreement":
+        query = query.filter(~agreement_exists)
+
+    needle = search.strip()
+    if needle:
+        term = f"%{needle}%"
+        query = query.filter(or_(
+            Student.full_name.ilike(term),
+            Student.admission_number.ilike(term),
+            Student.mobile.ilike(term),
+            Student.secondary_mobile.ilike(term),
+        ))
+
+    rows = query.order_by(Student.full_name, Student.admission_number).limit(limit).all()
+    return {
+        "items": [
+            {
+                "id": student.id,
+                "fullName": student.full_name,
+                "admissionNumber": student.admission_number,
+                "mobile": student.mobile,
+            }
+            for student in rows
+        ],
+        "query": needle,
+        "limit": limit,
     }
 
 

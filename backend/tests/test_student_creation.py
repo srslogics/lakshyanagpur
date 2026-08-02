@@ -135,3 +135,64 @@ def test_student_creation_validates_mobile_numbers(
         headers=owner_headers,
     )
     assert blank_name.status_code == 422
+
+
+def test_student_picker_is_server_filtered_and_finance_scoped(
+    client,
+    database,
+    owner_headers,
+):
+    with_agreement = Student(
+        admission_number="LI-2026-00101",
+        full_name="Aarav Searchable",
+        mobile="9876500101",
+        status="active",
+    )
+    without_agreement = Student(
+        admission_number="LI-2026-00102",
+        full_name="Aarushi Searchable",
+        mobile="9876500102",
+        status="active",
+    )
+    hidden_test = Student(
+        admission_number="LI-TEST-00103",
+        full_name="Searchable Test Student",
+        mobile="9876500103",
+        status="active",
+        is_test_account=True,
+    )
+    database.add_all([with_agreement, without_agreement, hidden_test])
+    database.flush()
+    enrollment = Enrollment(
+        student_id=with_agreement.id,
+        program="JEE",
+        batch="Tatva",
+        enrollment_date=date(2026, 7, 29),
+        status="active",
+        is_active=True,
+    )
+    database.add(enrollment)
+    database.flush()
+    database.add(FeeAgreement(
+        student_id=with_agreement.id,
+        enrollment_id=enrollment.id,
+        agreed_amount=80000,
+        legacy_registration_total=0,
+        currency="INR",
+        status="active",
+    ))
+    database.commit()
+
+    by_mobile = client.get(
+        "/api/students/picker?search=9876500101&scope=with_agreement",
+        headers=owner_headers,
+    )
+    assert by_mobile.status_code == 200
+    assert [item["id"] for item in by_mobile.json()["items"]] == [with_agreement.id]
+
+    missing_agreement = client.get(
+        "/api/students/picker?search=Searchable&scope=without_agreement",
+        headers=owner_headers,
+    )
+    assert [item["id"] for item in missing_agreement.json()["items"]] == [without_agreement.id]
+    assert all("email" not in item for item in missing_agreement.json()["items"])
