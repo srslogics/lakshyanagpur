@@ -108,6 +108,29 @@
   margin-left: auto;
 }
 
+.technology-credit {
+  margin: 24px 0 0;
+  color: #777985;
+  font-size: .68rem;
+  font-weight: 650;
+  letter-spacing: .08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.technology-credit a {
+  color: #303578;
+  font-weight: 850;
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.technology-credit a:hover,
+.technology-credit a:focus-visible {
+  color: #9f2338;
+  text-decoration: underline;
+}
+
 .connection-banner {
   position: fixed;
   z-index: 1000;
