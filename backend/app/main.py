@@ -27,6 +27,16 @@ PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
 FACULTY_APP_DIR = FRONTEND_DIR / "faculty-app"
 ATTENDANCE_APP_DIR = FRONTEND_DIR / "attendance-app"
 LAKSHYA_SITE_DIR = FRONTEND_DIR / "lakshya-site"
+PUBLIC_SITE_PAGES = frozenset({
+    "about",
+    "contact",
+    "dmit",
+    "lgsat",
+    "programs",
+    "results",
+    "system",
+})
+PUBLIC_SITE_ROOT_FILES = frozenset({"script.js", "styles.css", "sw.js"})
 PUBLIC_ROOT_FILES = frozenset({
     "app.js",
     "apple-touch-icon.png",
@@ -170,7 +180,41 @@ if ATTENDANCE_APP_DIR.exists():
     app.mount("/attendance-app", StaticFiles(directory=ATTENDANCE_APP_DIR, html=True), name="attendance-app")
 
 if LAKSHYA_SITE_DIR.exists():
-    app.mount("/lakshya-site", StaticFiles(directory=LAKSHYA_SITE_DIR, html=True), name="lakshya-site")
+    app.mount(
+        "/lakshya-site/assets",
+        StaticFiles(directory=LAKSHYA_SITE_DIR / "assets"),
+        name="lakshya-site-assets",
+    )
+
+
+@app.api_route("/lakshya-site", methods=["GET", "HEAD"], include_in_schema=False)
+def public_site_root_redirect():
+    return RedirectResponse(url="/lakshya-site/", status_code=308)
+
+
+@app.api_route("/lakshya-site/", methods=["GET", "HEAD"], include_in_schema=False)
+def public_site_index():
+    return FileResponse(LAKSHYA_SITE_DIR / "index.html")
+
+
+@app.api_route(
+    "/lakshya-site/{site_path:path}",
+    methods=["GET", "HEAD"],
+    include_in_schema=False,
+)
+def public_site_routes(site_path: str):
+    if site_path.endswith(".html"):
+        page = site_path.removesuffix(".html")
+        if page == "index":
+            return RedirectResponse(url="/lakshya-site/", status_code=308)
+        if page in PUBLIC_SITE_PAGES:
+            return RedirectResponse(url=f"/lakshya-site/{page}", status_code=308)
+        raise HTTPException(status_code=404, detail="Not found")
+    if site_path in PUBLIC_SITE_PAGES:
+        return FileResponse(LAKSHYA_SITE_DIR / f"{site_path}.html")
+    if site_path in PUBLIC_SITE_ROOT_FILES:
+        return FileResponse(LAKSHYA_SITE_DIR / site_path)
+    raise HTTPException(status_code=404, detail="Not found")
 
 @app.get("/attendence", include_in_schema=False)
 @app.get("/attendence/", include_in_schema=False)
