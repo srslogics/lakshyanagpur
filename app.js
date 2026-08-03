@@ -59,6 +59,7 @@ let settingsAccountSearch = "";
 let settingsAccountFilter = "all";
 let settingsSection = "accounts";
 let timetableSelectedDate = "";
+let timetableView = "schedule";
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
 const RECONCILIATION_ACTION_STATES = new Set(["review", "needs_date", "needs_mode"]);
@@ -448,7 +449,6 @@ async function loadViewResources(view) {
 function renderCore() {
   $("#nav-leads-count").textContent = state.leads.length;
   const reviewCount = state.payments.filter(item => item.status === "staged" && RECONCILIATION_ACTION_STATES.has(item.reconciliationStatus)).length;
-  $("#nav-finance-count").textContent = state.payments.length + state.installments.filter(item => item.status !== "cancelled").length;
   $("#payment-review-count").textContent = reviewCount ? `${reviewCount} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !reviewCount);
   renderDashboard(); renderStudents(); renderFinance(); renderAdmissions(); renderCommandResults(); injectIcons(); applyRoleUI();
@@ -655,29 +655,28 @@ function accountBalance(value) {
 }
 
 function reconciliationBadge(account) {
-  if (account.clientBalanceEntry && !account.needsReconciliation) return `<span class="status status-ready">Client confirmed</span>`;
-  if (!account.needsReconciliation) return `<span class="status status-ready">Complete</span>`;
-  return `<span class="status status-review">${account.reviewCount ? "Needs input" : "Check import"}</span>`;
+  if (account.clientBalanceEntry && !account.needsReconciliation) return `<span class="status status-ready">Verified</span>`;
+  if (!account.needsReconciliation) return `<span class="status status-ready">Up to date</span>`;
+  return `<span class="status status-review">Needs attention</span>`;
 }
 
 function renderFinance() {
   const accounts = state.agreements.map(studentAccount);
-  const agreed = accounts.reduce((sum, item) => sum + item.agreed, 0);
   const paymentTotal = accounts.reduce((sum, item) => sum + item.paid, 0);
   const outstanding = accounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
-  const scheduledCount = state.installments.filter(item => item.status === "scheduled").length;
+  const dueAccounts = accounts.filter(item => item.balance > 0).length;
   const review = state.payments.filter(needsPaymentReview).length;
   const registerCount = state.payments.length + state.installments.length;
   $("#new-future-payment").classList.toggle("hidden", !isOwner());
   $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
   $("#new-payment").classList.toggle("hidden", !canManageFinance());
-  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Agreed fees", value: shortMoney(agreed) }, { label: "Recorded payments", value: shortMoney(paymentTotal) }, { label: "Outstanding", value: shortMoney(outstanding) }, { label: "Future payments", value: String(scheduledCount) }]);
+  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Outstanding", value: shortMoney(outstanding) }, { label: "Collected", value: shortMoney(paymentTotal) }, { label: "Accounts due", value: String(dueAccounts) }]);
   $("#fee-agreement-count").textContent = accounts.length;
   $("#payment-total-count").textContent = registerCount;
   $("#payment-review-count").textContent = review ? `${review} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !review);
-  $("#finance-agreements-tab").setAttribute("aria-label", `Receivables, ${accounts.length} student accounts`);
-  $("#finance-payments-tab").setAttribute("aria-label", `Payment register, ${registerCount} entries${review ? `, ${review} need review` : ""}`);
+  $("#finance-agreements-tab").setAttribute("aria-label", `Student balances, ${accounts.length} accounts`);
+  $("#finance-payments-tab").setAttribute("aria-label", `Payments, ${registerCount} entries${review ? `, ${review} need attention` : ""}`);
   renderAgreementRows(); renderPaymentRows();
   if (ledgerCurrentStudentId) renderStudentLedger(ledgerCurrentStudentId);
 }
@@ -692,28 +691,31 @@ function renderAgreementRows() {
   });
   const visibleOutstanding = rows.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
   $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
-  const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}View</button>`;
+  const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}Ledger</button>`;
   const editAccountButton = item => isOwner() ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
   const balanceBadge = item => `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
-  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="currency receivable-number">${money(item.agreed)}</td><td class="currency receivable-number">${money(item.paid)}</td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.")}</td></tr>`;
-  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? (item.reviewCount ? "Needs input" : "Check import") : "Complete"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching accounts", "Clear a filter to see the complete receivables list.");
+  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="receivable-fee-summary"><strong class="currency">${money(item.agreed)}</strong><small>${money(item.paid)} paid</small></td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("search", "No matching balances", "Clear a filter to see every student balance.")}</td></tr>`;
+  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
 }
 
 function renderPaymentRows() {
   const filter = $("#payment-status-filter").value;
   const search = $("#payment-search").value.trim().toLowerCase();
   const today = dateInputValue();
-  const installmentState = item => item.status === "cancelled" ? "cancelled" : item.date < today ? "overdue" : "scheduled";
-  const entryState = item => item.type === "scheduled_payment"
-    ? installmentState(item)
-    : item.status === "staged" ? item.reconciliationStatus : item.type;
+  const entryCategory = item => {
+    if (item.type === "scheduled_payment") return "future";
+    if (needsPaymentReview(item)) return "review";
+    if (item.status === "staged" && item.reconciliationStatus === "do_not_import") return "adjustments";
+    if (["refund", "reversal", "void", "balance_credit", "balance_debit"].includes(item.type)) return "adjustments";
+    return "received";
+  };
   const register = [...state.payments, ...state.installments].sort((a, b) =>
     String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31"))
     || String(a.studentName || "").localeCompare(String(b.studentName || ""))
   );
   const rows = register.filter(item => {
     const matchesStudent = !financeStudentFilter || item.studentId === financeStudentFilter;
-    const matchesStatus = !filter || entryState(item) === filter;
+    const matchesStatus = !filter || entryCategory(item) === filter;
     const matchesSearch = !search || [item.studentName, item.method, item.sourceNote, item.reference, item.receiptNumber, item.date, item.amount, item.type].some(value => String(value || "").toLowerCase().includes(search));
     return matchesStudent && matchesStatus && matchesSearch;
   });
@@ -725,16 +727,22 @@ function renderPaymentRows() {
   const paymentRows = rows.filter(item => item.type !== "scheduled_payment");
   const installmentRows = rows.filter(item => item.type === "scheduled_payment");
   const total = paymentRows.reduce((sum, item) => sum + Number(item.receivedAmount ?? item.signedAmount ?? item.amount ?? 0), 0);
-  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${paymentRows.length} posted · ${installmentRows.length} future · ${money(total)} net received`;
+  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${money(total)} received${installmentRows.length ? ` · ${installmentRows.length} planned` : ""}`;
   const typeLabel = item => ({
     payment: "Payment received",
     reversal: "Reversal",
     refund: "Refund",
     void: "Void",
-    balance_credit: "Balance reconciliation credit",
-    balance_debit: "Balance reconciliation debit",
-    scheduled_payment: "Future payment",
+    balance_credit: "Balance adjustment",
+    balance_debit: "Balance adjustment",
+    scheduled_payment: "Planned payment",
   }[item.type] || String(item.type || "Entry").replaceAll("_", " "));
+  const displayState = item => item.type === "scheduled_payment"
+    ? item.status === "cancelled" ? "Cancelled" : item.date < today ? "Overdue" : "Planned"
+    : needsPaymentReview(item) ? "Needs attention"
+      : item.status === "staged" && item.reconciliationStatus === "do_not_import" ? "Excluded"
+        : item.status === "staged" ? "Recorded"
+      : ["refund", "reversal", "void", "balance_credit", "balance_debit"].includes(item.type) ? "Adjustment" : "Received";
   const amountLabel = item => {
     const amount = Number(item.signedAmount ?? item.amount ?? 0);
     return amount < 0 ? `−${money(Math.abs(amount))}` : money(amount);
@@ -747,8 +755,8 @@ function renderPaymentRows() {
       : item.type === "payment" && canManageFinance()
         ? `<button class="button button-secondary button-small" type="button" data-payment-reverse="${esc(item.id)}">${icon("refresh")}Reverse</button>`
         : "";
-  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.admissionNumber || `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc([item.receiptNumber, item.reference, item.notes || item.sourceNote].filter(Boolean).join(" · "))}"><strong>${esc(sourceLabel(item).slice(0, 32))}</strong>${item.reference && item.receiptNumber ? `<br><small>${esc(item.reference.slice(0, 32))}</small>` : ""}</td><td><div class="cell-actions">${status(entryState(item))}${action(item)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.")}</td></tr>`;
-  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(entryState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Receipt</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") : emptyState("search", "No matching payment entries", "Clear a filter to see the complete register.");
+  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.admissionNumber || `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc([item.receiptNumber, item.reference, item.notes || item.sourceNote].filter(Boolean).join(" · "))}"><strong>${esc(sourceLabel(item).slice(0, 32))}</strong>${item.reference && item.receiptNumber ? `<br><small>${esc(item.reference.slice(0, 32))}</small>` : ""}</td><td><div class="cell-actions">${status(displayState(item))}${action(item)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payments", "Clear a filter to see every payment.")}</td></tr>`;
+  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(displayState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Receipt</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") : emptyState("search", "No matching payments", "Clear a filter to see every payment.");
 }
 
 function activateFinanceTab(name, focus = false) {
@@ -871,11 +879,10 @@ function renderLeadRows() {
 }
 
 function renderTimetable() {
-  const now = Date.now();
   const teachingAssignments = state.timetable.teachingAssignments || [];
   const activeAssignments = teachingAssignments.filter(item => item.isActive);
-  $("#timetable-metrics").innerHTML = compactMetrics([{ label: "Teaching assignments", value: String(activeAssignments.length) }, { label: "Faculty assigned", value: String(new Set(activeAssignments.map(item => item.facultyId)).size) }, { label: "Batches covered", value: String(new Set(activeAssignments.map(item => item.batchId)).size) }, { label: "Upcoming classes", value: String(state.sessions.filter(item => asInstant(item.startsAt).getTime() >= now && item.status === "scheduled").length) }]);
-  $("#teaching-assignment-count").textContent = `${activeAssignments.length} active`;
+  $("#teaching-assignment-count").textContent = String(activeAssignments.length);
+  $("#timetable-faculty-tab").setAttribute("aria-label", `Faculty setup, ${activeAssignments.length} active assignments`);
   const scheduledRows = [...state.sessions].filter(item => item.status === "scheduled").sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
   const sessionDates = [...new Map(scheduledRows.map(item => [indiaDateKey(item.startsAt), item.startsAt])).entries()];
   const todayKey = indiaDateKey(new Date());
@@ -895,12 +902,27 @@ function renderTimetable() {
     const batchRows = selectedRows.filter(item => item.batch === batch);
     return `<section class="timetable-batch-lane" aria-label="${esc(batch)} timetable"><header><span class="timetable-batch-mark">${esc(batch.slice(0, 1))}</span><span><strong>${esc(batch)}</strong><small>${batchRows.length} ${batchRows.length === 1 ? "class" : "classes"}</small></span></header><div class="timetable-slot-list">${batchRows.map(item => `<article class="timetable-slot"><time>${esc(classTime(item.startsAt))}<small>${esc(classTime(item.endsAt))}</small></time><span><strong>${esc(item.subject)}</strong><small>${esc(item.faculty)} · ${esc(item.room)}</small></span>${ownerEditButton("session", item.id, "Edit")}</article>`).join("")}</div></section>`;
   }).join("") : emptyState("clock", "No classes scheduled", "Choose another date or schedule a class.");
-  $("#class-session-count").textContent = selectedDateValue ? `${selectedRows.length} ${selectedRows.length === 1 ? "class" : "classes"} · ${timetableDateLabel(selectedDateValue)}` : "0 classes";
   $("#teaching-assignments-table-body").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<tr><td>${studentPrimary(item.faculty, item.sessionCount ? `${item.sessionCount} scheduled ${item.sessionCount === 1 ? "class" : "classes"}` : "No classes scheduled")}</td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.subjectCode)}</small></td><td>${item.sessionCount}</td><td>${status(item.isActive ? "active" : "inactive")}</td><td>${teachingAssignmentEditButton(item)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.")}</td></tr>`;
   $("#teaching-assignments-mobile-list").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.faculty)}</h3><p>${esc(item.subject)} · ${esc(item.subjectCode)}</p></div>${status(item.isActive ? "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Classes</span><strong>${item.sessionCount}</strong></div></div>${teachingAssignmentEditButton(item)}</article>`).join("") : emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.");
-  const rows = selectedRows;
-  $("#sessions-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td><strong>${formatDateTime(item.startsAt)}</strong><br><small>${formatDateTime(item.endsAt).split(", ").pop()}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td>${esc(item.subject)}</td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("session", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("clock", "No classes scheduled")}</td></tr>`;
-  $("#sessions-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${formatDateTime(item.startsAt)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Room</span><strong>${esc(item.room)}</strong></div><div><span>Ends</span><strong>${formatDateTime(item.endsAt)}</strong></div></div>${ownerEditButton("session", item.id)}</article>`).join("") : emptyState("clock", "No classes scheduled");
+  activateTimetableView(timetableView);
+}
+
+function activateTimetableView(name, focus = false) {
+  timetableView = name === "faculty" ? "faculty" : "schedule";
+  $$('[data-timetable-view]').forEach(button => {
+    const active = button.dataset.timetableView === timetableView;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
+  });
+  $$(".timetable-workspace-panel").forEach(panel => {
+    const active = panel.id === `timetable-${timetableView}-panel`;
+    panel.classList.toggle("active", active);
+    panel.hidden = !active;
+  });
+  $("#new-session").classList.toggle("hidden", timetableView !== "schedule");
+  $("#new-teaching-assignment").classList.toggle("hidden", timetableView !== "faculty");
 }
 
 function teachingAssignmentEditButton(item) {
@@ -2698,7 +2720,7 @@ function bindEvents() {
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
   $$("[data-report-export]").forEach(button => button.addEventListener("click", () => downloadReport(button.dataset.reportExport, button)));
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));
-  $(".segmented-control[role='tablist']").addEventListener("keydown", event => {
+  $("#finance-view-tabs").addEventListener("keydown", event => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     const buttons = $$("[data-finance-tab]");
     const current = buttons.indexOf(document.activeElement);
@@ -2706,6 +2728,16 @@ function bindEvents() {
     event.preventDefault();
     const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
     activateFinanceTab(buttons[next].dataset.financeTab, true);
+  });
+  $$("[data-timetable-view]").forEach(button => button.addEventListener("click", () => activateTimetableView(button.dataset.timetableView)));
+  $("#timetable-view-tabs").addEventListener("keydown", event => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = $$("[data-timetable-view]");
+    const current = buttons.indexOf(document.activeElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    activateTimetableView(buttons[next].dataset.timetableView, true);
   });
   document.addEventListener("keydown", event => {
     trapDrawerFocus(event);

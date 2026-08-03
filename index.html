@@ -28,7 +28,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="/styles.css?v=50">
+  <link rel="stylesheet" href="/styles.css?v=51">
   <link rel="stylesheet" href="/auth-shared.css?v=8">
 </head>
 <body>
@@ -110,7 +110,7 @@
         <button class="nav-item active" type="button" data-view="dashboard"><span data-icon="grid"></span><span>Overview</span></button>
         <button class="nav-item" type="button" data-view="admissions"><span data-icon="spark"></span><span>Admissions</span><em id="nav-leads-count">0</em></button>
         <button class="nav-item" type="button" data-view="students"><span data-icon="users"></span><span>Students</span></button>
-        <button class="nav-item" type="button" data-view="finance"><span data-icon="wallet"></span><span>Fees &amp; finance</span><em id="nav-finance-count">3</em></button>
+        <button class="nav-item" type="button" data-view="finance"><span data-icon="wallet"></span><span>Fees &amp; finance</span></button>
         <button class="nav-item" type="button" data-view="attendance"><span data-icon="calendar-check"></span><span>Attendance</span></button>
         <button class="nav-item" type="button" data-view="communication"><span data-icon="message"></span><span>Communication</span></button>
 
@@ -210,17 +210,17 @@
 
         <section class="app-view" id="finance" aria-labelledby="finance-heading">
           <div id="finance-workspace">
-            <div class="page-heading"><h2 id="finance-heading">Finance</h2><div class="heading-actions"><button class="button button-secondary" id="new-fee-agreement" type="button"><span data-icon="plus"></span>Fee agreement</button><button class="button button-secondary" id="new-future-payment" type="button"><span data-icon="calendar-check"></span>Schedule</button><button class="button button-primary" id="new-payment" type="button"><span data-icon="receipt"></span>Record payment</button></div></div>
+            <div class="page-heading"><div><h2 id="finance-heading">Fees &amp; finance</h2><p class="page-heading-copy">Track student balances and record payments.</p></div><div class="heading-actions"><button class="button button-primary" id="new-payment" type="button"><span data-icon="receipt"></span>Record payment</button></div></div>
             <div class="compact-metrics" id="finance-metrics"></div>
-            <nav class="segmented-control" role="tablist" aria-label="Finance views"><button class="active" id="finance-agreements-tab" type="button" role="tab" aria-label="Receivables" aria-selected="true" aria-controls="finance-agreements-panel" data-finance-tab="agreements">Receivables <span class="tab-count" id="fee-agreement-count" aria-hidden="true">0</span></button><button id="finance-payments-tab" type="button" role="tab" aria-label="Payment register" aria-selected="false" aria-controls="finance-payments-panel" tabindex="-1" data-finance-tab="payments">Payment register <span class="tab-count" id="payment-total-count" aria-hidden="true">0</span><span class="tab-review-count hidden" id="payment-review-count" aria-hidden="true"></span></button></nav>
+            <nav class="segmented-control" id="finance-view-tabs" role="tablist" aria-label="Finance views"><button class="active" id="finance-agreements-tab" type="button" role="tab" aria-label="Student balances" aria-selected="true" aria-controls="finance-agreements-panel" data-finance-tab="agreements">Student balances <span class="tab-count" id="fee-agreement-count" aria-hidden="true">0</span></button><button id="finance-payments-tab" type="button" role="tab" aria-label="Payments" aria-selected="false" aria-controls="finance-payments-panel" tabindex="-1" data-finance-tab="payments">Payments <span class="tab-count" id="payment-total-count" aria-hidden="true">0</span><span class="tab-review-count hidden" id="payment-review-count" aria-hidden="true"></span></button></nav>
             <article class="surface table-surface finance-tab active" id="finance-agreements-panel" role="tabpanel" aria-labelledby="finance-agreements-tab">
-              <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search student receivables"></label><select id="agreement-balance-filter" aria-label="Filter account balance"><option value="">All accounts</option><option value="due">Outstanding</option><option value="settled">Settled</option><option value="credit">Credit balance</option><option value="reconcile">Needs reconciliation</option></select></div>
+              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search student balances"></label><select id="agreement-balance-filter" aria-label="Filter account balance"><option value="">All balances</option><option value="due">Payment due</option><option value="settled">Fully paid</option><option value="credit">Credit balance</option><option value="reconcile">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-fee-agreement" type="button"><span data-icon="plus"></span>Add fee</button></div>
               <div class="table-meta"><span id="agreement-result-summary">Loading accounts…</span></div>
-              <div class="data-table-wrap"><table class="data-table receivables-table"><colgroup><col class="receivables-col-student"><col class="receivables-col-agreed"><col class="receivables-col-paid"><col class="receivables-col-outstanding"><col class="receivables-col-reconciliation"><col class="receivables-col-actions"></colgroup><thead><tr><th scope="col">Student</th><th class="numeric-heading" scope="col">Agreed</th><th class="numeric-heading" scope="col">Paid</th><th class="numeric-heading" scope="col">Balance</th><th scope="col">Data check</th><th scope="col" aria-label="Actions"></th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
+              <div class="data-table-wrap"><table class="data-table receivables-table"><colgroup><col class="receivables-col-student"><col class="receivables-col-fee"><col class="receivables-col-outstanding"><col class="receivables-col-status"><col class="receivables-col-actions"></colgroup><thead><tr><th scope="col">Student</th><th scope="col">Fee summary</th><th class="numeric-heading" scope="col">Balance</th><th scope="col">Status</th><th scope="col" aria-label="Actions"></th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
               <div class="mobile-records" id="agreements-mobile-list"></div>
             </article>
             <article class="surface table-surface finance-tab" id="finance-payments-panel" role="tabpanel" aria-labelledby="finance-payments-tab" hidden>
-              <div class="toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, receipt or reference" aria-label="Search payment entries"></label><select id="payment-status-filter" aria-label="Filter payment entry status"><option value="">All entry states</option><option value="payment">Payments</option><option value="refund">Refunds</option><option value="reversal">Reversals</option><option value="void">Voids</option><option value="ready">Imported · ready</option><option value="needs_date">Needs payment date</option><option value="needs_mode">Needs payment mode</option><option value="review">Other review</option><option value="scheduled">Scheduled</option><option value="overdue">Overdue</option><option value="cancelled">Cancelled</option><option value="do_not_import">Excluded source notes</option></select></div>
+              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, receipt or reference" aria-label="Search payments"></label><select id="payment-status-filter" aria-label="Filter payments"><option value="">All payments</option><option value="received">Received</option><option value="future">Future payments</option><option value="adjustments">Refunds &amp; adjustments</option><option value="review">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-future-payment" type="button"><span data-icon="calendar-check"></span>Plan payment</button></div>
               <div class="payment-student-filter hidden" id="payment-student-filter"><span>Entries for <strong id="payment-student-filter-name"></strong></span><button class="button button-secondary button-small" id="clear-payment-student-filter" type="button">Show all entries</button></div>
               <div class="table-meta"><span id="payment-result-summary">Loading payments…</span></div>
               <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Type</th><th>Date</th><th>Amount</th><th>Mode</th><th>Receipt / reference</th><th>Entry state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
@@ -272,23 +272,25 @@
         </section>
 
         <section class="app-view" id="timetable" aria-labelledby="timetable-heading">
-          <div class="page-heading"><h2 id="timetable-heading">Faculty &amp; timetable</h2><div class="heading-actions"><button class="button button-secondary" id="new-session" type="button"><span data-icon="calendar-check"></span>Schedule class</button><button class="button button-primary" id="new-teaching-assignment" type="button"><span data-icon="plus"></span>Assign faculty</button></div></div>
-          <div class="compact-metrics" id="timetable-metrics"></div>
-          <article class="surface operations-timetable" aria-labelledby="operations-timetable-heading">
-            <div class="surface-head operations-timetable-head">
-              <div><h3 id="operations-timetable-heading">Daily timetable</h3><p>Choose a class day to see the complete Tatva and Essential schedule.</p></div>
-              <span class="count-badge" id="weekly-timetable-range">Loading…</span>
-            </div>
-            <div class="timetable-date-tabs" id="timetable-date-tabs" role="tablist" aria-label="Choose timetable date"></div>
-            <div class="operations-timetable-grid" id="operations-timetable-grid"></div>
-          </article>
-          <article class="surface table-surface teaching-register">
-            <div class="surface-head teaching-register-head"><h3>Teaching assignments</h3><span class="count-badge" id="teaching-assignment-count">0 active</span></div>
-            <div class="data-table-wrap"><table class="data-table teaching-assignment-table"><thead><tr><th>Faculty</th><th>Batch</th><th>Subject</th><th>Classes</th><th>Status</th><th aria-label="Actions"></th></tr></thead><tbody id="teaching-assignments-table-body"></tbody></table></div>
-            <div class="mobile-records" id="teaching-assignments-mobile-list"></div>
-          </article>
-          <div class="timetable-section-head"><h3>Selected day</h3><span id="class-session-count">0 classes</span></div>
-          <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date &amp; time</th><th>Batch</th><th>Subject</th><th>Faculty</th><th>Room</th><th>Status</th></tr></thead><tbody id="sessions-table-body"></tbody></table></div><div class="mobile-records" id="sessions-mobile-list"></div></article>
+          <div class="page-heading"><div><h2 id="timetable-heading">Faculty &amp; timetable</h2><p class="page-heading-copy">Plan classes or manage teaching responsibilities.</p></div><div class="heading-actions"><button class="button button-primary" id="new-session" type="button"><span data-icon="calendar-check"></span>Schedule class</button><button class="button button-primary hidden" id="new-teaching-assignment" type="button"><span data-icon="plus"></span>Assign faculty</button></div></div>
+          <nav class="segmented-control workspace-switcher" id="timetable-view-tabs" role="tablist" aria-label="Faculty and timetable views"><button class="active" id="timetable-schedule-tab" type="button" role="tab" aria-selected="true" aria-controls="timetable-schedule-panel" data-timetable-view="schedule">Timetable</button><button id="timetable-faculty-tab" type="button" role="tab" aria-selected="false" aria-controls="timetable-faculty-panel" tabindex="-1" data-timetable-view="faculty">Faculty setup <span class="tab-count" id="teaching-assignment-count" aria-hidden="true">0</span></button></nav>
+          <section class="timetable-workspace-panel active" id="timetable-schedule-panel" role="tabpanel" aria-labelledby="timetable-schedule-tab">
+            <article class="surface operations-timetable" aria-labelledby="operations-timetable-heading">
+              <div class="surface-head operations-timetable-head">
+                <div><h3 id="operations-timetable-heading">Daily timetable</h3><p>Select a day to view Tatva and Essential classes.</p></div>
+                <span class="count-badge" id="weekly-timetable-range">Loading…</span>
+              </div>
+              <div class="timetable-date-tabs" id="timetable-date-tabs" role="tablist" aria-label="Choose timetable date"></div>
+              <div class="operations-timetable-grid" id="operations-timetable-grid"></div>
+            </article>
+          </section>
+          <section class="timetable-workspace-panel" id="timetable-faculty-panel" role="tabpanel" aria-labelledby="timetable-faculty-tab" hidden>
+            <article class="surface table-surface teaching-register">
+              <div class="surface-head teaching-register-head"><div><h3>Faculty assignments</h3><p>One clear view of who teaches each batch and subject.</p></div></div>
+              <div class="data-table-wrap"><table class="data-table teaching-assignment-table"><thead><tr><th>Faculty</th><th>Batch</th><th>Subject</th><th>Classes</th><th>Status</th><th aria-label="Actions"></th></tr></thead><tbody id="teaching-assignments-table-body"></tbody></table></div>
+              <div class="mobile-records" id="teaching-assignments-mobile-list"></div>
+            </article>
+          </section>
         </section>
 
         <section class="app-view" id="communication" aria-labelledby="communication-heading">
@@ -357,6 +359,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="/app.js?v=63" defer></script>
+  <script src="/app.js?v=64" defer></script>
 </body>
 </html>

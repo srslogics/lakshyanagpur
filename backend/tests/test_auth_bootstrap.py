@@ -157,7 +157,10 @@ def test_operations_exposes_the_daily_timetable_workspace(client):
     assert 'id="operations-timetable-heading"' in response.text
     assert 'id="timetable-date-tabs"' in response.text
     assert 'id="operations-timetable-grid"' in response.text
-    assert "Choose a class day" in response.text
+    assert "Select a day" in response.text
+    assert 'id="timetable-view-tabs"' in response.text
+    assert 'id="timetable-faculty-panel"' in response.text
+    assert 'id="sessions-table-body"' not in response.text
 
 
 def test_every_application_uses_a_mobile_login_field(client):
