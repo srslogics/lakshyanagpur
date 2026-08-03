@@ -343,6 +343,33 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .mobile-card-actions .button { flex: 1; margin-top: 0; }
 .mobile-records { display: none; }
 .teaching-register { margin-bottom: 18px; }
+.operations-timetable { margin-bottom: 18px; padding: 0; overflow: hidden; }
+.operations-timetable-head { min-height: 76px; align-items: center; margin: 0; padding: 15px 18px; border-bottom: 1px solid var(--line); }
+.operations-timetable-head h3 { margin: 0; font: 800 1rem/1.25 "Manrope", sans-serif; letter-spacing: -.02em; }
+.operations-timetable-head p { margin: 5px 0 0; color: var(--ink-500); font-size: .72rem; line-height: 1.45; }
+.timetable-date-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--surface-muted); scrollbar-width: none; }
+.timetable-date-tabs::-webkit-scrollbar { display: none; }
+.timetable-date-tab { min-width: 88px; min-height: 52px; display: grid; place-content: center; gap: 3px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink-600); background: var(--surface); text-align: center; cursor: pointer; transition: border-color var(--motion-fast), color var(--motion-fast), background var(--motion-fast); }
+.timetable-date-tab span { font-size: .62rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.timetable-date-tab strong { font-size: .76rem; }
+.timetable-date-tab:hover { border-color: var(--line-strong); color: var(--forest-800); }
+.timetable-date-tab.active { border-color: var(--forest-800); color: #fff; background: var(--forest-800); box-shadow: var(--shadow-xs); }
+.operations-timetable-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0; }
+.timetable-batch-lane { min-width: 0; padding: 18px; }
+.timetable-batch-lane + .timetable-batch-lane { border-left: 1px solid var(--line); }
+.timetable-batch-lane > header { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; }
+.timetable-batch-mark { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 11px; color: var(--forest-900); background: var(--gold-400); font: 800 .8rem/1 "Manrope", sans-serif; }
+.timetable-batch-lane header strong, .timetable-batch-lane header small { display: block; }
+.timetable-batch-lane header strong { color: var(--ink-950); font-size: .84rem; }
+.timetable-batch-lane header small { margin-top: 3px; color: var(--ink-500); font-size: .65rem; }
+.timetable-slot-list { display: grid; gap: 8px; }
+.timetable-slot { min-height: 66px; display: grid; grid-template-columns: 78px minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.timetable-slot time { color: var(--forest-800); font-size: .72rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timetable-slot time small { display: block; margin-top: 3px; color: var(--ink-500); font-size: .59rem; font-weight: 600; }
+.timetable-slot > span > strong, .timetable-slot > span > small { display: block; }
+.timetable-slot > span > strong { color: var(--ink-950); font-size: .78rem; }
+.timetable-slot > span > small { margin-top: 4px; color: var(--ink-500); font-size: .64rem; line-height: 1.4; }
+.timetable-slot .owner-edit-button { min-width: 34px; padding-inline: 9px; }
 .teaching-register-head { min-height: 64px; align-items: center; margin: 0; padding: 0 18px; border-bottom: 1px solid var(--line); }
 .teaching-assignment-table td:last-child, .teaching-assignment-table th:last-child { width: 1%; text-align: right; }
 .teaching-assignment-table td:last-child .button { margin-left: auto; }
@@ -837,6 +864,15 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
   .mobile-record-card .button { width: 100%; margin-top: 12px; }
   .mobile-record-card .mobile-card-actions .button { margin-top: 0; }
   .teaching-register-head { min-height: 58px; padding: 0 14px; }
+  .operations-timetable-head { align-items: flex-start; flex-direction: column; gap: 10px; padding: 15px; }
+  .timetable-date-tabs { padding: 10px 12px; }
+  .timetable-date-tab { min-width: 78px; }
+  .operations-timetable-grid { grid-template-columns: 1fr; }
+  .timetable-batch-lane { padding: 14px; }
+  .timetable-batch-lane + .timetable-batch-lane { border-top: 1px solid var(--line); border-left: 0; }
+  .timetable-slot { grid-template-columns: 70px minmax(0,1fr) auto; gap: 9px; }
+  .timetable-slot .owner-edit-button { width: 34px; margin: 0; padding: 0; font-size: 0; }
+  .timetable-slot .owner-edit-button svg { width: 15px; height: 15px; }
   .teaching-register .mobile-record-card > .button { margin-top: 12px; }
   .timetable-section-head { min-height: 42px; padding: 0 2px; }
   .student-directory-search { padding: 12px; }

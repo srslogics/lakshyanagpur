@@ -58,6 +58,7 @@ let detailRouteStudentId = "";
 let settingsAccountSearch = "";
 let settingsAccountFilter = "all";
 let settingsSection = "accounts";
+let timetableSelectedDate = "";
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
 const RECONCILIATION_ACTION_STATES = new Set(["review", "needs_date", "needs_mode"]);
@@ -117,6 +118,22 @@ const formatDateTime = value => value ? new Intl.DateTimeFormat("en-IN", {
   hour: "2-digit",
   minute: "2-digit",
 }).format(asInstant(value)) : "—";
+const indiaDateKey = value => {
+  const parts = indiaDateParts(value);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+const classTime = value => value ? new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: true,
+}).format(asInstant(value)) : "—";
+const timetableDateLabel = value => new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  weekday: "short",
+  day: "2-digit",
+  month: "short",
+}).format(asInstant(value));
 const localInputValue = (date = new Date(Date.now() + 86400000)) => {
   const { year, month, day, hour, minute } = indiaDateParts(date);
   return `${year}-${month}-${day}T${hour}:${minute}`;
@@ -859,10 +876,29 @@ function renderTimetable() {
   const activeAssignments = teachingAssignments.filter(item => item.isActive);
   $("#timetable-metrics").innerHTML = compactMetrics([{ label: "Teaching assignments", value: String(activeAssignments.length) }, { label: "Faculty assigned", value: String(new Set(activeAssignments.map(item => item.facultyId)).size) }, { label: "Batches covered", value: String(new Set(activeAssignments.map(item => item.batchId)).size) }, { label: "Upcoming classes", value: String(state.sessions.filter(item => asInstant(item.startsAt).getTime() >= now && item.status === "scheduled").length) }]);
   $("#teaching-assignment-count").textContent = `${activeAssignments.length} active`;
-  $("#class-session-count").textContent = `${state.sessions.length} ${state.sessions.length === 1 ? "class" : "classes"}`;
+  const scheduledRows = [...state.sessions].filter(item => item.status === "scheduled").sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
+  const sessionDates = [...new Map(scheduledRows.map(item => [indiaDateKey(item.startsAt), item.startsAt])).entries()];
+  const todayKey = indiaDateKey(new Date());
+  const futureDates = sessionDates.filter(([key]) => key >= todayKey);
+  const availableDates = (futureDates.length ? futureDates : sessionDates.slice(-6)).slice(0, 6);
+  if (!availableDates.some(([key]) => key === timetableSelectedDate)) timetableSelectedDate = availableDates[0]?.[0] || "";
+  $("#timetable-date-tabs").innerHTML = availableDates.length ? availableDates.map(([key, value]) => {
+    const selected = key === timetableSelectedDate;
+    const label = timetableDateLabel(value).split(", ");
+    return `<button class="timetable-date-tab${selected ? " active" : ""}" type="button" role="tab" aria-selected="${selected}" data-timetable-date="${esc(key)}"><span>${esc(label[0])}</span><strong>${esc(label[1] || label[0])}</strong></button>`;
+  }).join("") : "";
+  const selectedRows = scheduledRows.filter(item => indiaDateKey(item.startsAt) === timetableSelectedDate);
+  const selectedDateValue = availableDates.find(([key]) => key === timetableSelectedDate)?.[1];
+  $("#weekly-timetable-range").textContent = selectedDateValue ? timetableDateLabel(selectedDateValue) : "No schedule";
+  const orderedBatches = ["Tatva", "Essential", ...new Set(selectedRows.map(item => item.batch).filter(name => !["Tatva", "Essential"].includes(name)))];
+  $("#operations-timetable-grid").innerHTML = selectedRows.length ? orderedBatches.filter(batch => selectedRows.some(item => item.batch === batch)).map(batch => {
+    const batchRows = selectedRows.filter(item => item.batch === batch);
+    return `<section class="timetable-batch-lane" aria-label="${esc(batch)} timetable"><header><span class="timetable-batch-mark">${esc(batch.slice(0, 1))}</span><span><strong>${esc(batch)}</strong><small>${batchRows.length} ${batchRows.length === 1 ? "class" : "classes"}</small></span></header><div class="timetable-slot-list">${batchRows.map(item => `<article class="timetable-slot"><time>${esc(classTime(item.startsAt))}<small>${esc(classTime(item.endsAt))}</small></time><span><strong>${esc(item.subject)}</strong><small>${esc(item.faculty)} · ${esc(item.room)}</small></span>${ownerEditButton("session", item.id, "Edit")}</article>`).join("")}</div></section>`;
+  }).join("") : emptyState("clock", "No classes scheduled", "Choose another date or schedule a class.");
+  $("#class-session-count").textContent = selectedDateValue ? `${selectedRows.length} ${selectedRows.length === 1 ? "class" : "classes"} · ${timetableDateLabel(selectedDateValue)}` : "0 classes";
   $("#teaching-assignments-table-body").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<tr><td>${studentPrimary(item.faculty, item.sessionCount ? `${item.sessionCount} scheduled ${item.sessionCount === 1 ? "class" : "classes"}` : "No classes scheduled")}</td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.subjectCode)}</small></td><td>${item.sessionCount}</td><td>${status(item.isActive ? "active" : "inactive")}</td><td>${teachingAssignmentEditButton(item)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.")}</td></tr>`;
   $("#teaching-assignments-mobile-list").innerHTML = teachingAssignments.length ? teachingAssignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.faculty)}</h3><p>${esc(item.subject)} · ${esc(item.subjectCode)}</p></div>${status(item.isActive ? "active" : "inactive")}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Classes</span><strong>${item.sessionCount}</strong></div></div>${teachingAssignmentEditButton(item)}</article>`).join("") : emptyState("users", "No teaching assignments", "Assign a faculty member to a batch and subject.");
-  const rows = [...state.sessions].sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
+  const rows = selectedRows;
   $("#sessions-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td><strong>${formatDateTime(item.startsAt)}</strong><br><small>${formatDateTime(item.endsAt).split(", ").pop()}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td>${esc(item.subject)}</td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("session", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("clock", "No classes scheduled")}</td></tr>`;
   $("#sessions-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${formatDateTime(item.startsAt)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Batch</span><strong>${esc(item.batch)}</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Room</span><strong>${esc(item.room)}</strong></div><div><span>Ends</span><strong>${formatDateTime(item.endsAt)}</strong></div></div>${ownerEditButton("session", item.id)}</article>`).join("") : emptyState("clock", "No classes scheduled");
 }
@@ -2615,6 +2651,8 @@ function bindEvents() {
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
     const attendance = event.target.closest("[data-attendance-id]")?.dataset.attendanceId; if (attendance) openAttendance(attendance);
+    const timetableDate = event.target.closest("[data-timetable-date]")?.dataset.timetableDate;
+    if (timetableDate) { timetableSelectedDate = timetableDate; renderTimetable(); }
     if (!event.target.closest("#account-menu, #user-menu-button, #topbar-profile-button")) closeAccountMenu();
   });
   $("#menu-button").addEventListener("click", openSidebar); $("#sidebar-close").addEventListener("click", closeSidebar); $("#drawer-scrim").addEventListener("click", closeSidebar);
