@@ -219,7 +219,12 @@ def test_health_checks_support_get_and_head(client):
     for path in ("/health", "/api/health"):
         response = client.get(path)
         assert response.status_code == 200
-        assert response.json() == {"status": "ok", "service": "lakshya-erp"}
+        assert response.json() == {
+            "status": "ok",
+            "service": "lakshya-erp",
+            "release": "development",
+        }
+        assert response.headers["x-lakshya-release"] == "development"
         assert client.head(path).status_code == 200
 
 

@@ -90,6 +90,7 @@ async def request_context(request: Request, call_next):
     response = await call_next(request)
     response.headers.update({
         "x-request-id": request_id,
+        "x-lakshya-release": settings.release,
         "x-content-type-options": "nosniff",
         "x-frame-options": "DENY",
         "referrer-policy": "strict-origin-when-cross-origin",
@@ -161,7 +162,7 @@ def health(db=Depends(get_db)):
             503,
             detail={"code": "DATABASE_UNAVAILABLE", "message": "Database health check failed"},
         ) from error
-    return {"status": "ok", "service": "lakshya-erp"}
+    return {"status": "ok", "service": "lakshya-erp", "release": settings.release}
 
 for static_dir in ("assets", "src"):
     directory = FRONTEND_DIR / static_dir

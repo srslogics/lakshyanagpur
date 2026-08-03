@@ -80,6 +80,20 @@ Optional:
 
 Database migrations run automatically during the Render build. For local work, run `alembic upgrade head` from `backend` before starting the API. The application does not create production tables implicitly.
 
+## Production release checks
+
+Every deployment exposes its release identifier through `/api/health` and the
+`X-Lakshya-Release` response header. Verify all public portal pages with:
+
+```bash
+python3 scripts/production_smoke.py
+```
+
+To include live authentication without putting passwords in source control or
+shell arguments, set `LAKSHYA_SMOKE_ACCOUNTS` to a JSON array of temporary
+`role`, `mobile`, and `password` records before running the same command. The
+script never prints passwords or access tokens.
+
 ## Implemented production foundation
 
 - Signed bearer authentication with PBKDF2 password hashing

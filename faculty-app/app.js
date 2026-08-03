@@ -198,6 +198,19 @@ function showLogin(message = "") {
   requestAnimationFrame(() => $("#login-identity").focus());
 }
 
+function loginErrorMessage(error) {
+  if (error.status === 401) {
+    const identifier = state.loginMode === "email" ? "Email address" : "Mobile number";
+    return `${identifier} or password is incorrect. Re-enter your password and try again.`;
+  }
+  return error.message.includes("permission") ? "This account does not have Faculty access." : error.message;
+}
+
+function clearLoginError() {
+  $("#login-error").textContent = "";
+  $("#login-error").classList.add("hidden");
+}
+
 function setLoginMode(mode) {
   state.loginMode = mode === "email" ? "email" : "mobile";
   const emailMode = state.loginMode === "email";
@@ -345,7 +358,7 @@ async function login(event) {
       showStartupError(error);
     } else {
       clearSession();
-      showLogin(error.message.includes("permission") ? "This account does not have Faculty access." : error.message);
+      showLogin(loginErrorMessage(error));
     }
   } finally {
     button.disabled = false;
@@ -1091,6 +1104,7 @@ function resetPasswordVisibility(root = document) {
 
 function bindEvents() {
   $("#login-form").addEventListener("submit", login);
+  $$("input", $("#login-form")).forEach(field => field.addEventListener("input", clearLoginError));
   $("#login-mode-button").addEventListener("click", () => {
     setLoginMode(state.loginMode === "mobile" ? "email" : "mobile");
     $("#login-identity").value = "";

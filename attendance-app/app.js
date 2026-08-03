@@ -156,6 +156,18 @@ function showLogin(message = "") {
   requestAnimationFrame(() => $("#login-mobile").focus());
 }
 
+function loginErrorMessage(error) {
+  if (error.status === 401) {
+    return "Mobile number or password is incorrect. Re-enter your password and try again.";
+  }
+  return error.message;
+}
+
+function clearLoginError() {
+  $("#login-error").textContent = "";
+  $("#login-error").classList.add("hidden");
+}
+
 function showPasswordChange(identity) {
   state.identity = identity;
   $("#boot-screen").classList.add("hidden");
@@ -260,7 +272,7 @@ async function login(event) {
       showStartupError(error);
     } else {
       clearSession();
-      showLogin(error.message);
+      showLogin(loginErrorMessage(error));
     }
   } finally {
     button.disabled = false;
@@ -704,6 +716,7 @@ function setDate(date) {
 
 function bindEvents() {
   $("#login-form").addEventListener("submit", login);
+  $$("input", $("#login-form")).forEach(field => field.addEventListener("input", clearLoginError));
   $("#password-change-form").addEventListener("submit", changePassword);
   $("#account-button").addEventListener("click", event => { event.stopPropagation(); toggleAccountMenu(); });
   $("#signout-button").addEventListener("click", logout);
