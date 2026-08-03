@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import (
     AttendanceEntry,
+    AttendancePeriodSummary,
     AttendanceRegister,
     Batch,
     ClassSession,
@@ -51,18 +52,18 @@ def _get_session(db: Session, session_id: str, user: User):
 
 
 def _eligible_students(db: Session, batch: Batch):
-    return (
+    query = (
         db.query(Student)
         .join(Enrollment, Enrollment.student_id == Student.id)
         .filter(
             Student.status == "active",
             Enrollment.is_active.is_(True),
             Enrollment.batch == batch.name,
-            Enrollment.program == batch.program,
         )
-        .order_by(Student.full_name)
-        .all()
     )
+    if batch.program != "All programs":
+        query = query.filter(Enrollment.program == batch.program)
+    return query.distinct().order_by(Student.full_name).all()
 
 
 def _eligible_manual_students(
@@ -188,18 +189,18 @@ def _attendance_catalog(db: Session):
 
 def _session_summary(db: Session, row):
     session, batch, subject, faculty, room, register = row
-    students = (
+    student_query = (
         db.query(func.count(func.distinct(Enrollment.student_id)))
         .join(Student, Student.id == Enrollment.student_id)
         .filter(
             Student.status == "active",
             Enrollment.is_active.is_(True),
             Enrollment.batch == batch.name,
-            Enrollment.program == batch.program,
         )
-        .scalar()
-        or 0
     )
+    if batch.program != "All programs":
+        student_query = student_query.filter(Enrollment.program == batch.program)
+    students = student_query.scalar() or 0
     marked = db.query(AttendanceEntry).filter_by(register_id=register.id).count() if register else 0
     return {"id": session.id, "batch": batch.name, "program": batch.program, "subject": subject.name, "faculty": faculty.full_name, "room": room.name, "startsAt": _aware(session.starts_at), "endsAt": _aware(session.ends_at), "status": session.status, "registerStatus": register.status if register else "not_started", "studentCount": students, "markedCount": marked}
 
@@ -229,6 +230,19 @@ def _session_summaries(db: Session, rows):
             .all()
         )
     }
+    for batch_name, program in batch_keys:
+        if program == "All programs":
+            student_counts[(batch_name, program)] = (
+                db.query(func.count(func.distinct(Enrollment.student_id)))
+                .join(Student, Student.id == Enrollment.student_id)
+                .filter(
+                    Student.status == "active",
+                    Enrollment.is_active.is_(True),
+                    Enrollment.batch == batch_name,
+                )
+                .scalar()
+                or 0
+            )
     register_ids = [row[5].id for row in rows if row[5]]
     marked_counts = {
         register_id: count
@@ -299,6 +313,31 @@ def attendance_portal_bootstrap(
         .limit(5)
         .all()
     )
+    latest_period_end = db.query(func.max(AttendancePeriodSummary.period_end)).filter(
+        AttendancePeriodSummary.status == "confirmed",
+    ).scalar()
+    history = []
+    if latest_period_end:
+        history = [{
+            "batch": batch_name,
+            "presentDays": int(present),
+            "workingDays": int(working),
+            "attendanceRate": round(int(present) / int(working) * 100, 1) if working else None,
+            "periodEnd": latest_period_end,
+        } for batch_name, present, working in (
+            db.query(
+                AttendancePeriodSummary.batch_name,
+                func.sum(AttendancePeriodSummary.present_days),
+                func.sum(AttendancePeriodSummary.working_days),
+            )
+            .filter(
+                AttendancePeriodSummary.period_end == latest_period_end,
+                AttendancePeriodSummary.status == "confirmed",
+            )
+            .group_by(AttendancePeriodSummary.batch_name)
+            .order_by(AttendancePeriodSummary.batch_name)
+            .all()
+        )]
     return {
         "profile": {
             "id": operator.id,
@@ -316,6 +355,7 @@ def attendance_portal_bootstrap(
         },
         "sessions": sessions,
         "catalog": _attendance_catalog(db),
+        "history": history,
         "notices": [{
             "id": notice.id,
             "title": notice.title,

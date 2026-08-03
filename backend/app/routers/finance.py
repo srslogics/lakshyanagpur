@@ -18,7 +18,7 @@ from ..operations_schemas import (
     PaymentReviewUpdate,
 )
 from ..security import require_roles
-from ..services import audit, payment_effect
+from ..services import audit, payment_effect, received_effect
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
 FINANCE_ROLES = ("owner", "accounts", "admissions_manager")
@@ -66,6 +66,7 @@ def _payment_payload(row: PaymentTransaction, student: Student):
         "date": row.transaction_date,
         "amount": row.amount,
         "signedAmount": _transaction_effect(row),
+        "receivedAmount": received_effect(row),
         "method": row.method,
         "type": row.transaction_type,
         "sourceNote": row.source_note,

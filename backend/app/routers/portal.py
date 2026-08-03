@@ -10,6 +10,7 @@ from ..models import (
     Assignment,
     AssignmentRecipient,
     AttendanceEntry,
+    AttendancePeriodSummary,
     AttendanceRegister,
     Batch,
     ClassSession,
@@ -25,11 +26,12 @@ from ..models import (
     Room,
     Student,
     StudentAccount,
+    StudentSubjectSelection,
     Subject,
     User,
 )
 from ..security import require_roles
-from ..services import payment_effect
+from ..services import payment_effect, received_effect
 from ..services import audit
 
 router = APIRouter(prefix="/api/portal", tags=["student portal"])
@@ -60,6 +62,7 @@ def _student_for_account(db: Session, model, user: User):
         .filter(
             model.user_id == user.id,
             Student.is_test_account.is_(False),
+            Student.status == "active",
         )
         .first()
     )
@@ -68,10 +71,15 @@ def _student_for_account(db: Session, model, user: User):
     return row
 
 
-def schedule_rows(db: Session, enrollment: Enrollment | None):
+def schedule_rows(db: Session, student: Student, enrollment: Enrollment | None):
     if not enrollment or not enrollment.batch:
         return []
-    rows = (
+    selected_subjects = {
+        name for name, in db.query(StudentSubjectSelection.subject_name)
+        .filter(StudentSubjectSelection.student_id == student.id)
+        .all()
+    }
+    query = (
         db.query(ClassSession, Batch, Subject, User, Room)
         .join(Batch, Batch.id == ClassSession.batch_id)
         .join(Subject, Subject.id == ClassSession.subject_id)
@@ -79,12 +87,16 @@ def schedule_rows(db: Session, enrollment: Enrollment | None):
         .join(Room, Room.id == ClassSession.room_id)
         .filter(
             Batch.name == enrollment.batch,
-            Batch.program == enrollment.program,
+            or_(
+                Batch.program == enrollment.program,
+                Batch.program == "All programs",
+            ),
             ClassSession.status == "scheduled",
         )
-        .order_by(ClassSession.starts_at)
-        .all()
     )
+    if selected_subjects:
+        query = query.filter(Subject.name.in_(selected_subjects))
+    rows = query.order_by(ClassSession.starts_at).all()
     return [{
         "id": session.id,
         "subject": subject.name,
@@ -116,7 +128,10 @@ def assignment_rows(
         )
         .filter(
             Batch.name == enrollment.batch,
-            Batch.program == enrollment.program,
+            or_(
+                Batch.program == enrollment.program,
+                Batch.program == "All programs",
+            ),
             Assignment.status == "published",
         )
         .order_by(Assignment.due_at)
@@ -204,6 +219,36 @@ def attendance_rows(db: Session, student: Student):
         "source": "imported_daily",
     } for entry in daily]
     return class_rows + manual_rows + daily_rows
+
+
+def attendance_period_summary(db: Session, student: Student):
+    row = (
+        db.query(AttendancePeriodSummary)
+        .filter(
+            AttendancePeriodSummary.student_id == student.id,
+            AttendancePeriodSummary.status == "confirmed",
+        )
+        .order_by(
+            AttendancePeriodSummary.period_end.desc(),
+            AttendancePeriodSummary.created_at.desc(),
+        )
+        .first()
+    )
+    if not row:
+        return None
+    return {
+        "id": row.id,
+        "batch": row.batch_name,
+        "mentor": row.mentor_name,
+        "periodStart": row.period_start,
+        "periodEnd": row.period_end,
+        "presentDays": row.present_days,
+        "absentDays": row.absent_days,
+        "workingDays": row.working_days,
+        "attendanceRate": float(row.attendance_rate),
+        "status": row.status,
+        "source": row.source_name,
+    }
 
 
 def examination_rows(
@@ -295,7 +340,10 @@ def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
             and_(
                 Notice.audience == "batch",
                 Batch.name == enrollment.batch,
-                Batch.program == enrollment.program,
+                or_(
+                    Batch.program == enrollment.program,
+                    Batch.program == "All programs",
+                ),
             ),
         ))
     else:
@@ -348,11 +396,12 @@ def fee_summary(db: Session, student: Student):
         }
     agreement = rows[0][0]
     transactions = [transaction for _, transaction in rows if transaction is not None]
-    paid = sum(payment_effect(item) for item in transactions)
+    ledger_effect = sum(payment_effect(item) for item in transactions)
+    paid = sum(received_effect(item) for item in transactions)
     return {
         "agreedAmount": agreement.agreed_amount,
         "paidAmount": max(0, paid),
-        "outstandingAmount": max(0, agreement.agreed_amount - paid),
+        "outstandingAmount": max(0, agreement.agreed_amount - ledger_effect),
         "currency": agreement.currency,
         "payments": [{
             "id": item.id,
@@ -360,7 +409,7 @@ def fee_summary(db: Session, student: Student):
             "amount": item.amount,
             "method": item.method,
             "status": item.status,
-        } for item in transactions],
+        } for item in transactions if item.transaction_type not in {"balance_credit", "balance_debit"}],
     }
 
 
@@ -384,9 +433,10 @@ def _portal_payload(
     notice_audience: str,
     include_finance: bool = False,
 ):
-    schedule = schedule_rows(db, enrollment)
+    schedule = schedule_rows(db, student, enrollment)
     assignments = assignment_rows(db, student, enrollment)
     attendance = attendance_rows(db, student)
+    period_summary = attendance_period_summary(db, student)
     examinations = examination_rows(db, student, enrollment)
     notices = notice_rows(db, enrollment, notice_audience)
     now = datetime.now(timezone.utc)
@@ -410,7 +460,9 @@ def _portal_payload(
             and _aware(row["scheduledAt"]) >= now
         ),
         "attendanceRate": (
-            round(present / len(classified_attendance) * 100, 1)
+            period_summary["attendanceRate"]
+            if period_summary
+            else round(present / len(classified_attendance) * 100, 1)
             if classified_attendance else None
         ),
     }
@@ -421,6 +473,7 @@ def _portal_payload(
         "assignments": assignments,
         "examinations": examinations,
         "attendance": attendance,
+        "attendanceSummary": period_summary,
         "notices": notices,
     }
     if include_finance:

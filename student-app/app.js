@@ -636,17 +636,23 @@ function renderExaminations() {
 
 function renderAttendance() {
   const rows = state.data.attendance;
+  const confirmed = state.data.attendanceSummary;
   const presentStatuses = new Set(["present", "late", "excused"]);
-  const present = rows.filter((item) => presentStatuses.has(item.status)).length;
+  const present = confirmed?.presentDays ?? rows.filter((item) => presentStatuses.has(item.status)).length;
   const late = rows.filter((item) => item.status === "late").length;
-  const absent = rows.filter((item) => item.status === "absent").length;
+  const absent = confirmed?.absentDays ?? rows.filter((item) => item.status === "absent").length;
   const unclassified = rows.filter((item) => item.status === "unclassified").length;
   const classified = rows.length - unclassified;
-  const rate = classified ? Math.round((present / classified) * 1000) / 10 : null;
+  const rate = confirmed?.attendanceRate ?? (classified ? Math.round((present / classified) * 1000) / 10 : null);
   $("#attendance-hero").innerHTML = `
     <div class="attendance-ring" style="--attendance:${rate ?? 0}%"><div><strong>${rate == null ? "—" : `${rate}%`}</strong><small>Overall</small></div></div>
-    <div class="attendance-copy"><strong>${rows.length ? "Recorded attendance" : "No attendance submitted"}</strong><p>${classified ? `${present} of ${classified} classified records count as attended.` : "This module will update after attendance is recorded."}</p></div>`;
-  $("#attendance-metrics").innerHTML = [
+    <div class="attendance-copy"><strong>${confirmed ? "Institute-confirmed attendance" : rows.length ? "Recorded attendance" : "No attendance submitted"}</strong><p>${confirmed ? `${present} present of ${confirmed.workingDays} applicable working days · ${dateText(confirmed.periodStart)} to ${dateText(confirmed.periodEnd)}.` : classified ? `${present} of ${classified} classified records count as attended.` : "This module will update after attendance is recorded."}</p></div>`;
+  $("#attendance-metrics").innerHTML = confirmed ? [
+    moduleMetric("Present", String(present)),
+    moduleMetric("Absent", String(absent), absent > 0),
+    moduleMetric("Working days", String(confirmed.workingDays)),
+    moduleMetric("Mentor", confirmed.mentor || "—"),
+  ].join("") : [
     moduleMetric("Attended", String(present)),
     moduleMetric("Late", String(late)),
     moduleMetric("Absent", String(absent), absent > 0),
@@ -658,7 +664,9 @@ function renderAttendance() {
     groups[subject].push(item);
     return groups;
   }, {});
-  $("#attendance-breakdown").innerHTML = Object.entries(grouped).length
+  $("#attendance-breakdown").innerHTML = confirmed
+    ? empty("check", "Confirmed period summary", "The client report contains a consolidated total; subject-level attendance was not supplied.")
+    : Object.entries(grouped).length
     ? Object.entries(grouped).map(([subject, items]) => {
       const attended = items.filter((item) => presentStatuses.has(item.status)).length;
       const subjectRate = Math.round((attended / items.length) * 100);

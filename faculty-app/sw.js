@@ -1,4 +1,4 @@
-const CACHE = "lakshya-faculty-v20";
+const CACHE = "lakshya-faculty-v21";
 const ASSETS = [
   "./",
   "./styles.css?v=11",

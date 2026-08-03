@@ -264,6 +264,34 @@ class DailyAttendanceEntry(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
 
 
+class AttendancePeriodSummary(TimestampMixin, Base):
+    """Client-confirmed aggregate attendance when daily marks are unavailable."""
+
+    __tablename__ = "attendance_period_summaries"
+    __table_args__ = (
+        UniqueConstraint(
+            "student_id",
+            "period_start",
+            "period_end",
+            name="uq_attendance_period_student",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("aps"))
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    source_student_code: Mapped[str] = mapped_column(String(24), index=True)
+    batch_name: Mapped[str] = mapped_column(String(120), index=True)
+    mentor_name: Mapped[str | None] = mapped_column(String(255), index=True)
+    period_start: Mapped[date] = mapped_column(Date, index=True)
+    period_end: Mapped[date] = mapped_column(Date, index=True)
+    present_days: Mapped[int] = mapped_column(Integer)
+    absent_days: Mapped[int] = mapped_column(Integer)
+    working_days: Mapped[int] = mapped_column(Integer)
+    attendance_rate: Mapped[float] = mapped_column(Numeric(5, 2))
+    source_name: Mapped[str] = mapped_column(String(255))
+    source_reference: Mapped[str] = mapped_column(String(255), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="confirmed", index=True)
+
+
 class FeeAgreement(TimestampMixin, Base):
     __tablename__ = "fee_agreements"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("fee"))
@@ -447,7 +475,7 @@ class ClassSession(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(24), default="scheduled", index=True)
     notes: Mapped[str] = mapped_column(Text, default="")
     override_reason: Mapped[str | None] = mapped_column(Text)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
 
 
 class AttendanceRegister(TimestampMixin, Base):

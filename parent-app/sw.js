@@ -1,4 +1,4 @@
-const CACHE="lakshya-parent-v20";
+const CACHE="lakshya-parent-v21";
 const ASSETS=["./","../portal-shared.css?v=4","./styles.css?v=5","../auth-shared.css?v=7","./app.js?v=12","./manifest.webmanifest","../lakshya-logo-576.png","../pwa-icon-192.png"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));self.skipWaiting();});
 self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE&&key.startsWith("lakshya-parent-")).map(key=>caches.delete(key)))));self.clients.claim();});

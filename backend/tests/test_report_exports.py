@@ -70,6 +70,36 @@ def test_owner_can_export_student_and_fee_csv(
     assert "80000,5000,75000,INR,active" in fees.text
 
 
+def test_client_balance_reconciliation_changes_balance_not_cash_received(
+    client,
+    database,
+    owner_headers,
+):
+    _finance_records(database)
+    agreement = database.query(FeeAgreement).one()
+    student = database.query(Student).filter_by(full_name="Export Student").one()
+    database.add(
+        PaymentTransaction(
+            student_id=student.id,
+            fee_agreement_id=agreement.id,
+            legacy_import_id="client-snapshot-test",
+            legacy_line_number=1,
+            transaction_date=date(2026, 8, 3),
+            amount=7_000,
+            method="client_statement",
+            transaction_type="balance_credit",
+            source_note="Client-confirmed balance",
+            status="posted",
+            reconciliation_status="ready",
+        )
+    )
+    database.commit()
+
+    fees = client.get("/api/reports/export/fees", headers=owner_headers)
+    assert fees.status_code == 200
+    assert "80000,5000,68000,INR,active" in fees.text
+
+
 def test_accounts_can_export_but_students_cannot(
     client,
     database,
@@ -106,4 +136,3 @@ def test_report_date_range_validation(client, owner_headers):
         headers=owner_headers,
     )
     assert response.status_code == 422
-

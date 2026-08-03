@@ -146,7 +146,7 @@ def health(db=Depends(get_db)):
         db.execute(text("SELECT 1"))
         if settings.is_render or settings.environment in {"production", "prod"}:
             revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-            if revision != "f63a1d9b7e20":
+            if revision != "0d8a3f2026c1":
                 raise HTTPException(
                     503,
                     detail={

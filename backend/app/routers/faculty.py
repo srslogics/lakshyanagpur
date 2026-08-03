@@ -132,6 +132,26 @@ def bootstrap(
         (batch_name, program): count
         for batch_name, program, count in student_count_rows
     }
+    batch_totals = {
+        batch_name: count
+        for batch_name, count in (
+            db.query(
+                Enrollment.batch,
+                func.count(func.distinct(Enrollment.student_id)),
+            )
+            .filter(
+                Enrollment.is_active.is_(True),
+                Enrollment.batch.in_(batch_names),
+            )
+            .group_by(Enrollment.batch)
+            .all()
+        )
+    } if batch_names else {}
+
+    def roster_count(batch):
+        if batch.program == "All programs":
+            return batch_totals.get(batch.name, 0)
+        return student_counts.get((batch.name, batch.program), 0)
 
     sessions = []
     teaching_pairs = {
@@ -143,7 +163,7 @@ def bootstrap(
             "subjectId": subject.id,
             "subject": subject.name,
             "subjectCode": subject.code,
-            "studentCount": student_counts.get((batch.name, batch.program), 0),
+            "studentCount": roster_count(batch),
         }
         for assignment, batch, subject in teaching_assignment_rows
     }
@@ -165,7 +185,7 @@ def bootstrap(
             "endsAt": _aware(session.ends_at),
             "status": session.status,
             "notes": session.notes,
-            "studentCount": student_counts.get((batch.name, batch.program), 0),
+            "studentCount": roster_count(batch),
         })
     assignment_rows = (
         db.query(Assignment, Batch, Subject)
@@ -186,7 +206,7 @@ def bootstrap(
         "dueAt": _aware(assignment.due_at),
         "externalUrl": assignment.external_url,
         "status": assignment.status,
-        "recipientCount": student_counts.get((batch.name, batch.program), 0),
+        "recipientCount": roster_count(batch),
         "createdAt": _aware(assignment.created_at),
     } for assignment, batch, subject in assignment_rows]
 

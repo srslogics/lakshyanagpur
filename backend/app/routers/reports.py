@@ -11,6 +11,7 @@ from ..database import get_db
 from ..models import (
     Assignment,
     AttendanceEntry,
+    AttendancePeriodSummary,
     AttendanceRegister,
     AuditLog,
     ClassSession,
@@ -24,7 +25,7 @@ from ..models import (
     User,
 )
 from ..security import require_roles
-from ..services import payment_effect
+from ..services import payment_effect, received_effect
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 REPORT_ROLES = ("owner", "accounts", "academic_coordinator")
@@ -65,21 +66,34 @@ def overview(
 ):
     now = datetime.now(timezone.utc)
     lead_rows = db.query(Lead.stage, func.count(Lead.id)).group_by(Lead.stage).all()
-    attendance_rows = db.query(AttendanceEntry.status, func.count()).group_by(AttendanceEntry.status).all()
-    attendance = {status: count for status, count in attendance_rows}
-    daily_rows = (
-        db.query(DailyAttendanceEntry.normalized_status, func.count())
-        .group_by(DailyAttendanceEntry.normalized_status)
-        .all()
-    )
-    for status, count in daily_rows:
-        key = status or "unclassified"
-        attendance[key] = attendance.get(key, 0) + count
+    latest_period_end = db.query(func.max(AttendancePeriodSummary.period_end)).filter(
+        AttendancePeriodSummary.status == "confirmed",
+    ).scalar()
+    if latest_period_end:
+        present, absent = db.query(
+            func.coalesce(func.sum(AttendancePeriodSummary.present_days), 0),
+            func.coalesce(func.sum(AttendancePeriodSummary.absent_days), 0),
+        ).filter(
+            AttendancePeriodSummary.period_end == latest_period_end,
+            AttendancePeriodSummary.status == "confirmed",
+        ).one()
+        attendance = {"present": int(present), "absent": int(absent)}
+    else:
+        attendance_rows = db.query(AttendanceEntry.status, func.count()).group_by(AttendanceEntry.status).all()
+        attendance = {status: count for status, count in attendance_rows}
+        daily_rows = (
+            db.query(DailyAttendanceEntry.normalized_status, func.count())
+            .group_by(DailyAttendanceEntry.normalized_status)
+            .all()
+        )
+        for status, count in daily_rows:
+            key = status or "unclassified"
+            attendance[key] = attendance.get(key, 0) + count
     attendance_total = sum(
         count for status, count in attendance.items() if status != "unclassified"
     )
     paid = sum(
-        payment_effect(row)
+        received_effect(row)
         for row, _student in db.query(PaymentTransaction, Student)
         .join(Student, Student.id == PaymentTransaction.student_id)
         .filter(Student.is_test_account.is_(False))
@@ -198,10 +212,15 @@ def export_report(
             .all()
         )
         effects: dict[str, int] = {}
+        receipts: dict[str, int] = {}
         for transaction in db.query(PaymentTransaction).all():
             effects[transaction.fee_agreement_id] = (
                 effects.get(transaction.fee_agreement_id, 0)
                 + payment_effect(transaction)
+            )
+            receipts[transaction.fee_agreement_id] = (
+                receipts.get(transaction.fee_agreement_id, 0)
+                + received_effect(transaction)
             )
         return _csv_download(
             f"lakshya-fee-balances-{stamp}.csv",
@@ -219,7 +238,7 @@ def export_report(
                     student.admission_number,
                     student.full_name,
                     agreement.agreed_amount,
-                    max(0, effects.get(agreement.id, 0)),
+                    max(0, receipts.get(agreement.id, 0)),
                     max(
                         0,
                         agreement.agreed_amount
@@ -298,6 +317,33 @@ def export_report(
                 "imported",
             )
             for entry, student in daily_query.all()
+        )
+        summary_query = (
+            db.query(AttendancePeriodSummary, Student)
+            .join(Student, Student.id == AttendancePeriodSummary.student_id)
+            .filter(AttendancePeriodSummary.status == "confirmed")
+        )
+        if date_from:
+            summary_query = summary_query.filter(
+                AttendancePeriodSummary.period_end >= date_from,
+            )
+        if date_to:
+            summary_query = summary_query.filter(
+                AttendancePeriodSummary.period_start <= date_to,
+            )
+        rows.extend(
+            (
+                f"{summary.period_start.isoformat()} to {summary.period_end.isoformat()}",
+                student.admission_number,
+                student.full_name,
+                summary.batch_name,
+                "",
+                "Period summary",
+                f"{float(summary.attendance_rate):.1f}%",
+                f"{summary.present_days} present / {summary.working_days} working days",
+                "client-confirmed summary",
+            )
+            for summary, student in summary_query.all()
         )
         rows.sort(key=lambda item: (str(item[0]), item[2]), reverse=True)
         return _csv_download(

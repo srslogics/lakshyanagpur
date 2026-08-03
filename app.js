@@ -607,23 +607,27 @@ const needsPaymentReview = item => item.status === "staged" && RECONCILIATION_AC
 
 function studentAccount(agreement) {
   const payments = studentPayments(agreement.studentId);
-  const paid = payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
+  const ledgerEffect = payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
+  const paid = payments.reduce((sum, item) => sum + Number(item.receivedAmount ?? item.signedAmount ?? item.amount ?? 0), 0);
   const agreed = Number(agreement.agreedAmount || 0);
   const workbookControl = Number(agreement.legacyRegistrationTotal || 0);
-  const balance = agreed - paid;
+  const balance = agreed - ledgerEffect;
   const difference = paid - workbookControl;
   const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && needsPaymentReview(item)).length;
+  const clientBalanceEntry = payments.find(item => ["balance_credit", "balance_debit"].includes(item.type));
   return {
     ...agreement,
     payments,
     paid,
+    ledgerEffect,
     agreed,
     workbookControl,
     balance,
     difference,
     reviewCount,
+    clientBalanceEntry,
     balanceState: balance > 0 ? "due" : balance < 0 ? "credit" : "settled",
-    needsReconciliation: difference !== 0 || reviewCount > 0
+    needsReconciliation: reviewCount > 0 || (!clientBalanceEntry && difference !== 0)
   };
 }
 
@@ -634,6 +638,7 @@ function accountBalance(value) {
 }
 
 function reconciliationBadge(account) {
+  if (account.clientBalanceEntry && !account.needsReconciliation) return `<span class="status status-ready">Client confirmed</span>`;
   if (!account.needsReconciliation) return `<span class="status status-ready">Complete</span>`;
   return `<span class="status status-review">${account.reviewCount ? "Needs input" : "Check import"}</span>`;
 }
@@ -702,13 +707,15 @@ function renderPaymentRows() {
   $("#payment-student-filter-name").textContent = student?.studentName || "";
   const paymentRows = rows.filter(item => item.type !== "scheduled_payment");
   const installmentRows = rows.filter(item => item.type === "scheduled_payment");
-  const total = paymentRows.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
+  const total = paymentRows.reduce((sum, item) => sum + Number(item.receivedAmount ?? item.signedAmount ?? item.amount ?? 0), 0);
   $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${paymentRows.length} posted · ${installmentRows.length} future · ${money(total)} net received`;
   const typeLabel = item => ({
     payment: "Payment received",
     reversal: "Reversal",
     refund: "Refund",
     void: "Void",
+    balance_credit: "Balance reconciliation credit",
+    balance_debit: "Balance reconciliation debit",
     scheduled_payment: "Future payment",
   }[item.type] || String(item.type || "Entry").replaceAll("_", " "));
   const amountLabel = item => {
@@ -774,7 +781,7 @@ function renderStudentLedger(studentId) {
     runningBalance -= effect;
     return {
       date: item.date,
-      particulars: item.type === "payment" ? "Fee received" : String(item.type || "Adjustment").replace(/^./, value => value.toUpperCase()),
+      particulars: item.type === "payment" ? "Fee received" : item.type === "balance_credit" || item.type === "balance_debit" ? "Client balance reconciliation" : String(item.type || "Adjustment").replaceAll("_", " ").replace(/^./, value => value.toUpperCase()),
       reference: item.receiptNumber || (item.line ? `Import line ${item.line}` : item.reference || "—"),
       mode: item.method || "Not captured",
       debit: effect < 0 ? Math.abs(effect) : null,
@@ -800,7 +807,9 @@ function renderStudentLedger(studentId) {
   $("#ledger-table-body").innerHTML = transactions.map(item => `<tr><td>${item.date ? formatDate(item.date) : `<span class="unknown-date">Date unknown</span>`}</td><td><strong>${esc(item.particulars)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ""}</td><td>${esc(item.reference)}</td><td class="payment-mode">${esc(item.mode)}</td><td class="currency ledger-number">${item.debit == null ? "—" : money(item.debit)}</td><td class="currency ledger-number">${item.credit == null ? "—" : money(item.credit)}</td><td class="currency ledger-number ledger-running-balance">${accountBalance(item.balance)}</td></tr>`).join("");
   $("#ledger-mobile-list").innerHTML = transactions.map(item => `<article class="mobile-record-card ledger-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.particulars)}</h3><p>${item.date ? formatDate(item.date) : "Date unknown"} · ${esc(item.reference)}</p></div><strong class="ledger-mobile-balance">${accountBalance(item.balance)}</strong></div>${item.note ? `<p class="ledger-mobile-note">${esc(item.note)}</p>` : ""}<div class="mobile-record-meta"><div><span>Debit</span><strong>${item.debit == null ? "—" : money(item.debit)}</strong></div><div><span>Credit</span><strong>${item.credit == null ? "—" : money(item.credit)}</strong></div><div><span>Mode</span><strong class="payment-mode">${esc(item.mode)}</strong></div><div><span>Balance</span><strong>${accountBalance(item.balance)}</strong></div></div></article>`).join("");
   const controlDifference = account.difference;
-  $("#ledger-control-values").innerHTML = `<div><span>Workbook control</span><strong>${money(account.workbookControl)}</strong></div><div><span>Posted payments</span><strong>${money(account.paid)}</strong></div><div><span>Difference</span><strong class="${controlDifference ? "control-difference" : ""}">${controlDifference ? `${money(Math.abs(controlDifference))} ${controlDifference < 0 ? "below" : "above"}` : money(0)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`;
+  $("#ledger-control-values").innerHTML = account.clientBalanceEntry
+    ? `<div><span>Client-confirmed balance</span><strong>${accountBalance(account.balance)}</strong></div><div><span>Confirmed on</span><strong>${formatDate(account.clientBalanceEntry.date)}</strong></div><div><span>Recorded payments</span><strong>${money(account.paid)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`
+    : `<div><span>Workbook control</span><strong>${money(account.workbookControl)}</strong></div><div><span>Posted payments</span><strong>${money(account.paid)}</strong></div><div><span>Difference</span><strong class="${controlDifference ? "control-difference" : ""}">${controlDifference ? `${money(Math.abs(controlDifference))} ${controlDifference < 0 ? "below" : "above"}` : money(0)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`;
   injectIcons($("#student-ledger-view"));
 }
 

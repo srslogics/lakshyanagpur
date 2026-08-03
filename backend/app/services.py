@@ -37,7 +37,7 @@ def audit(db: Session, actor: User, action: str, entity_type: str, entity_id: st
 
 
 def payment_effect(transaction: PaymentTransaction) -> int:
-    """Return the canonical signed value used by every financial summary."""
+    """Return the signed ledger effect used to calculate the balance."""
     if transaction.status not in {"staged", "posted"}:
         return 0
     if transaction.status == "staged" and transaction.reconciliation_status != "ready":
@@ -46,9 +46,20 @@ def payment_effect(transaction: PaymentTransaction) -> int:
         return 0
     if transaction.transaction_type == "payment":
         return transaction.amount
+    if transaction.transaction_type == "balance_credit":
+        return transaction.amount
+    if transaction.transaction_type == "balance_debit":
+        return -transaction.amount
     if transaction.transaction_type in {"adjustment", "reversal", "refund", "void"}:
         return -transaction.amount
     return 0
+
+
+def received_effect(transaction: PaymentTransaction) -> int:
+    """Return actual money received, excluding client balance reconciliations."""
+    if transaction.transaction_type in {"balance_credit", "balance_debit"}:
+        return 0
+    return payment_effect(transaction)
 
 
 def admission_number(db: Session) -> str:
