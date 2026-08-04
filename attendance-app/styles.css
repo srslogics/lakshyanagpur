@@ -190,6 +190,9 @@ svg{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-li
 .student-copy{min-width:0;display:grid}
 .student-copy strong{overflow:hidden;font-size:.79rem;text-overflow:ellipsis;white-space:nowrap}
 .student-copy small{margin-top:3px;color:var(--muted);font-size:.64rem}
+.arrival-time{width:max-content;margin-top:6px;padding:4px 7px;border-radius:999px;font-size:.59rem;font-weight:900;letter-spacing:.01em}
+.arrival-time.recorded{color:var(--green);background:var(--green-soft)}
+.arrival-time.pending{color:var(--muted);background:var(--surface-soft)}
 .status-option{min-height:44px;padding:0 9px;border:1px solid var(--line);border-radius:10px;color:var(--muted);background:#fff;font-size:.68rem;font-weight:900}
 .status-option.active[data-status="present"]{color:var(--green);border-color:rgba(23,115,90,.3);background:var(--green-soft)}
 .status-option.active[data-status="late"]{color:var(--orange);border-color:rgba(155,101,18,.3);background:var(--orange-soft)}

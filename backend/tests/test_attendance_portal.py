@@ -121,6 +121,7 @@ def test_attendance_operator_sees_all_classes_and_submits_register(client, datab
     roster = client.get(f"/api/attendance/sessions/{started.id}", headers=headers)
     assert roster.status_code == 200
     assert roster.json()["entries"][0]["studentId"] == student.id
+    assert roster.json()["entries"][0]["arrivalAt"] is None
 
     marks = {"entries": [{"studentId": student.id, "status": "present", "reason": ""}]}
     draft = client.put(
@@ -158,6 +159,68 @@ def test_attendance_operator_sees_all_classes_and_submits_register(client, datab
         register_id=register.id,
         student_id=student.id,
     ).one().marked_by == operator.id
+    present_entry = database.query(AttendanceEntry).filter_by(
+        register_id=register.id,
+        student_id=student.id,
+    ).one()
+    absent_entry = database.query(AttendanceEntry).filter_by(
+        register_id=register.id,
+        student_id=second_student.id,
+    ).one()
+    assert present_entry.arrival_at is not None
+    assert absent_entry.arrival_at is None
+
+    saved_roster = client.get(
+        f"/api/attendance/sessions/{started.id}",
+        headers=headers,
+    ).json()
+    saved_present = next(
+        item for item in saved_roster["entries"]
+        if item["studentId"] == student.id
+    )
+    assert saved_present["arrivalAt"] is not None
+
+
+def test_attendance_preserves_supplied_arrival_time(client, database):
+    operator, _, student, started, _ = setup_attendance_day(database)
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    arrival = (datetime.now(timezone.utc) - timedelta(minutes=12)).replace(
+        microsecond=0,
+    )
+    marks = {
+        "entries": [{
+            "studentId": student.id,
+            "status": "late",
+            "reason": "Traffic delay",
+            "arrivalAt": arrival.isoformat(),
+        }],
+    }
+
+    saved = client.put(
+        f"/api/attendance/sessions/{started.id}",
+        headers=headers,
+        json=marks,
+    )
+    assert saved.status_code == 200
+
+    roster = client.get(
+        f"/api/attendance/sessions/{started.id}",
+        headers=headers,
+    ).json()
+    assert roster["entries"][0]["status"] == "late"
+    assert datetime.fromisoformat(roster["entries"][0]["arrivalAt"]) == arrival
+
+    marks["entries"][0].pop("arrivalAt")
+    marks["entries"][0]["reason"] = "Updated note"
+    assert client.put(
+        f"/api/attendance/sessions/{started.id}",
+        headers=headers,
+        json=marks,
+    ).status_code == 200
+    preserved = database.query(AttendanceEntry).filter_by(
+        student_id=student.id,
+    ).one()
+    assert preserved.arrival_at.replace(tzinfo=timezone.utc) == arrival
 
 
 def test_faculty_cannot_access_or_write_attendance(client, database):

@@ -63,6 +63,12 @@ function timeText(value) {
   }).format(asInstant(value));
 }
 
+const recordsArrival = status => status === "present" || status === "late";
+
+function arrivalText(value) {
+  return value ? `Arrived ${timeText(value)}` : "Arrival time pending";
+}
+
 function shiftDate(dateKey, amount) {
   const date = new Date(`${dateKey}T12:00:00+05:30`);
   date.setUTCDate(date.getUTCDate() + amount);
@@ -588,9 +594,14 @@ function renderRoster() {
 
 function rosterRow(item) {
   const statuses = ["present", "late", "absent", "excused"];
+  const tracksArrival = recordsArrival(item.status);
   return `
     <div class="roster-row" data-student-id="${esc(item.studentId)}">
-      <span class="student-copy"><strong>${esc(item.fullName)}</strong><small>${esc(item.admissionNumber)}</small></span>
+      <span class="student-copy">
+        <strong>${esc(item.fullName)}</strong>
+        <small>${esc(item.admissionNumber)}</small>
+        ${tracksArrival ? `<span class="arrival-time ${item.arrivalAt ? "recorded" : "pending"}">${esc(arrivalText(item.arrivalAt))}</span>` : ""}
+      </span>
       ${statuses.map(status => `<button class="status-option ${item.status === status ? "active" : ""}" type="button" data-status="${status}" aria-pressed="${item.status === status}" ${state.locked ? "disabled" : ""}>${status[0].toUpperCase() + status.slice(1)}</button>`).join("")}
       <input class="reason-input" data-reason type="text" maxlength="1000" value="${esc(item.reason || "")}" placeholder="Note (optional)" aria-label="Attendance note for ${esc(item.fullName)}" ${state.locked ? "disabled" : ""}>
     </div>
@@ -606,12 +617,18 @@ function closeRegister() {
 }
 
 function attendancePayload() {
+  const markedAt = new Date().toISOString();
   return {
-    entries:state.roster.map(item => ({
-      studentId:item.studentId,
-      status:item.status,
-      reason:item.reason || ""
-    }))
+    entries:state.roster.map(item => {
+      if (recordsArrival(item.status) && !item.arrivalAt) item.arrivalAt = markedAt;
+      if (!recordsArrival(item.status)) item.arrivalAt = null;
+      return {
+        studentId:item.studentId,
+        status:item.status,
+        reason:item.reason || "",
+        arrivalAt:item.arrivalAt
+      };
+    })
   };
 }
 
@@ -735,7 +752,12 @@ function bindEvents() {
   $("#attendance-form").addEventListener("submit", requestSubmit);
   $("#mark-all-present").addEventListener("click", () => {
     syncVisibleReasons();
-    state.roster.forEach(item => { item.status = "present"; item.reason = ""; });
+    const markedAt = new Date().toISOString();
+    state.roster.forEach(item => {
+      item.status = "present";
+      item.reason = "";
+      if (!item.arrivalAt) item.arrivalAt = markedAt;
+    });
     renderRoster();
   });
   document.addEventListener("click", event => {
@@ -770,7 +792,12 @@ function bindEvents() {
       syncVisibleReasons();
       const row = statusButton.closest("[data-student-id]");
       const student = state.roster.find(item => item.studentId === row.dataset.studentId);
-      if (student) student.status = statusButton.dataset.status;
+      if (student) {
+        const nextStatus = statusButton.dataset.status;
+        student.status = nextStatus;
+        if (recordsArrival(nextStatus) && !student.arrivalAt) student.arrivalAt = new Date().toISOString();
+        if (!recordsArrival(nextStatus)) student.arrivalAt = null;
+      }
       renderRoster();
     }
     if (event.target === $("#register-dialog")) closeRegister();

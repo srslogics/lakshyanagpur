@@ -40,6 +40,26 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def _arrival_at(status: str, supplied: datetime | None, existing: AttendanceEntry | None = None):
+    """Keep the first recorded arrival separate from later attendance edits."""
+    if status not in {"present", "late"}:
+        return None
+    if supplied:
+        return _aware(supplied).astimezone(timezone.utc)
+    if existing and existing.arrival_at:
+        return existing.arrival_at
+    return datetime.now(timezone.utc)
+
+
+def _entry_arrival(entry: AttendanceEntry | None):
+    return _aware(entry.arrival_at) if entry and entry.arrival_at else None
+
+
+def _arrival_iso(entry: AttendanceEntry | None):
+    value = _entry_arrival(entry)
+    return value.isoformat() if value else None
+
+
 def _session_query(db: Session):
     return db.query(ClassSession, Batch, Subject, User, Room, AttendanceRegister).join(Batch, Batch.id == ClassSession.batch_id).join(Subject, Subject.id == ClassSession.subject_id).join(User, User.id == ClassSession.faculty_id).join(Room, Room.id == ClassSession.room_id).outerjoin(AttendanceRegister, AttendanceRegister.class_session_id == ClassSession.id)
 
@@ -437,6 +457,7 @@ def _manual_register_payload(db: Session, register: AttendanceRegister):
                 if student.id in entries
                 else ""
             ),
+            "arrivalAt": _entry_arrival(entries.get(student.id)),
         } for student in students],
     }
 
@@ -557,6 +578,7 @@ def _save_manual(
             entry.status = item.status
             entry.reason = item.reason.strip()
             entry.marked_by = actor.id
+            entry.arrival_at = _arrival_at(item.status, item.arrival_at, entry)
         else:
             db.add(AttendanceEntry(
                 register_id=register.id,
@@ -564,6 +586,7 @@ def _save_manual(
                 status=item.status,
                 reason=item.reason.strip(),
                 marked_by=actor.id,
+                arrival_at=_arrival_at(item.status, item.arrival_at),
             ))
     audit(
         db,
@@ -641,10 +664,11 @@ def correct_manual_attendance(
     )
     if not entry:
         raise HTTPException(404, "Attendance entry not found")
-    before = {"status": entry.status, "reason": entry.reason}
+    before = {"status": entry.status, "reason": entry.reason, "arrivalAt": _arrival_iso(entry)}
     entry.status = payload.status
     entry.reason = payload.reason.strip()
     entry.marked_by = actor.id
+    entry.arrival_at = _arrival_at(payload.status, None, entry)
     audit(
         db,
         actor,
@@ -652,13 +676,14 @@ def correct_manual_attendance(
         "attendance_entry",
         f"{register.id}:{student_id}",
         before=before,
-        after={"status": entry.status, "reason": entry.reason},
+        after={"status": entry.status, "reason": entry.reason, "arrivalAt": _arrival_iso(entry)},
     )
     db.commit()
     return {
         "studentId": student_id,
         "status": entry.status,
         "reason": entry.reason,
+        "arrivalAt": _entry_arrival(entry),
     }
 
 
@@ -668,7 +693,7 @@ def attendance_roster(session_id: str, db: Session = Depends(get_db), user: User
     session, batch, subject, faculty, room, register = row
     students = _eligible_students(db, batch)
     entries = {item.student_id: item for item in db.query(AttendanceEntry).filter_by(register_id=register.id).all()} if register else {}
-    return {"session": _session_summary(db, row), "entries": [{"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "status": entries[student.id].status if student.id in entries else "present", "reason": entries[student.id].reason if student.id in entries else ""} for student in students]}
+    return {"session": _session_summary(db, row), "entries": [{"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "status": entries[student.id].status if student.id in entries else "present", "reason": entries[student.id].reason if student.id in entries else "", "arrivalAt": _entry_arrival(entries.get(student.id))} for student in students]}
 
 
 def _save(
@@ -698,8 +723,9 @@ def _save(
         entry = existing.get(item.student_id)
         if entry:
             entry.status, entry.reason, entry.marked_by = item.status, item.reason.strip(), actor.id
+            entry.arrival_at = _arrival_at(item.status, item.arrival_at, entry)
         else:
-            db.add(AttendanceEntry(register_id=register.id, student_id=item.student_id, status=item.status, reason=item.reason.strip(), marked_by=actor.id))
+            db.add(AttendanceEntry(register_id=register.id, student_id=item.student_id, status=item.status, reason=item.reason.strip(), marked_by=actor.id, arrival_at=_arrival_at(item.status, item.arrival_at)))
     audit(db, actor, "attendance.draft.save", "attendance_register", register.id, after={"session_id": session.id, "entries": len(payload.entries)})
     db.commit()
     return register
@@ -735,8 +761,9 @@ def correct_attendance(session_id: str, student_id: str, payload: AttendanceCorr
     entry = db.query(AttendanceEntry).filter_by(register_id=register.id, student_id=student_id).first()
     if not entry:
         raise HTTPException(404, "Attendance entry not found")
-    before = {"status": entry.status, "reason": entry.reason}
+    before = {"status": entry.status, "reason": entry.reason, "arrivalAt": _arrival_iso(entry)}
     entry.status, entry.reason, entry.marked_by = payload.status, payload.reason.strip(), actor.id
-    audit(db, actor, "attendance.correction", "attendance_entry", f"{register.id}:{student_id}", before=before, after={"status": entry.status, "reason": entry.reason})
+    entry.arrival_at = _arrival_at(payload.status, None, entry)
+    audit(db, actor, "attendance.correction", "attendance_entry", f"{register.id}:{student_id}", before=before, after={"status": entry.status, "reason": entry.reason, "arrivalAt": _arrival_iso(entry)})
     db.commit()
-    return {"studentId": student_id, "status": entry.status, "reason": entry.reason}
+    return {"studentId": student_id, "status": entry.status, "reason": entry.reason, "arrivalAt": _entry_arrival(entry)}

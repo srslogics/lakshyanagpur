@@ -508,6 +508,7 @@ class AttendanceEntry(Base):
     status: Mapped[str] = mapped_column(String(16), default="present", index=True)
     reason: Mapped[str] = mapped_column(Text, default="")
     marked_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    arrival_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
 
 

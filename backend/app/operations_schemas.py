@@ -418,6 +418,7 @@ class AttendanceMark(BaseModel):
     student_id: str = Field(alias="studentId")
     status: AttendanceStatus
     reason: str = Field(default="", max_length=1000)
+    arrival_at: datetime | None = Field(default=None, alias="arrivalAt")
     model_config = ConfigDict(populate_by_name=True)
 
 
