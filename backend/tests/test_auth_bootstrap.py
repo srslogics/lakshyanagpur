@@ -63,7 +63,7 @@ def test_frontend_shell_is_served(client):
     assert 'id="settings-account-filter"' in response.text
     assert 'id="settings-accounts-panel"' in response.text
     assert 'id="settings-academics-panel"' in response.text
-    assert 'property="og:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=2"' in response.text
+    assert 'property="og:image" content="https://lakshyaedutech.onrender.com/share-card.png?v=20260804-no-tm"' in response.text
 
     share_card = client.get("/share-card.png")
     assert share_card.status_code == 200

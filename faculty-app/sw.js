@@ -1,12 +1,12 @@
-const CACHE = "lakshya-faculty-v22";
+const CACHE = "lakshya-faculty-v23";
 const ASSETS = [
   "./",
   "./styles.css?v=11",
   "../auth-shared.css?v=8",
   "./app.js?v=17",
   "./manifest.webmanifest",
-  "../lakshya-logo-576.png",
-  "../pwa-icon-192.png"
+  "../lakshya-logo-576.png?v=20260804-no-tm",
+  "../pwa-icon-192.png?v=20260804-no-tm"
 ];
 
 self.addEventListener("install", event => {

@@ -128,7 +128,7 @@ const systemContent = {
   reinforce: {
     kicker: "Close the loop",
     title: "Doubt support and extra guidance turn weak areas into progress.",
-    copy: "Dedicated sessions, one-to-one guidance, Robomate+ and RoboAssist help students revisit difficult concepts until confidence returns.",
+    copy: "Dedicated sessions, one-to-one guidance and structured digital resources help students revisit difficult concepts until confidence returns.",
     progress: "100%",
   },
 };

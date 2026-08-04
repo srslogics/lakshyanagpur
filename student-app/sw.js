@@ -1,5 +1,5 @@
-const CACHE = "lakshya-student-v31";
-const ASSETS = ["./", "../portal-shared.css?v=4", "./styles.css?v=14", "../auth-shared.css?v=8", "./app.js?v=20", "./manifest.webmanifest", "../lakshya-logo-576.png", "../pwa-icon-192.png"];
+const CACHE = "lakshya-student-v32";
+const ASSETS = ["./", "../portal-shared.css?v=4", "./styles.css?v=14", "../auth-shared.css?v=8", "./app.js?v=20", "./manifest.webmanifest", "../lakshya-logo-576.png?v=20260804-no-tm", "../pwa-icon-192.png?v=20260804-no-tm"];
 self.addEventListener("install", event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener("activate", event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE && key.startsWith("lakshya-student-")).map(key => caches.delete(key))))); self.clients.claim(); });
 self.addEventListener("fetch", event => {
