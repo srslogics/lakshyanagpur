@@ -1,6 +1,9 @@
 from pathlib import Path
 from uuid import uuid4
 from contextlib import asynccontextmanager
+from functools import cache
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,6 +68,19 @@ OPERATIONS_VIEWS = frozenset({
     "reports",
     "settings",
 })
+
+
+@cache
+def expected_database_revisions() -> frozenset[str]:
+    """Read the migration heads shipped with this release.
+
+    Keeping this dynamic prevents a new migration from silently making the
+    readiness endpoint unhealthy because of a stale hard-coded revision.
+    """
+    alembic_config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    return frozenset(ScriptDirectory.from_config(alembic_config).get_heads())
+
+
 app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.include_router(auth.router)
@@ -141,13 +157,19 @@ async def validation_error(request: Request, exc: RequestValidationError):
     )
 
 @app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
+def health():
+    """Process-level liveness check for Render and external uptime monitors."""
+    return {"status": "ok", "service": "lakshya-erp", "release": settings.release}
+
+
 @app.api_route("/api/health", methods=["GET", "HEAD"])
-def health(db=Depends(get_db)):
+def readiness(db=Depends(get_db)):
+    """Database-aware readiness check for operational diagnostics."""
     try:
         db.execute(text("SELECT 1"))
         if settings.is_render or settings.environment in {"production", "prod"}:
-            revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
-            if revision != "0d8a3f2026c1":
+            revisions = frozenset(db.execute(text("SELECT version_num FROM alembic_version")).scalars().all())
+            if revisions != expected_database_revisions():
                 raise HTTPException(
                     503,
                     detail={
@@ -224,7 +246,7 @@ def public_site_routes(site_path: str):
 def attendance_app_redirect():
     return RedirectResponse(url="/attendance-app/", status_code=308)
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def frontend_index(): return FileResponse(FRONTEND_DIR / "index.html")
 
 

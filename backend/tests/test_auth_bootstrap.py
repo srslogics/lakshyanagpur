@@ -228,6 +228,7 @@ def test_portal_manifests_keep_installations_inside_their_app(client):
 
 
 def test_health_checks_support_get_and_head(client):
+    assert client.head("/").status_code == 200
     for path in ("/health", "/api/health"):
         response = client.get(path)
         assert response.status_code == 200
