@@ -485,8 +485,9 @@ function metricCard(label, value, iconName, featured = false) {
 
 function renderDashboard() {
   const activeStudents = state.students.filter(student => student.status === "active");
-  const agreed = state.agreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0);
-  const registration = state.agreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
+  const openAgreements = state.agreements.filter(item => !["inactive", "forfeited"].includes(item.studentStatus) && item.status !== "inactive");
+  const agreed = openAgreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0);
+  const registration = openAgreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
   $("#dashboard-metrics").innerHTML = [
     metricCard("Active students", String(activeStudents.length), "users", true),
     metricCard("Agreed fees", shortMoney(agreed), "wallet"),
@@ -509,7 +510,7 @@ function renderDashboard() {
   $("#recent-students").innerHTML = recent.length ? recent.map(student => `<button class="record-item" type="button" data-student-id="${esc(student.id)}"><span class="record-avatar">${initials(student.fullName)}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span><span class="record-program">${esc(student.program)}</span><span class="record-date">${formatDate(student.enrollmentDate)}</span>${status(student.dataQualityStatus)}</button>`).join("") : emptyState("users", "No admissions");
 
   const stagedRows = state.payments.filter(item => item.status === "staged");
-  const stagedTotal = state.payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
+  const stagedTotal = state.payments.reduce((sum, item) => sum + Number(item.receivedAmount ?? 0), 0);
   const readyPayments = stagedRows.filter(item => item.reconciliationStatus === "ready").length;
   const actionPayments = stagedRows.filter(needsPaymentReview).length;
   const excludedNotes = stagedRows.filter(item => item.reconciliationStatus === "do_not_import").length;
@@ -550,7 +551,7 @@ function filteredStudents() {
   return state.students.filter(item =>
     (!search || [item.fullName, item.mobile, item.admissionNumber, item.previousSchool, item.batch, item.program].some(value => String(value || "").toLowerCase().includes(search)))
     && (!quality || item.dataQualityStatus === quality)
-    && studentBatchKey(item.batch) === studentHierarchyState.batch
+    && (studentHierarchyState.batch === "Opted out" ? ["inactive", "forfeited"].includes(item.status) : studentBatchKey(item.batch) === studentHierarchyState.batch && !["inactive", "forfeited"].includes(item.status))
     && (!studentHierarchyState.program || studentProgramKey(item.program) === studentHierarchyState.program)
   );
 }
@@ -568,7 +569,7 @@ function renderStudentDirectoryRow(student) {
     <span class="student-directory-identity"><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span>
     <span class="student-directory-context"><strong>${esc(studentProgramKey(student.program))}</strong><small>${esc(school)}</small></span>
     <span class="student-directory-contact"><strong>${esc(contact)}</strong><small>${esc(student.batch || "Batch not assigned")}</small></span>
-    <span class="student-directory-status">${status(student.dataQualityStatus)}</span>
+    <span class="student-directory-status">${["inactive", "forfeited"].includes(student.status) ? `<span class="status status-inactive">Opted out</span>` : status(student.dataQualityStatus)}</span>
     <span class="student-directory-open" aria-hidden="true">${icon("chevron-right")}</span>
   </button>`;
 }
@@ -580,14 +581,18 @@ function renderStudentRows() {
     (!search || [item.fullName, item.mobile, item.admissionNumber, item.previousSchool, item.batch, item.program].some(value => String(value || "").toLowerCase().includes(search)))
     && (!quality || item.dataQualityStatus === quality)
   );
-  const batchNames = [...STUDENT_BATCH_ORDER, "Records for review"].filter(batch =>
-    batch !== "Records for review" || baseRows.some(item => studentBatchKey(item.batch) === batch)
+  const batchNames = [...STUDENT_BATCH_ORDER, "Records for review", "Opted out"].filter(batch =>
+    batch === "Opted out"
+      ? baseRows.some(item => ["inactive", "forfeited"].includes(item.status))
+      : batch !== "Records for review" || baseRows.some(item => studentBatchKey(item.batch) === batch && !["inactive", "forfeited"].includes(item.status))
   );
   if (!batchNames.includes(studentHierarchyState.batch)) {
     studentHierarchyState.batch = batchNames[0] || "Essential";
     studentHierarchyState.program = "";
   }
-  const batchRows = baseRows.filter(item => studentBatchKey(item.batch) === studentHierarchyState.batch);
+  const batchRows = baseRows.filter(item => studentHierarchyState.batch === "Opted out"
+    ? ["inactive", "forfeited"].includes(item.status)
+    : studentBatchKey(item.batch) === studentHierarchyState.batch && !["inactive", "forfeited"].includes(item.status));
   const programCounts = new Map(STUDENT_PROGRAM_ORDER.map(program => [program, batchRows.filter(item => studentProgramKey(item.program) === program).length]));
   if (studentHierarchyState.batch === "Records for review") {
     batchRows.forEach(item => {
@@ -600,10 +605,10 @@ function renderStudentRows() {
     .filter(item => !studentHierarchyState.program || studentProgramKey(item.program) === studentHierarchyState.program)
     .sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
   const batchTabs = batchNames.map(batch => {
-    const count = baseRows.filter(item => studentBatchKey(item.batch) === batch).length;
+    const count = baseRows.filter(item => batch === "Opted out" ? ["inactive", "forfeited"].includes(item.status) : studentBatchKey(item.batch) === batch && !["inactive", "forfeited"].includes(item.status)).length;
     const label = batch === "Records for review" ? "Needs assignment" : batch;
     const active = studentHierarchyState.batch === batch;
-    return `<button type="button" role="tab" aria-selected="${active}" class="student-batch-tab${active ? " active" : ""}${batch === "Records for review" ? " review" : ""}" data-student-batch="${esc(batch)}"><span>${esc(label)}</span><strong>${count}</strong></button>`;
+    return `<button type="button" role="tab" aria-selected="${active}" class="student-batch-tab${active ? " active" : ""}${batch === "Records for review" ? " review" : ""}${batch === "Opted out" ? " inactive" : ""}" data-student-batch="${esc(batch)}"><span>${esc(label)}</span><strong>${count}</strong></button>`;
   }).join("");
   const programTabs = [["", "All", batchRows.length], ...[...programCounts.entries()].filter(([, count]) => count > 0).map(([program, count]) => [program, program, count])]
     .map(([value, label, count]) => `<button type="button" class="student-program-chip${studentHierarchyState.program === value ? " active" : ""}" data-student-program="${esc(value)}"><span>${esc(label)}</span><strong>${count}</strong></button>`).join("");
@@ -632,6 +637,7 @@ function studentAccount(agreement) {
   const difference = paid - workbookControl;
   const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && needsPaymentReview(item)).length;
   const clientBalanceEntry = payments.find(item => ["balance_credit", "balance_debit"].includes(item.type));
+  const accountClosed = ["inactive", "forfeited"].includes(agreement.studentStatus) || agreement.status === "inactive";
   return {
     ...agreement,
     payments,
@@ -643,6 +649,7 @@ function studentAccount(agreement) {
     difference,
     reviewCount,
     clientBalanceEntry,
+    accountClosed,
     balanceState: balance > 0 ? "due" : balance < 0 ? "credit" : "settled",
     needsReconciliation: reviewCount > 0 || (!clientBalanceEntry && difference !== 0)
   };
@@ -655,6 +662,7 @@ function accountBalance(value) {
 }
 
 function reconciliationBadge(account) {
+  if (account.accountClosed) return `<span class="status status-inactive">Opted out</span>`;
   if (account.clientBalanceEntry && !account.needsReconciliation) return `<span class="status status-ready">Verified</span>`;
   if (!account.needsReconciliation) return `<span class="status status-ready">Up to date</span>`;
   return `<span class="status status-review">Needs attention</span>`;
@@ -662,20 +670,21 @@ function reconciliationBadge(account) {
 
 function renderFinance() {
   const accounts = state.agreements.map(studentAccount);
+  const openAccounts = accounts.filter(item => !item.accountClosed);
   const paymentTotal = accounts.reduce((sum, item) => sum + item.paid, 0);
-  const outstanding = accounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
-  const dueAccounts = accounts.filter(item => item.balance > 0).length;
+  const outstanding = openAccounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
+  const dueAccounts = openAccounts.filter(item => item.balance > 0).length;
   const review = state.payments.filter(needsPaymentReview).length;
   const registerCount = state.payments.length + state.installments.length;
   $("#new-future-payment").classList.toggle("hidden", !isOwner());
   $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
   $("#new-payment").classList.toggle("hidden", !canManageFinance());
   $("#finance-metrics").innerHTML = compactMetrics([{ label: "Outstanding", value: shortMoney(outstanding) }, { label: "Collected", value: shortMoney(paymentTotal) }, { label: "Accounts due", value: String(dueAccounts) }]);
-  $("#fee-agreement-count").textContent = accounts.length;
+  $("#fee-agreement-count").textContent = openAccounts.length;
   $("#payment-total-count").textContent = registerCount;
   $("#payment-review-count").textContent = review ? `${review} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !review);
-  $("#finance-agreements-tab").setAttribute("aria-label", `Student balances, ${accounts.length} accounts`);
+  $("#finance-agreements-tab").setAttribute("aria-label", `Student balances, ${openAccounts.length} active accounts`);
   $("#finance-payments-tab").setAttribute("aria-label", `Payments, ${registerCount} entries${review ? `, ${review} need attention` : ""}`);
   renderAgreementRows(); renderPaymentRows();
   if (ledgerCurrentStudentId) renderStudentLedger(ledgerCurrentStudentId);
@@ -686,14 +695,14 @@ function renderAgreementRows() {
   const filter = $("#agreement-balance-filter").value;
   const rows = state.agreements.map(studentAccount).filter(item => {
     const matchesSearch = !search || [item.studentName, item.admissionNumber].some(value => String(value || "").toLowerCase().includes(search));
-    const matchesFilter = !filter || (filter === "reconcile" ? item.needsReconciliation : item.balanceState === filter);
+    const matchesFilter = !filter || (filter === "closed" ? item.accountClosed : filter === "reconcile" ? !item.accountClosed && item.needsReconciliation : !item.accountClosed && item.balanceState === filter);
     return matchesSearch && matchesFilter;
   });
-  const visibleOutstanding = rows.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
+  const visibleOutstanding = rows.reduce((sum, item) => sum + (item.accountClosed ? 0 : Math.max(item.balance, 0)), 0);
   $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
   const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}Ledger</button>`;
   const editAccountButton = item => isOwner() ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
-  const balanceBadge = item => `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
+  const balanceBadge = item => item.accountClosed ? `<span class="ledger-balance-state ledger-balance-settled">Closed</span>` : `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
   $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="receivable-fee-summary"><strong class="currency">${money(item.agreed)}</strong><small>${money(item.paid)} paid</small></td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("search", "No matching balances", "Clear a filter to see every student balance.")}</td></tr>`;
   $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
 }
@@ -806,7 +815,7 @@ function renderStudentLedger(studentId) {
     runningBalance -= effect;
     return {
       date: item.date,
-      particulars: item.type === "payment" ? "Fee received" : item.type === "balance_credit" || item.type === "balance_debit" ? "Client balance reconciliation" : String(item.type || "Adjustment").replaceAll("_", " ").replace(/^./, value => value.toUpperCase()),
+      particulars: item.type === "payment" ? "Fee received" : item.type === "balance_credit" || item.type === "balance_debit" ? item.sourceNote || "Balance adjustment" : String(item.type || "Adjustment").replaceAll("_", " ").replace(/^./, value => value.toUpperCase()),
       reference: item.receiptNumber || (item.line ? `Import line ${item.line}` : item.reference || "—"),
       mode: item.method || "Not captured",
       debit: effect < 0 ? Math.abs(effect) : null,
@@ -817,7 +826,7 @@ function renderStudentLedger(studentId) {
     };
   })];
   const knownDates = transactions.map(item => item.date).filter(Boolean).sort();
-  const balanceLabel = account.balance < 0 ? "Credit balance" : account.balance === 0 ? "Balance settled" : "Outstanding";
+  const balanceLabel = account.accountClosed ? "Account balance" : account.balance < 0 ? "Credit balance" : account.balance === 0 ? "Balance settled" : "Outstanding";
   const accountStatus = account.balance < 0 ? "credit" : account.balance === 0 ? "settled" : "due";
   $("#ledger-student-name").textContent = account.studentName;
   $("#ledger-student-meta").textContent = [account.admissionNumber, student?.program, student?.batch].filter(Boolean).join(" · ");
@@ -827,7 +836,7 @@ function renderStudentLedger(studentId) {
     { label: "Agreed fee", value: money(account.agreed), detail: "Account debit" },
     { label: "Paid", value: money(account.paid), detail: `${account.payments.length} ${account.payments.length === 1 ? "payment" : "payments"}` },
     { label: balanceLabel, value: accountBalance(account.balance), detail: accountStatus === "due" ? "Amount receivable" : accountStatus === "credit" ? "Student credit" : "No amount due", featured: true },
-    { label: "Account status", value: accountStatus === "due" ? "Payment due" : accountStatus === "credit" ? "Credit" : "Settled", detail: account.needsReconciliation ? "Control needs review" : "Control matched" }
+    { label: "Account status", value: account.accountClosed ? "Opted out" : accountStatus === "due" ? "Payment due" : accountStatus === "credit" ? "Credit" : "Settled", detail: account.accountClosed ? "Future liability closed" : account.needsReconciliation ? "Control needs review" : "Control matched" }
   ].map(item => `<article class="ledger-summary-card ${item.featured ? "ledger-summary-featured" : ""}"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong><small>${esc(item.detail)}</small></article>`).join("");
   $("#ledger-table-body").innerHTML = transactions.map(item => `<tr><td>${item.date ? formatDate(item.date) : `<span class="unknown-date">Date unknown</span>`}</td><td><strong>${esc(item.particulars)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ""}</td><td>${esc(item.reference)}</td><td class="payment-mode">${esc(item.mode)}</td><td class="currency ledger-number">${item.debit == null ? "—" : money(item.debit)}</td><td class="currency ledger-number">${item.credit == null ? "—" : money(item.credit)}</td><td class="currency ledger-number ledger-running-balance">${accountBalance(item.balance)}</td></tr>`).join("");
   $("#ledger-mobile-list").innerHTML = transactions.map(item => `<article class="mobile-record-card ledger-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.particulars)}</h3><p>${item.date ? formatDate(item.date) : "Date unknown"} · ${esc(item.reference)}</p></div><strong class="ledger-mobile-balance">${accountBalance(item.balance)}</strong></div>${item.note ? `<p class="ledger-mobile-note">${esc(item.note)}</p>` : ""}<div class="mobile-record-meta"><div><span>Debit</span><strong>${item.debit == null ? "—" : money(item.debit)}</strong></div><div><span>Credit</span><strong>${item.credit == null ? "—" : money(item.credit)}</strong></div><div><span>Mode</span><strong class="payment-mode">${esc(item.mode)}</strong></div><div><span>Balance</span><strong>${accountBalance(item.balance)}</strong></div></div></article>`).join("");
@@ -1261,7 +1270,7 @@ async function openStudent(studentId, updateRoute = true) {
     const issues = student.migration?.issues || [];
     const academic = student.academicProfile;
     body.innerHTML = `<div class="profile-hero"><span class="record-avatar">${initials(student.fullName)}</span><h3>${esc(student.fullName)}</h3><p>${esc(student.admissionNumber)} · ${esc(student.enrollment?.program || "Program not assigned")}</p></div>
-      ${isOwner() ? `<div class="owner-record-actions">${ownerEditButton("student", student.id, "Edit student")}</div>` : ""}
+      ${isOwner() ? `<div class="owner-record-actions">${student.status === "active" ? `<button class="button button-danger button-small" type="button" data-student-lifecycle="inactive" data-lifecycle-student-id="${esc(student.id)}" data-lifecycle-student-name="${esc(student.fullName)}">Mark opted out</button>` : ["inactive", "forfeited"].includes(student.status) ? `<button class="button button-primary button-small" type="button" data-student-lifecycle="active" data-lifecycle-student-id="${esc(student.id)}" data-lifecycle-student-name="${esc(student.fullName)}">Reactivate</button>` : ""}${ownerEditButton("student", student.id, "Edit student")}</div>` : ""}
       <section class="detail-section"><h4>Student &amp; enrollment</h4><div class="detail-grid">${detailField("Primary mobile", student.mobile)}${detailField("Secondary mobile", student.secondaryMobile)}${detailField("Previous school", student.previousSchool)}${detailField("Enrollment date", formatDate(student.enrollment?.enrollmentDate))}${detailField("Batch", student.enrollment?.batch)}${detailField("Status", student.status)}</div></section>
       <section class="detail-section"><h4>Academic profile</h4><div class="detail-grid">${detailField("Source student ID", academic?.sourceStudentCode)}${detailField("Mentor", academic?.mentorName)}${detailField("Workbook stream", academic?.sourceStream)}${detailField("Workbook school", academic?.sourceSchoolName)}${detailField("Selected subjects", academic?.subjects?.join(", "))}${detailField("Workbook contact", [academic?.sourcePrimaryMobile, academic?.sourceSecondaryMobile].filter(Boolean).join(", "))}</div></section>
       ${studentInventoryMarkup(student, inventory)}
@@ -1270,6 +1279,55 @@ async function openStudent(studentId, updateRoute = true) {
   } catch (error) { body.innerHTML = emptyState("alert", "Could not open this record", error.message); }
 }
 function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
+
+function openStudentLifecycleForm(studentId, studentName, targetStatus) {
+  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  const optingOut = targetStatus === "inactive";
+  openDrawer(optingOut ? `Mark opted out · ${studentName}` : `Reactivate · ${studentName}`, `<form class="auth-form" id="student-lifecycle-form" data-student-id="${esc(studentId)}" data-target-status="${esc(targetStatus)}">
+    <div class="inline-notice${optingOut ? " inline-notice-danger" : ""}">${icon(optingOut ? "alert" : "shield")}<span>${optingOut ? "This closes the unpaid fee balance, cancels future payment plans and disables student and parent portal access. Existing receipts remain in the ledger." : "This restores the previously closed fee liability and portal access. Cancelled payment plans stay cancelled and can be rescheduled if needed."}</span></div>
+    <label class="field"><span>Reason</span><textarea name="reason" rows="4" minlength="3" maxlength="500" placeholder="${optingOut ? "Example: Student discontinued the course" : "Example: Student rejoined the course"}" required></textarea><small>This note is stored in the audit trail and fee adjustment.</small></label>
+    ${formError("student-lifecycle-error")}
+    <button class="button ${optingOut ? "button-danger" : "button-primary"} button-large" type="submit">${optingOut ? "Confirm opt-out" : "Reactivate student"}</button>
+  </form>`);
+  $("#student-lifecycle-form").addEventListener("submit", submitStudentLifecycle);
+}
+
+async function refreshStudentAndFinanceState() {
+  const [students, agreements, payments, installments] = await Promise.all([
+    fetchAll("/api/students"),
+    fetchAll("/api/finance/agreements"),
+    fetchAll("/api/finance/transactions"),
+    fetchAll("/api/finance/installments"),
+  ]);
+  state.students = students;
+  state.agreements = agreements;
+  state.payments = payments;
+  state.installments = installments;
+}
+
+async function submitStudentLifecycle(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  try {
+    const result = await api(`/api/students/${encodeURIComponent(form.dataset.studentId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: form.dataset.targetStatus,
+        reason: String(new FormData(form).get("reason") || "").trim(),
+      }),
+    });
+    await refreshStudentAndFinanceState();
+    closeDetail();
+    renderAll();
+    const adjustment = Number(result.lifecycle?.adjustmentAmount || 0);
+    toast(result.status === "active" ? `Student reactivated${adjustment ? ` · ${money(adjustment)} receivable restored` : ""}.` : `Student opted out${adjustment ? ` · ${money(adjustment)} future liability closed` : ""}.`);
+  } catch (error) {
+    showFormError("#student-lifecycle-error", error);
+    button.disabled = false;
+  }
+}
 
 function studentInventoryMarkup(student, inventory) {
   if (!inventory) return "";
@@ -2306,7 +2364,7 @@ async function openOwnerEdit(kind, id) {
       <div class="form-pair"><label class="field"><span>Primary mobile</span><input name="mobile" value="${esc(item.mobile || "")}" inputmode="numeric"></label><label class="field"><span>Secondary mobile</span><input name="secondaryMobile" value="${esc(item.secondaryMobile || "")}" inputmode="numeric"></label></div>
       <label class="field"><span>Email</span><input name="email" type="email" value="${esc(item.email || "")}"></label>
       <label class="field"><span>Previous school</span><input name="previousSchool" value="${esc(item.previousSchool || "")}"></label>
-      <div class="form-pair"><label class="field"><span>Student status</span><select name="status">${ownerStatusOptions(["active","draft","inactive","forfeited"], item.status)}</select></label><label class="field"><span>Data quality</span><select name="dataQualityStatus">${ownerStatusOptions(["ready","review","blocked"], item.dataQualityStatus)}</select></label></div>
+      <div class="form-pair"><label class="field"><span>Student status</span><select name="status"><option value="active"${selected("active", item.status)}>Active</option><option value="draft"${selected("draft", item.status)}>Draft</option><option value="inactive"${selected("inactive", item.status)}>Opted out / inactive</option><option value="forfeited"${selected("forfeited", item.status)}>Forfeited</option></select><small>Changing an active student to opted out closes future fee liability and portal access.</small></label><label class="field"><span>Data quality</span><select name="dataQualityStatus">${ownerStatusOptions(["ready","review","blocked"], item.dataQualityStatus)}</select></label></div>
       <div class="form-pair"><label class="field"><span>Program</span><select name="program"><option value="">Not assigned</option>${STUDENT_PROGRAM_ORDER.map(program => `<option value="${esc(program)}"${selected(program, item.enrollment?.program)}>${esc(program)}</option>`).join("")}</select></label><label class="field"><span>Batch</span><select name="batch"><option value="">Not assigned</option>${STUDENT_BATCH_ORDER.map(batch => `<option value="${esc(batch)}"${selected(batch, item.enrollment?.batch)}>${esc(batch)}</option>`).join("")}</select></label></div>
       <label class="field"><span>Enrollment date</span><input name="enrollmentDate" type="date" value="${esc(item.enrollment?.enrollmentDate || "")}"></label>
       <fieldset class="choice-fieldset"><legend>Subjects</legend><div class="choice-grid">${["Physics", "Chemistry", "Mathematics", "Biology"].map(subject => `<label class="check-field"><input name="subjects" type="checkbox" value="${subject}"${checked(item.academicProfile?.subjects?.includes(subject))}><span>${subject}</span></label>`).join("")}</div></fieldset>`;
@@ -2369,7 +2427,7 @@ async function submitOwnerEdit(event) {
   else { endpoint = `/api/settings/${{ batch: "batches", subject: "subjects", room: "rooms" }[kind]}/${id}`; payload.isActive = form.elements.isActive.checked; if (kind === "room") payload.capacity = Number(payload.capacity); }
   try {
     await api(endpoint, { method: "PATCH", body: JSON.stringify(payload) });
-    if (kind === "student") state.students = await fetchAll("/api/students");
+    if (kind === "student") await refreshStudentAndFinanceState();
     else if (kind === "lead") state.leads = await fetchAll("/api/admissions/leads");
     else if (kind === "agreement") state.agreements = await fetchAll("/api/finance/agreements");
     else if (kind === "payment") state.payments = await fetchAll("/api/finance/transactions");
@@ -2639,6 +2697,8 @@ function bindEvents() {
     if (studentInventoryIssue) openStudentInventoryIssue(studentInventoryIssue.dataset.studentInventoryIssue);
     const studentInventoryReturn = event.target.closest("[data-student-inventory-return]");
     if (studentInventoryReturn) openStudentInventoryReturn(studentInventoryReturn.dataset.inventoryStudentId, studentInventoryReturn.dataset.studentInventoryReturn);
+    const studentLifecycle = event.target.closest("[data-student-lifecycle]");
+    if (studentLifecycle) openStudentLifecycleForm(studentLifecycle.dataset.lifecycleStudentId, studentLifecycle.dataset.lifecycleStudentName, studentLifecycle.dataset.studentLifecycle);
     const inventoryEdit = event.target.closest("[data-inventory-edit]");
     if (inventoryEdit) {
       const item = (state.inventory.items || []).find(row => row.id === inventoryEdit.dataset.inventoryEdit);

@@ -53,6 +53,19 @@ class StudentUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class StudentLifecycleUpdate(BaseModel):
+    status: Literal["active", "inactive"]
+    reason: str = Field(min_length=3, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def clean_reason(cls, value):
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("Enter a reason with at least 3 characters")
+        return value
+
+
 class StudentCreate(BaseModel):
     fullName: str = Field(min_length=2, max_length=255)
     mobile: str | None = None

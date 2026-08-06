@@ -335,7 +335,7 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .cell-actions { display: flex; align-items: center; justify-content: flex-start; gap: 8px; flex-wrap: wrap; }
 .owner-edit-button { min-height: 34px; gap: 6px; white-space: nowrap; }
 .owner-edit-button svg { width: 14px; height: 14px; }
-.owner-record-actions { display: flex; justify-content: flex-end; margin: -4px 0 14px; }
+.owner-record-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin: -4px 0 14px; }
 .immutable-record-note { display: grid; grid-template-columns: 38px 1fr; align-items: center; gap: 12px; padding: 13px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink-800); background: var(--surface-muted); font-size: .78rem; font-weight: 700; }
 .immutable-record-note > svg { width: 38px; height: 38px; padding: 9px; border-radius: 11px; color: var(--forest-700); background: var(--forest-50); }
 .immutable-record-note small { display: block; margin-top: 5px; color: var(--ink-500); font-size: .68rem; font-weight: 500; line-height: 1.45; }
@@ -399,6 +399,7 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .student-batch-tab.active { border-color: var(--forest-100); color: #fff; background: var(--forest-800); box-shadow: var(--shadow-xs); }
 .student-batch-tab.active strong { color: var(--forest-800); background: #fff; }
 .student-batch-tab.review:not(.active) { color: var(--danger); }
+.student-batch-tab.inactive:not(.active) { color: var(--danger); background: var(--danger-bg); }
 .student-directory-bar { padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .student-program-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .student-program-chip { min-height: 34px; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink-600); background: var(--surface); font-size: .7rem; font-weight: 700; cursor: pointer; }

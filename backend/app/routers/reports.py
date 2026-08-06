@@ -102,7 +102,10 @@ def overview(
     recent = db.query(AuditLog, User).outerjoin(User, User.id == AuditLog.actor_id).filter((User.id.is_(None)) | (User.is_test_account.is_(False))).order_by(AuditLog.created_at.desc()).limit(10).all()
     return {
         "metrics": {
-            "students": db.query(Student).filter(Student.is_test_account.is_(False)).count(),
+            "students": db.query(Student).filter(
+                Student.is_test_account.is_(False),
+                Student.status == "active",
+            ).count(),
             "activeUsers": db.query(User).filter(User.is_active.is_(True), User.is_test_account.is_(False)).count(),
             "scheduledClasses": db.query(ClassSession).filter(ClassSession.starts_at >= now).count(),
             "publishedNotices": db.query(Notice).filter_by(status="published").count(),
@@ -157,15 +160,17 @@ def export_report(
         raise HTTPException(422, "'from' date must be on or before 'to' date")
     stamp = datetime.now(timezone.utc).date().isoformat()
     if report_name == "students":
-        enrollment_rows = {
-            row.student_id: row
-            for row in (
-                db.query(Enrollment)
-                .filter(Enrollment.is_active.is_(True))
-                .order_by(Enrollment.created_at.desc())
-                .all()
+        enrollment_rows = {}
+        for row in (
+            db.query(Enrollment)
+            .order_by(
+                Enrollment.is_active.desc(),
+                Enrollment.created_at.desc(),
+                Enrollment.id.desc(),
             )
-        }
+            .all()
+        ):
+            enrollment_rows.setdefault(row.student_id, row)
         students = db.query(Student).filter(Student.is_test_account.is_(False)).order_by(Student.full_name).all()
         return _csv_download(
             f"lakshya-students-{stamp}.csv",

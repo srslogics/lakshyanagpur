@@ -2,7 +2,18 @@ from datetime import date
 
 import pytest
 
-from app.models import AuditLog, Enrollment, FeeAgreement, PaymentTransaction, Room, Student, User
+from app.models import (
+    AuditLog,
+    Enrollment,
+    FeeAgreement,
+    FeeInstallment,
+    ParentAccount,
+    PaymentTransaction,
+    Room,
+    Student,
+    StudentAccount,
+    User,
+)
 
 
 def _student_record(database):
@@ -63,6 +74,117 @@ def test_owner_can_edit_student_and_non_owner_cannot(client, database, owner_hea
 
     denied = client.patch(f"/api/students/{student.id}", json=payload, headers=parent_headers)
     assert denied.status_code == 403
+
+
+def test_opt_out_closes_future_fee_liability_and_reactivation_restores_it(
+    client, database, owner_headers
+):
+    student, enrollment = _student_record(database)
+    agreement = FeeAgreement(
+        student_id=student.id,
+        enrollment_id=enrollment.id,
+        agreed_amount=100000,
+        legacy_registration_total=30000,
+        currency="INR",
+        status="active",
+    )
+    database.add(agreement)
+    database.flush()
+    database.add(
+        PaymentTransaction(
+            student_id=student.id,
+            fee_agreement_id=agreement.id,
+            transaction_date=date(2026, 7, 1),
+            amount=30000,
+            method="upi",
+            transaction_type="payment",
+            source_note="ERP payment receipt",
+            status="posted",
+            reconciliation_status="ready",
+        )
+    )
+    installment = FeeInstallment(
+        student_id=student.id,
+        fee_agreement_id=agreement.id,
+        due_date=date(2026, 9, 1),
+        amount=20000,
+        expected_method="not_decided",
+        notes="Future collection",
+        status="scheduled",
+        created_by=database.query(User).filter_by(role="owner").one().id,
+    )
+    student_user = User(
+        mobile="9000000003",
+        full_name="Student login",
+        role="student",
+        password_hash="unused-in-test",
+    )
+    parent_user = database.query(User).filter_by(role="parent_student").one()
+    database.add_all([installment, student_user])
+    database.flush()
+    database.add_all(
+        [
+            StudentAccount(user_id=student_user.id, student_id=student.id),
+            ParentAccount(
+                user_id=parent_user.id,
+                student_id=student.id,
+                contact_type="primary_contact",
+            ),
+        ]
+    )
+    database.commit()
+
+    opted_out = client.patch(
+        f"/api/students/{student.id}/status",
+        json={"status": "inactive", "reason": "Student discontinued the course"},
+        headers=owner_headers,
+    )
+    assert opted_out.status_code == 200
+    assert opted_out.json()["lifecycle"] == {
+        "adjustmentAmount": 70000,
+        "cancelledInstallments": 1,
+        "portalAccounts": 2,
+    }
+    database.refresh(student)
+    database.refresh(enrollment)
+    database.refresh(agreement)
+    database.refresh(installment)
+    database.refresh(student_user)
+    database.refresh(parent_user)
+    assert student.status == "inactive"
+    assert enrollment.is_active is False
+    assert agreement.status == "inactive"
+    assert installment.status == "cancelled"
+    assert student_user.is_active is False
+    assert parent_user.is_active is False
+    closure = database.query(PaymentTransaction).filter_by(
+        fee_agreement_id=agreement.id,
+        transaction_type="balance_credit",
+    ).one()
+    assert closure.amount == 70000
+    assert closure.source_note == "Student opt-out fee closure"
+
+    reactivated = client.patch(
+        f"/api/students/{student.id}/status",
+        json={"status": "active", "reason": "Student rejoined the course"},
+        headers=owner_headers,
+    )
+    assert reactivated.status_code == 200
+    assert reactivated.json()["lifecycle"]["adjustmentAmount"] == 70000
+    database.refresh(agreement)
+    database.refresh(installment)
+    database.refresh(student_user)
+    database.refresh(parent_user)
+    assert agreement.status == "active"
+    assert installment.status == "cancelled"
+    assert student_user.is_active is True
+    assert parent_user.is_active is True
+    restoration = database.query(PaymentTransaction).filter_by(
+        fee_agreement_id=agreement.id,
+        transaction_type="balance_debit",
+    ).one()
+    assert restoration.amount == 70000
+    assert restoration.source_note == "Student reactivation fee restoration"
 
 
 def test_owner_can_edit_fee_agreement_and_only_review_imported_payment(

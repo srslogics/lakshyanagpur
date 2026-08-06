@@ -28,7 +28,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=51">
+  <link rel="stylesheet" href="/styles.css?v=52">
   <link rel="stylesheet" href="/auth-shared.css?v=8">
 </head>
 <body>
@@ -214,7 +214,7 @@
             <div class="compact-metrics" id="finance-metrics"></div>
             <nav class="segmented-control" id="finance-view-tabs" role="tablist" aria-label="Finance views"><button class="active" id="finance-agreements-tab" type="button" role="tab" aria-label="Student balances" aria-selected="true" aria-controls="finance-agreements-panel" data-finance-tab="agreements">Student balances <span class="tab-count" id="fee-agreement-count" aria-hidden="true">0</span></button><button id="finance-payments-tab" type="button" role="tab" aria-label="Payments" aria-selected="false" aria-controls="finance-payments-panel" tabindex="-1" data-finance-tab="payments">Payments <span class="tab-count" id="payment-total-count" aria-hidden="true">0</span><span class="tab-review-count hidden" id="payment-review-count" aria-hidden="true"></span></button></nav>
             <article class="surface table-surface finance-tab active" id="finance-agreements-panel" role="tabpanel" aria-labelledby="finance-agreements-tab">
-              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search student balances"></label><select id="agreement-balance-filter" aria-label="Filter account balance"><option value="">All balances</option><option value="due">Payment due</option><option value="settled">Fully paid</option><option value="credit">Credit balance</option><option value="reconcile">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-fee-agreement" type="button"><span data-icon="plus"></span>Add fee</button></div>
+              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search student balances"></label><select id="agreement-balance-filter" aria-label="Filter account balance"><option value="">All balances</option><option value="due">Payment due</option><option value="settled">Fully paid</option><option value="credit">Credit balance</option><option value="closed">Opted out</option><option value="reconcile">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-fee-agreement" type="button"><span data-icon="plus"></span>Add fee</button></div>
               <div class="table-meta"><span id="agreement-result-summary">Loading accounts…</span></div>
               <div class="data-table-wrap"><table class="data-table receivables-table"><colgroup><col class="receivables-col-student"><col class="receivables-col-fee"><col class="receivables-col-outstanding"><col class="receivables-col-status"><col class="receivables-col-actions"></colgroup><thead><tr><th scope="col">Student</th><th scope="col">Fee summary</th><th class="numeric-heading" scope="col">Balance</th><th scope="col">Status</th><th scope="col" aria-label="Actions"></th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
               <div class="mobile-records" id="agreements-mobile-list"></div>
@@ -359,6 +359,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="/app.js?v=64" defer></script>
+  <script src="/app.js?v=65" defer></script>
 </body>
 </html>

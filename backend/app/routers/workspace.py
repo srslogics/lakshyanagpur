@@ -70,6 +70,7 @@ def _finance(db: Session):
             "studentId": student.id,
             "studentName": student.full_name,
             "studentMobile": student.mobile,
+            "studentStatus": student.status,
             "admissionNumber": student.admission_number,
             "agreedAmount": agreement.agreed_amount,
             "legacyRegistrationTotal": agreement.legacy_registration_total,

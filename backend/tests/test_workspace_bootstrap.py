@@ -101,6 +101,7 @@ def test_owner_workspace_bootstrap_replaces_separate_initial_requests(
     body = response.json()
     assert [item["fullName"] for item in body["students"]] == ["Fast Bootstrap Student"]
     assert body["agreements"][0]["agreedAmount"] == 80000
+    assert body["agreements"][0]["studentStatus"] == "active"
     assert body["payments"][0]["signedAmount"] == 5000
     assert body["installments"][0]["amount"] == 10000
     assert body["leads"][0]["student"] == "Future Student"

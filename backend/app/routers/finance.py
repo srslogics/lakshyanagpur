@@ -79,6 +79,21 @@ def _payment_payload(row: PaymentTransaction, student: Student):
     }
 
 
+def _agreement_payload(row: FeeAgreement, student: Student):
+    return {
+        "id": row.id,
+        "studentId": student.id,
+        "studentName": student.full_name,
+        "studentMobile": student.mobile,
+        "studentStatus": student.status,
+        "admissionNumber": student.admission_number,
+        "agreedAmount": row.agreed_amount,
+        "legacyRegistrationTotal": row.legacy_registration_total,
+        "currency": row.currency,
+        "status": row.status,
+    }
+
+
 def _create_posted_payment(
     db: Session,
     *,
@@ -116,7 +131,7 @@ def fee_agreements(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, 
     query = db.query(FeeAgreement, Student).join(Student, Student.id == FeeAgreement.student_id).filter(Student.is_test_account.is_(False))
     total = query.count()
     rows = query.order_by(Student.full_name).offset((page - 1) * page_size).limit(page_size).all()
-    return {"items": [{"id": fee.id, "studentId": student.id, "studentName": student.full_name, "studentMobile": student.mobile, "admissionNumber": student.admission_number, "agreedAmount": fee.agreed_amount, "legacyRegistrationTotal": fee.legacy_registration_total, "currency": fee.currency, "status": fee.status} for fee, student in rows], "total": total, "page": page, "pageSize": page_size}
+    return {"items": [_agreement_payload(fee, student) for fee, student in rows], "total": total, "page": page, "pageSize": page_size}
 
 
 @router.post("/agreements", status_code=201)
@@ -128,6 +143,8 @@ def create_agreement(
     student = db.get(Student, payload.student_id)
     if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
+    if student.status not in {"active", "draft"}:
+        raise HTTPException(409, "Reactivate the student before creating a fee agreement")
     if db.query(FeeAgreement).filter_by(student_id=student.id).first():
         raise HTTPException(409, "This student already has a fee agreement")
     enrollment = (
@@ -155,17 +172,7 @@ def create_agreement(
     }
     audit(db, actor, "finance.agreement.create", "fee_agreement", agreement.id, after=after)
     db.commit()
-    return {
-        "id": agreement.id,
-        "studentId": student.id,
-        "studentName": student.full_name,
-        "studentMobile": student.mobile,
-        "admissionNumber": student.admission_number,
-        "agreedAmount": agreement.agreed_amount,
-        "legacyRegistrationTotal": agreement.legacy_registration_total,
-        "currency": agreement.currency,
-        "status": agreement.status,
-    }
+    return _agreement_payload(agreement, student)
 
 
 @router.get("/staged-payments")
@@ -219,6 +226,8 @@ def post_payment(
     agreement = db.query(FeeAgreement).filter_by(student_id=student.id).first()
     if not agreement:
         raise HTTPException(409, "Create a fee agreement before recording a payment")
+    if student.status not in {"active", "draft"}:
+        raise HTTPException(409, "Reactivate the student before recording a payment")
     if agreement.status not in {"active", "draft"}:
         raise HTTPException(409, "The fee agreement is not open for payments")
     if payload.transaction_date > _india_today():
@@ -340,6 +349,8 @@ def create_installment(
     agreement = db.query(FeeAgreement).filter_by(student_id=student.id).first()
     if not agreement:
         raise HTTPException(409, "Create a fee agreement before scheduling a payment")
+    if student.status not in {"active", "draft"} or agreement.status not in {"active", "draft"}:
+        raise HTTPException(409, "Reactivate the student before scheduling a payment")
     if payload.dueDate < _india_today():
         raise HTTPException(422, "Future payment date cannot be in the past")
     row = FeeInstallment(
@@ -402,6 +413,9 @@ def update_agreement(agreement_id: str, payload: FeeAgreementUpdate, db: Session
     row = db.get(FeeAgreement, agreement_id)
     if not row:
         raise HTTPException(404, "Fee agreement not found")
+    student = db.get(Student, row.student_id)
+    if student.status in {"inactive", "forfeited"} and payload.status in {"active", "draft"}:
+        raise HTTPException(409, "Reactivate the student before reopening the fee agreement")
     before = {"agreedAmount": row.agreed_amount, "legacyRegistrationTotal": row.legacy_registration_total, "currency": row.currency, "status": row.status}
     row.agreed_amount = payload.agreed_amount
     row.legacy_registration_total = payload.legacy_registration_total
@@ -409,8 +423,7 @@ def update_agreement(agreement_id: str, payload: FeeAgreementUpdate, db: Session
     row.status = payload.status
     audit(db, actor, "finance.agreement.update", "fee_agreement", row.id, before=before, after=payload.model_dump(by_alias=True))
     db.commit()
-    student = db.get(Student, row.student_id)
-    return {"id": row.id, "studentId": student.id, "studentName": student.full_name, "studentMobile": student.mobile, "admissionNumber": student.admission_number, "agreedAmount": row.agreed_amount, "legacyRegistrationTotal": row.legacy_registration_total, "currency": row.currency, "status": row.status}
+    return _agreement_payload(row, student)
 
 
 @router.patch("/staged-payments/{payment_id}/review")
