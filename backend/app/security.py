@@ -4,13 +4,14 @@ from hmac import compare_digest
 from secrets import token_hex
 
 import jwt
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .database import get_db
 from .models import RevokedToken, User
+from .permissions import action_for_request, explicit_permission, module_for_request
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -76,9 +77,22 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
 
 
 def require_roles(*roles: str):
-    def dependency(user: User = Depends(current_user)) -> User:
+    def dependency(
+        request: Request,
+        user: User = Depends(current_user),
+        db: Session = Depends(get_db),
+    ) -> User:
         if user.must_change_password:
             raise HTTPException(403, "Password change required")
+        if user.role == "owner":
+            return user
+        module = module_for_request(request)
+        if module:
+            override = explicit_permission(db, user.id, module, action_for_request(request))
+            if override is not None:
+                if override:
+                    return user
+                raise HTTPException(403, "You do not have permission to perform this action")
         if user.role not in roles:
             raise HTTPException(403, "You do not have permission to perform this action")
         return user

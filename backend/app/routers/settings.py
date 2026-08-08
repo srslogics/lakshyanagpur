@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..importers.academic_workbook import AcademicImportConflict, import_manifest as import_academic_manifest
-from ..models import AcademicImportBatch, AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User
-from ..operations_schemas import BatchCreate, BatchUpdate, ParentAccessCreate, RoomCreate, RoomUpdate, StudentAccessCreate, SubjectCreate, SubjectUpdate, UserCreate, UserUpdate
+from ..models import AcademicImportBatch, AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User, UserModulePermission
+from ..operations_schemas import BatchCreate, BatchUpdate, ParentAccessCreate, RoomCreate, RoomUpdate, StudentAccessCreate, SubjectCreate, SubjectUpdate, UserCreate, UserPermissionsUpdate, UserUpdate
+from ..permissions import MODULE_LABELS, MODULES, permissions_from_rows
 from ..security import hash_password, require_roles
 from ..services import audit
 
@@ -24,9 +25,27 @@ def _room(row: Room):
     return {"id": row.id, "name": row.name, "capacity": row.capacity, "isActive": row.is_active}
 
 
+def _user_payload(row: User, permission_rows: list[UserModulePermission] | None = None):
+    permission_rows = permission_rows or []
+    by_module = {item.module: item for item in permission_rows}
+    return {
+        "id": row.id,
+        "fullName": row.full_name,
+        "mobile": row.mobile,
+        "email": row.email,
+        "role": row.role,
+        "isActive": row.is_active,
+        "permissions": permissions_from_rows(row, by_module),
+        "hasCustomPermissions": bool(permission_rows) and row.role != "owner",
+    }
+
+
 @router.get("/bootstrap")
 def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles("owner"))):
     users = db.query(User).filter(User.is_test_account.is_(False)).order_by(User.full_name).all()
+    permissions_by_user: dict[str, list[UserModulePermission]] = {}
+    for permission in db.query(UserModulePermission).all():
+        permissions_by_user.setdefault(permission.user_id, []).append(permission)
     academic_imports = (
         db.query(AcademicImportBatch)
         .order_by(AcademicImportBatch.created_at.desc())
@@ -34,7 +53,8 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
         .all()
     )
     return {
-        "users": [{"id": item.id, "fullName": item.full_name, "mobile": item.mobile, "email": item.email, "role": item.role, "isActive": item.is_active} for item in users],
+        "users": [_user_payload(item, permissions_by_user.get(item.id, [])) for item in users],
+        "permissionModules": [{"key": module, "label": MODULE_LABELS[module]} for module in MODULES],
         "batches": [_batch(item) for item in db.query(Batch).order_by(Batch.program, Batch.name).all()],
         "subjects": [_subject(item) for item in db.query(Subject).order_by(Subject.program, Subject.name).all()],
         "rooms": [_room(item) for item in db.query(Room).order_by(Room.name).all()],
@@ -96,7 +116,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User 
     db.add(row); db.flush()
     audit(db, actor, "settings.user.create", "user", row.id, after={"mobile": row.mobile, "email": row.email, "role": row.role})
     db.commit()
-    return {"id": row.id, "fullName": row.full_name, "mobile": row.mobile, "email": row.email, "role": row.role, "isActive": row.is_active}
+    return _user_payload(row)
 
 
 @router.patch("/users/{user_id}")
@@ -124,7 +144,57 @@ def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db)
     except IntegrityError as error:
         db.rollback()
         raise HTTPException(409, "This mobile number or email is already assigned to another account") from error
-    return {"id": row.id, "fullName": row.full_name, "mobile": row.mobile, "email": row.email, "role": row.role, "isActive": row.is_active}
+    return _user_payload(row, db.query(UserModulePermission).filter_by(user_id=row.id).all())
+
+
+@router.put("/users/{user_id}/permissions")
+def update_user_permissions(
+    user_id: str,
+    payload: UserPermissionsUpdate,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("owner")),
+):
+    row = db.get(User, user_id)
+    if not row or row.is_test_account:
+        raise HTTPException(404, "User not found")
+    if row.role == "owner":
+        raise HTTPException(409, "Owner accounts always have full access")
+    if row.role in {"student", "parent", "parent_student"}:
+        raise HTTPException(409, "Portal accounts cannot access Operations modules")
+    if set(payload.permissions) != set(MODULES):
+        raise HTTPException(422, "Submit permissions for every Operations module")
+
+    existing = {
+        item.module: item
+        for item in db.query(UserModulePermission).filter_by(user_id=row.id).all()
+    }
+    before = permissions_from_rows(row, existing)
+    for module in MODULES:
+        values = payload.permissions[module]
+        permission = existing.get(module)
+        if permission is None:
+            permission = UserModulePermission(user_id=row.id, module=module)
+            db.add(permission)
+        permission.can_read = values.read
+        permission.can_create = values.create
+        permission.can_edit = values.edit
+    db.flush()
+    updated_rows = {
+        item.module: item
+        for item in db.query(UserModulePermission).filter_by(user_id=row.id).all()
+    }
+    after = permissions_from_rows(row, updated_rows)
+    audit(
+        db,
+        actor,
+        "settings.user.permissions.update",
+        "user",
+        row.id,
+        before=before,
+        after=after,
+    )
+    db.commit()
+    return {"userId": row.id, "permissions": after, "hasCustomPermissions": True}
 
 
 @router.post("/student-access", status_code=201)

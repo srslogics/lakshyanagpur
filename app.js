@@ -49,7 +49,19 @@ const ROLE_VIEWS = {
   faculty: ["dashboard","academics","examinations","timetable"],
   storekeeper: ["dashboard","inventory"]
 };
-const allowedViews = () => new Set(ROLE_VIEWS[state.user?.role] || ["dashboard"]);
+const OPERATIONS_MODULES = ["admissions", "students", "finance", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"];
+const PERMISSION_MODULE_LABELS = { admissions: "Admissions", students: "Students", finance: "Fees & finance", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", inventory: "Inventory", reports: "Reports" };
+function canAccess(module, action = "read") {
+  if (state.user?.role === "owner") return true;
+  const permission = state.user?.permissions?.[module];
+  if (permission) return Boolean(permission[action]);
+  return action === "read" && (ROLE_VIEWS[state.user?.role] || []).includes(module);
+}
+const allowedViews = () => new Set([
+  "dashboard",
+  ...OPERATIONS_MODULES.filter(module => canAccess(module, "read")),
+  ...(state.user?.role === "owner" ? ["settings"] : []),
+]);
 let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
 let ledgerReturnFocus = null;
@@ -240,10 +252,8 @@ async function initialize() {
   try {
     if (state.token) {
       try {
-        if (!state.user) {
-          state.user = await api("/api/auth/me");
-          sessionStorage.setItem("lakshya_user", JSON.stringify(state.user));
-        }
+        state.user = await api("/api/auth/me");
+        sessionStorage.setItem("lakshya_user", JSON.stringify(state.user));
         await enterWorkspace();
       }
       catch (error) {
@@ -345,7 +355,7 @@ async function handleAuth(event) {
 }
 
 async function enterWorkspace() {
-  if (!ROLE_VIEWS[state.user?.role]) {
+  if (!ROLE_VIEWS[state.user?.role] && !OPERATIONS_MODULES.some(module => canAccess(module, "read"))) {
     const portal = state.user?.role === "parent" ? "Parent portal" : ["student","parent_student"].includes(state.user?.role) ? "Student portal" : state.user?.role === "attendance_operator" ? "Attendance Desk" : "assigned portal";
     clearSession();
     showAuth(`This account belongs to the ${portal}. Open that application to continue.`);
@@ -409,7 +419,8 @@ async function loadResource(resource) {
     if (resource === "timetable") {
       state.timetable = await api("/api/timetable/bootstrap");
       state.sessions = state.timetable.sessions || [];
-    } else if (resource === "assignments") state.assignments = await api("/api/academics/assignments");
+    } else if (resource === "references") state.timetable = { ...state.timetable, ...await api("/api/workspace/reference-data") };
+    else if (resource === "assignments") state.assignments = await api("/api/academics/assignments");
     else if (resource === "examinations") state.examinations = await api("/api/examinations");
     else if (resource === "attendance") state.attendanceSessions = await api("/api/attendance/sessions");
     else if (resource === "notices") state.notices = await api("/api/communication/notices");
@@ -428,10 +439,10 @@ async function loadResource(resource) {
 async function loadViewResources(view) {
   const requirements = {
     timetable: ["timetable"],
-    academics: ["timetable", "assignments"],
-    examinations: ["timetable", "examinations"],
+    academics: ["references", "assignments"],
+    examinations: ["references", "examinations"],
     attendance: ["attendance"],
-    communication: ["timetable", "notices", "conversations"],
+    communication: ["references", "notices", "conversations"],
     inventory: ["inventory"],
     reports: ["reports"],
     settings: ["timetable", "masters", "audit"],
@@ -523,12 +534,14 @@ function compactMetrics(items) { return items.map(item => `<div class="compact-m
 function studentPrimary(name, detail = "") { return `<div class="table-primary"><span class="record-avatar">${initials(name)}</span><span><strong>${esc(name)}</strong><small>${esc(detail)}</small></span></div>`; }
 function emptyState(iconName, title, copy = "") { return `<div class="empty-state"><span class="empty-icon">${icon(iconName)}</span><div><h3>${esc(title)}</h3>${copy ? `<p>${esc(copy)}</p>` : ""}</div></div>`; }
 function isOwner() { return state.user?.role === "owner"; }
-function canManageFinance() { return ["owner", "accounts"].includes(state.user?.role); }
-function canReadInventory() { return ["owner", "storekeeper", "accounts"].includes(state.user?.role); }
-function canManageInventory() { return ["owner", "storekeeper"].includes(state.user?.role); }
-function canConvertAdmissions() { return ["owner", "admissions_manager"].includes(state.user?.role); }
+function canManageFinance() { return canAccess("finance", "create") || canAccess("finance", "edit"); }
+function canReadInventory() { return canAccess("inventory", "read"); }
+function canManageInventory() { return canAccess("inventory", "create") || canAccess("inventory", "edit"); }
+function canConvertAdmissions() { return canAccess("admissions", "edit"); }
 function ownerEditButton(kind, id, label = "Edit") {
-  return isOwner() ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-owner-edit="${esc(kind)}" data-edit-id="${esc(id)}">${icon("edit")}${esc(label)}</button>` : "";
+  const module = { student: "students", lead: "admissions", agreement: "finance", payment: "finance", session: "timetable", assignment: "academics", notice: "communication" }[kind];
+  const allowed = module ? canAccess(module, "edit") : isOwner();
+  return allowed ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-owner-edit="${esc(kind)}" data-edit-id="${esc(id)}">${icon("edit")}${esc(label)}</button>` : "";
 }
 
 function studentBatchKey(batch) {
@@ -557,7 +570,7 @@ function filteredStudents() {
 }
 
 function renderStudents() {
-  $("#new-student").classList.toggle("hidden", !isOwner());
+  $("#new-student").classList.toggle("hidden", !canAccess("students", "create"));
   renderStudentRows();
 }
 
@@ -676,7 +689,7 @@ function renderFinance() {
   const dueAccounts = openAccounts.filter(item => item.balance > 0).length;
   const review = state.payments.filter(needsPaymentReview).length;
   const registerCount = state.payments.length + state.installments.length;
-  $("#new-future-payment").classList.toggle("hidden", !isOwner());
+  $("#new-future-payment").classList.toggle("hidden", !canAccess("finance", "create"));
   $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
   $("#new-payment").classList.toggle("hidden", !canManageFinance());
   $("#finance-metrics").innerHTML = compactMetrics([{ label: "Outstanding", value: shortMoney(outstanding) }, { label: "Collected", value: shortMoney(paymentTotal) }, { label: "Accounts due", value: String(dueAccounts) }]);
@@ -701,7 +714,7 @@ function renderAgreementRows() {
   const visibleOutstanding = rows.reduce((sum, item) => sum + (item.accountClosed ? 0 : Math.max(item.balance, 0)), 0);
   $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
   const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}Ledger</button>`;
-  const editAccountButton = item => isOwner() ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
+  const editAccountButton = item => canAccess("finance", "edit") ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
   const balanceBadge = item => item.accountClosed ? `<span class="ledger-balance-state ledger-balance-settled">Closed</span>` : `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
   $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="receivable-fee-summary"><strong class="currency">${money(item.agreed)}</strong><small>${money(item.paid)} paid</small></td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("search", "No matching balances", "Clear a filter to see every student balance.")}</td></tr>`;
   $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
@@ -758,7 +771,7 @@ function renderPaymentRows() {
   };
   const sourceLabel = item => item.receiptNumber || item.reference || item.sourceNote || (item.type === "scheduled_payment" ? "Client schedule" : "—");
   const action = item => item.type === "scheduled_payment"
-    ? isOwner() ? `<button class="button button-secondary button-small" type="button" data-installment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : ""
+    ? canAccess("finance", "edit") ? `<button class="button button-secondary button-small" type="button" data-installment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : ""
     : item.status === "staged"
       ? ownerEditButton("payment", item.id, "Review")
       : item.type === "payment" && canManageFinance()
@@ -930,12 +943,12 @@ function activateTimetableView(name, focus = false) {
     panel.classList.toggle("active", active);
     panel.hidden = !active;
   });
-  $("#new-session").classList.toggle("hidden", timetableView !== "schedule");
-  $("#new-teaching-assignment").classList.toggle("hidden", timetableView !== "faculty");
+  $("#new-session").classList.toggle("hidden", timetableView !== "schedule" || !canAccess("timetable", "create"));
+  $("#new-teaching-assignment").classList.toggle("hidden", timetableView !== "faculty" || !canAccess("timetable", "create"));
 }
 
 function teachingAssignmentEditButton(item) {
-  return isOwner() ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-teaching-assignment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : "";
+  return canAccess("timetable", "edit") ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-teaching-assignment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : "";
 }
 
 function renderAcademics() {
@@ -956,6 +969,7 @@ function filteredExaminations() {
 
 function examinationAction(item) {
   if (item.status === "cancelled") return "";
+  if (item.status !== "published" && !canAccess("examinations", "edit")) return `<button class="button button-secondary button-small" type="button" data-examination-open="${esc(item.id)}">${icon("exam")}View</button>`;
   const label = item.status === "published" ? "View results" : item.marksEntered ? "Continue marks" : "Enter marks";
   return `<button class="button button-primary button-small" type="button" data-examination-open="${esc(item.id)}">${icon(item.status === "published" ? "chart" : "exam")}${label}</button>`;
 }
@@ -975,9 +989,9 @@ function renderExaminations() {
     const resultSummary = item.status === "published"
       ? `${item.averageMarks == null ? "—" : item.averageMarks} avg · ${item.highestMarks == null ? "—" : item.highestMarks} high`
       : `${item.marksEntered}/${item.participantCount} entered`;
-    return `<tr><td><strong>${esc(item.name)}</strong><br><small>${esc(item.subject)} · ${esc(item.faculty)}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td><strong>${formatDateTime(item.scheduledAt)}</strong><br><small>${item.durationMinutes} minutes</small></td><td class="numeric-heading"><strong>${esc(item.maxMarks)}</strong><br><small>Pass ${esc(item.passMarks)}</small></td><td><div class="exam-progress-copy"><strong>${esc(resultSummary)}</strong><span class="exam-progress" aria-label="${progress}% of marks entered"><i style="width:${progress}%"></i></span></div></td><td>${status(item.status)}</td><td><div class="cell-actions examination-actions">${examinationAction(item)}${isOwner() && item.status !== "published" ? `<button class="icon-button exam-edit-button" type="button" data-examination-edit="${esc(item.id)}" aria-label="Edit ${esc(item.name)}" title="Edit examination">${icon("edit")}</button>` : ""}</div></td></tr>`;
+    return `<tr><td><strong>${esc(item.name)}</strong><br><small>${esc(item.subject)} · ${esc(item.faculty)}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program)}</small></td><td><strong>${formatDateTime(item.scheduledAt)}</strong><br><small>${item.durationMinutes} minutes</small></td><td class="numeric-heading"><strong>${esc(item.maxMarks)}</strong><br><small>Pass ${esc(item.passMarks)}</small></td><td><div class="exam-progress-copy"><strong>${esc(resultSummary)}</strong><span class="exam-progress" aria-label="${progress}% of marks entered"><i style="width:${progress}%"></i></span></div></td><td>${status(item.status)}</td><td><div class="cell-actions examination-actions">${examinationAction(item)}${canAccess("examinations", "edit") && item.status !== "published" ? `<button class="icon-button exam-edit-button" type="button" data-examination-edit="${esc(item.id)}" aria-label="Edit ${esc(item.name)}" title="Edit examination">${icon("edit")}</button>` : ""}</div></td></tr>`;
   }).join("") : `<tr><td colspan="7">${emptyState("exam", state.examinations.length ? "No matching examinations" : "No examinations scheduled", state.examinations.length ? "Clear a filter to see every examination." : "Create an examination for a batch and subject.")}</td></tr>`;
-  $("#examination-mobile-list").innerHTML = exams.length ? exams.map(item => `<article class="mobile-record-card examination-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Schedule</span><strong>${formatDateTime(item.scheduledAt)}</strong></div><div><span>Maximum</span><strong>${esc(item.maxMarks)} marks</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Results</span><strong>${item.marksEntered}/${item.participantCount} entered</strong></div></div><div class="mobile-card-actions">${examinationAction(item)}${isOwner() && item.status !== "published" ? `<button class="button button-secondary button-small" type="button" data-examination-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : ""}</div></article>`).join("") : emptyState("exam", state.examinations.length ? "No matching examinations" : "No examinations scheduled");
+  $("#examination-mobile-list").innerHTML = exams.length ? exams.map(item => `<article class="mobile-record-card examination-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Schedule</span><strong>${formatDateTime(item.scheduledAt)}</strong></div><div><span>Maximum</span><strong>${esc(item.maxMarks)} marks</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Results</span><strong>${item.marksEntered}/${item.participantCount} entered</strong></div></div><div class="mobile-card-actions">${examinationAction(item)}${canAccess("examinations", "edit") && item.status !== "published" ? `<button class="button button-secondary button-small" type="button" data-examination-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : ""}</div></article>`).join("") : emptyState("exam", state.examinations.length ? "No matching examinations" : "No examinations scheduled");
 }
 
 function renderAttendance() {
@@ -1153,6 +1167,15 @@ function settingsAccountLabel(role = "") {
   return labels[role] || String(role || "Staff").replaceAll("_", " ");
 }
 
+function canConfigureOperationsAccess(item) {
+  return item && !["owner", "student", "parent", "parent_student"].includes(item.role);
+}
+
+function settingsPermissionsButton(item) {
+  if (!canConfigureOperationsAccess(item)) return "";
+  return `<button class="button button-secondary button-small" type="button" data-user-permissions="${esc(item.id)}">${icon("shield")}Access</button>`;
+}
+
 function renderSettingsAccounts() {
   const masters = state.masters;
   const studentLinks = new Map((masters.studentAccess || []).map(item => [item.userId, item]));
@@ -1170,8 +1193,70 @@ function renderSettingsAccounts() {
     const student = studentLinks.get(item.id);
     const parent = parentLinks.get(item.id);
     const context = student?.admissionNumber || (parent ? `${parent.studentName} · ${parent.admissionNumber}` : item.email || "Institute account");
-    return `<div class="settings-account-row"><span class="settings-account-identity"><i>${esc(initials(item.fullName))}</i><span><strong>${esc(item.fullName)}</strong><small>${esc(context)}</small></span></span><span class="settings-account-access"><strong>${esc(settingsAccountLabel(item.role))}</strong><small>${esc(settingsAccountGroup(item.role) === "staff" ? "Operations" : "Portal access")}</small></span><span class="settings-account-login"><strong>${esc(mobileLabel(item.mobile))}</strong><small>${item.mobile ? "Mobile login" : "Setup required"}</small></span><span class="settings-account-status">${status(item.isActive ? "active" : "inactive")}</span><span class="settings-account-edit">${ownerEditButton("user", item.id)}</span></div>`;
+    const accessCopy = canConfigureOperationsAccess(item)
+      ? `${Object.values(item.permissions || {}).filter(permission => permission.read).length} modules`
+      : settingsAccountGroup(item.role) === "staff" ? "Operations" : "Portal access";
+    return `<div class="settings-account-row"><span class="settings-account-identity"><i>${esc(initials(item.fullName))}</i><span><strong>${esc(item.fullName)}</strong><small>${esc(context)}</small></span></span><span class="settings-account-access"><strong>${esc(settingsAccountLabel(item.role))}</strong><small>${esc(accessCopy)}</small></span><span class="settings-account-login"><strong>${esc(mobileLabel(item.mobile))}</strong><small>${item.mobile ? "Mobile login" : "Setup required"}</small></span><span class="settings-account-status">${status(item.isActive ? "active" : "inactive")}</span><span class="settings-account-edit">${settingsPermissionsButton(item)}${ownerEditButton("user", item.id)}</span></div>`;
   }).join("") : emptyState("search", "No matching accounts", "Try another name, mobile number or access type.");
+}
+
+function openUserPermissions(userId) {
+  const user = (state.masters.users || []).find(item => item.id === userId);
+  if (!canConfigureOperationsAccess(user)) {
+    toast(user?.role === "owner" ? "Owner access is always unrestricted." : "Portal accounts do not use Operations permissions.", "error");
+    return;
+  }
+  const modules = state.masters.permissionModules?.length
+    ? state.masters.permissionModules
+    : OPERATIONS_MODULES.map(key => ({ key, label: PERMISSION_MODULE_LABELS[key] }));
+  const rows = modules.map(module => {
+    const permission = user.permissions?.[module.key] || { read: false, create: false, edit: false };
+    return `<div class="permission-row" role="group" aria-label="${esc(module.label)} permissions" data-permission-module="${esc(module.key)}"><strong>${esc(module.label)}</strong><label><input type="checkbox" data-permission-action="read"${checked(permission.read)}><span>View</span></label><label><input type="checkbox" data-permission-action="create"${checked(permission.create)}><span>Add</span></label><label><input type="checkbox" data-permission-action="edit"${checked(permission.edit)}><span>Edit</span></label></div>`;
+  }).join("");
+  openDrawer("Module access", `<form class="permission-form" id="user-permissions-form" data-user-id="${esc(user.id)}"><div class="permission-person"><span>${esc(initials(user.fullName))}</span><div><strong>${esc(user.fullName)}</strong><small>${esc(settingsAccountLabel(user.role))} · ${user.hasCustomPermissions ? "Custom access" : "Role defaults"}</small></div></div><div class="permission-presets" aria-label="Permission presets"><button class="button button-secondary button-small" type="button" data-permission-preset="read">View only</button><button class="button button-secondary button-small" type="button" data-permission-preset="full">Full access</button><button class="button button-quiet button-small" type="button" data-permission-preset="none">Clear</button></div><div class="permission-matrix-head" aria-hidden="true"><span>Module</span><span>View</span><span>Add</span><span>Edit</span></div><div class="permission-matrix">${rows}</div><p class="permission-help">Add and Edit always require View access. Changes apply to this person only and are enforced by the server.</p>${formError("user-permissions-error")}<button class="button button-primary button-large" type="submit">${icon("shield")}Save access</button></form>`);
+  const form = $("#user-permissions-form");
+  form.addEventListener("change", event => {
+    const row = event.target.closest("[data-permission-module]");
+    if (!row) return;
+    const read = $('[data-permission-action="read"]', row);
+    const create = $('[data-permission-action="create"]', row);
+    const edit = $('[data-permission-action="edit"]', row);
+    if (event.target === read && !read.checked) { create.checked = false; edit.checked = false; }
+    if ((event.target === create || event.target === edit) && event.target.checked) read.checked = true;
+  });
+  form.addEventListener("click", event => {
+    const preset = event.target.closest("[data-permission-preset]")?.dataset.permissionPreset;
+    if (!preset) return;
+    $$('[data-permission-module]', form).forEach(row => {
+      $('[data-permission-action="read"]', row).checked = preset !== "none";
+      $('[data-permission-action="create"]', row).checked = preset === "full";
+      $('[data-permission-action="edit"]', row).checked = preset === "full";
+    });
+  });
+  form.addEventListener("submit", submitUserPermissions);
+}
+
+async function submitUserPermissions(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  const permissions = Object.fromEntries($$('[data-permission-module]', form).map(row => [row.dataset.permissionModule, {
+    read: $('[data-permission-action="read"]', row).checked,
+    create: $('[data-permission-action="create"]', row).checked,
+    edit: $('[data-permission-action="edit"]', row).checked,
+  }]));
+  try {
+    const result = await api(`/api/settings/users/${encodeURIComponent(form.dataset.userId)}/permissions`, { method: "PUT", body: JSON.stringify({ permissions }) });
+    const user = state.masters.users.find(item => item.id === form.dataset.userId);
+    if (user) { user.permissions = result.permissions; user.hasCustomPermissions = true; }
+    closeDetail();
+    renderSettingsAccounts();
+    toast("Module access updated.");
+  } catch (error) {
+    showFormError("#user-permissions-error", error);
+    button.disabled = false;
+  }
 }
 
 function showSettingsSection(section = "accounts") {
@@ -1270,7 +1355,7 @@ async function openStudent(studentId, updateRoute = true) {
     const issues = student.migration?.issues || [];
     const academic = student.academicProfile;
     body.innerHTML = `<div class="profile-hero"><span class="record-avatar">${initials(student.fullName)}</span><h3>${esc(student.fullName)}</h3><p>${esc(student.admissionNumber)} · ${esc(student.enrollment?.program || "Program not assigned")}</p></div>
-      ${isOwner() ? `<div class="owner-record-actions">${student.status === "active" ? `<button class="button button-danger button-small" type="button" data-student-lifecycle="inactive" data-lifecycle-student-id="${esc(student.id)}" data-lifecycle-student-name="${esc(student.fullName)}">Mark opted out</button>` : ["inactive", "forfeited"].includes(student.status) ? `<button class="button button-primary button-small" type="button" data-student-lifecycle="active" data-lifecycle-student-id="${esc(student.id)}" data-lifecycle-student-name="${esc(student.fullName)}">Reactivate</button>` : ""}${ownerEditButton("student", student.id, "Edit student")}</div>` : ""}
+      ${canAccess("students", "edit") ? `<div class="owner-record-actions">${student.status === "active" ? `<button class="button button-danger button-small" type="button" data-student-lifecycle="inactive" data-lifecycle-student-id="${esc(student.id)}" data-lifecycle-student-name="${esc(student.fullName)}">Mark opted out</button>` : ["inactive", "forfeited"].includes(student.status) ? `<button class="button button-primary button-small" type="button" data-student-lifecycle="active" data-lifecycle-student-id="${esc(student.id)}" data-lifecycle-student-name="${esc(student.fullName)}">Reactivate</button>` : ""}${ownerEditButton("student", student.id, "Edit student")}</div>` : ""}
       <section class="detail-section"><h4>Student &amp; enrollment</h4><div class="detail-grid">${detailField("Primary mobile", student.mobile)}${detailField("Secondary mobile", student.secondaryMobile)}${detailField("Previous school", student.previousSchool)}${detailField("Enrollment date", formatDate(student.enrollment?.enrollmentDate))}${detailField("Batch", student.enrollment?.batch)}${detailField("Status", student.status)}</div></section>
       <section class="detail-section"><h4>Academic profile</h4><div class="detail-grid">${detailField("Source student ID", academic?.sourceStudentCode)}${detailField("Mentor", academic?.mentorName)}${detailField("Workbook stream", academic?.sourceStream)}${detailField("Workbook school", academic?.sourceSchoolName)}${detailField("Selected subjects", academic?.subjects?.join(", "))}${detailField("Workbook contact", [academic?.sourcePrimaryMobile, academic?.sourceSecondaryMobile].filter(Boolean).join(", "))}</div></section>
       ${studentInventoryMarkup(student, inventory)}
@@ -1281,7 +1366,7 @@ async function openStudent(studentId, updateRoute = true) {
 function detailField(label, value) { return `<div class="detail-field"><span>${esc(label)}</span><strong>${esc(value || "—")}</strong></div>`; }
 
 function openStudentLifecycleForm(studentId, studentName, targetStatus) {
-  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  if (!canAccess("students", "edit")) { toast("Edit access to Students is required.", "error"); return; }
   const optingOut = targetStatus === "inactive";
   openDrawer(optingOut ? `Mark opted out · ${studentName}` : `Reactivate · ${studentName}`, `<form class="auth-form" id="student-lifecycle-form" data-student-id="${esc(studentId)}" data-target-status="${esc(targetStatus)}">
     <div class="inline-notice${optingOut ? " inline-notice-danger" : ""}">${icon(optingOut ? "alert" : "shield")}<span>${optingOut ? "This closes the unpaid fee balance, cancels future payment plans and disables student and parent portal access. Existing receipts remain in the ledger." : "This restores the previously closed fee liability and portal access. Cancelled payment plans stay cancelled and can be rescheduled if needed."}</span></div>
@@ -1472,7 +1557,7 @@ function closeDetail(restoreFocus = true, updateRoute = true) {
 }
 
 function openStudentCreateForm() {
-  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  if (!canAccess("students", "create")) { toast("Add access to Students is required.", "error"); return; }
   openDrawer("Add student", `<form class="auth-form" id="student-create-form">
     <label class="field"><span>Student name</span><input name="fullName" autocomplete="name" required></label>
     <div class="form-pair"><label class="field"><span>Primary mobile <small>(optional)</small></span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16"></label><label class="field"><span>Secondary mobile <small>(optional)</small></span><input name="secondaryMobile" type="tel" inputmode="tel" placeholder="10-digit mobile number" maxlength="16"></label></div>
@@ -1922,7 +2007,8 @@ function openInventoryMovementForm(item) {
 }
 
 function openFuturePaymentForm(item = null) {
-  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  const action = item ? "edit" : "create";
+  if (!canAccess("finance", action)) { toast(`${item ? "Edit" : "Add"} access to Fees & finance is required.`, "error"); return; }
   if (!item && !state.agreements.length) {
     toast("Create a fee agreement before scheduling a payment.", "error");
     return;
@@ -2192,7 +2278,7 @@ function examinationResultSummary(detail) {
 
 function renderExaminationRoster(detail) {
   $("#drawer-title").textContent = detail.name;
-  const readOnly = detail.status === "published";
+  const readOnly = detail.status === "published" || !canAccess("examinations", "edit");
   const rows = detail.students.map(item => {
     if (readOnly) {
       const resultValue = item.resultStatus === "graded" ? `${item.marksObtained} / ${detail.maxMarks}` : item.resultStatus.replaceAll("_", " ");
@@ -2271,9 +2357,13 @@ async function openAttendance(sessionId) {
   openDrawer("Attendance", '<div class="skeleton-line"></div>');
   try {
     const roster = await api(`/api/attendance/sessions/${encodeURIComponent(sessionId)}`), locked = roster.session.registerStatus === "submitted";
+    const editable = canAccess("attendance", "edit");
     $("#drawer-title").textContent = `${roster.session.subject} · ${roster.session.batch} · ${roster.session.program || ""}`;
-    $("#detail-drawer-body").innerHTML = `<form class="attendance-form" id="attendance-form" data-session-id="${esc(sessionId)}" data-locked="${locked}"><div class="attendance-form-head">${status(roster.session.registerStatus)}<span>${roster.entries.length} students</span></div>${roster.entries.map(entry => `<label class="attendance-student"><span><strong>${esc(entry.fullName)}</strong><small>${esc(entry.admissionNumber)}</small></span><select name="${esc(entry.studentId)}" data-original="${esc(entry.status)}"><option value="present" ${entry.status === "present" ? "selected" : ""}>Present</option><option value="late" ${entry.status === "late" ? "selected" : ""}>Late</option><option value="absent" ${entry.status === "absent" ? "selected" : ""}>Absent</option><option value="excused" ${entry.status === "excused" ? "selected" : ""}>Excused</option></select></label>`).join("")}${locked ? `<label class="field"><span>Correction reason</span><textarea name="correctionReason" rows="3" required></textarea></label>` : ""}${formError("attendance-form-error")}<div class="drawer-actions">${locked ? `<button class="button button-primary" type="submit">Apply corrections</button>` : `<button class="button button-secondary" type="button" id="save-attendance">Save draft</button><button class="button button-primary" type="submit">Submit &amp; lock</button>`}</div></form>`;
-    $("#attendance-form").addEventListener("submit", submitAttendance); $("#save-attendance")?.addEventListener("click", () => saveAttendance(false));
+    $("#detail-drawer-body").innerHTML = `<form class="attendance-form" id="attendance-form" data-session-id="${esc(sessionId)}" data-locked="${locked}"><div class="attendance-form-head">${status(roster.session.registerStatus)}<span>${roster.entries.length} students</span></div>${!editable ? `<div class="inline-notice">${icon("shield")}<span>This register is read-only for your account.</span></div>` : ""}${roster.entries.map(entry => `<label class="attendance-student"><span><strong>${esc(entry.fullName)}</strong><small>${esc(entry.admissionNumber)}</small></span><select name="${esc(entry.studentId)}" data-original="${esc(entry.status)}"${editable ? "" : " disabled"}><option value="present" ${entry.status === "present" ? "selected" : ""}>Present</option><option value="late" ${entry.status === "late" ? "selected" : ""}>Late</option><option value="absent" ${entry.status === "absent" ? "selected" : ""}>Absent</option><option value="excused" ${entry.status === "excused" ? "selected" : ""}>Excused</option></select></label>`).join("")}${editable && locked ? `<label class="field"><span>Correction reason</span><textarea name="correctionReason" rows="3" required></textarea></label>` : ""}${editable ? `${formError("attendance-form-error")}<div class="drawer-actions">${locked ? `<button class="button button-primary" type="submit">Apply corrections</button>` : `<button class="button button-secondary" type="button" id="save-attendance">Save draft</button><button class="button button-primary" type="submit">Submit &amp; lock</button>`}</div>` : ""}</form>`;
+    if (editable) {
+      $("#attendance-form").addEventListener("submit", submitAttendance);
+      $("#save-attendance")?.addEventListener("click", () => saveAttendance(false));
+    }
   } catch (error) { $("#detail-drawer-body").innerHTML = emptyState("alert", "Could not open register", error.message); }
 }
 
@@ -2344,7 +2434,8 @@ const checked = value => value ? " checked" : "";
 const ownerStatusOptions = (values, current) => values.map(value => `<option value="${esc(value)}"${selected(value, current)}>${esc(value.replaceAll("_", " "))}</option>`).join("");
 
 async function openOwnerEdit(kind, id) {
-  if (!isOwner()) { toast("Owner access is required.", "error"); return; }
+  const module = { student: "students", lead: "admissions", agreement: "finance", payment: "finance", session: "timetable", assignment: "academics", notice: "communication" }[kind];
+  if (module ? !canAccess(module, "edit") : !isOwner()) { toast(module ? `Edit access to ${PERMISSION_MODULE_LABELS[module]} is required.` : "Owner access is required.", "error"); return; }
   let item;
   if (kind === "student") item = await api(`/api/students/${encodeURIComponent(id)}`);
   else if (kind === "lead") item = state.leads.find(row => row.id === id);
@@ -2530,37 +2621,42 @@ function applyRoleUI() {
     node.hidden = !visible;
     node.disabled = !visible;
   });
-  const actionRoles = {
-    "#quick-new-lead": ["owner","admissions_manager","counsellor","front_desk"],
-    "#quick-new-student": ["owner"],
-    "#quick-new-payment": ["owner","accounts","admissions_manager"],
-    "#quick-new-session": ["owner","academic_coordinator"],
-    "#quick-new-notice": ["owner","admissions_manager","academic_coordinator","front_desk"],
-    "#new-lead-button": ["owner","admissions_manager","counsellor","front_desk"],
-    "#new-student": ["owner"],
-    "#new-future-payment": ["owner","accounts","admissions_manager"],
-    "#new-session": ["owner","academic_coordinator"],
-    "#new-teaching-assignment": ["owner","academic_coordinator"],
-    "#new-assignment": ["owner","academic_coordinator"],
-    "#new-examination": ["owner","academic_coordinator"],
-    "#new-notice": ["owner","admissions_manager","academic_coordinator","front_desk"],
-    "#new-inventory-item": ["owner","storekeeper"],
-    "#settings-add-account": ["owner"],
-    "#new-master": ["owner"]
+  const actionPermissions = {
+    "#quick-new-lead": ["admissions", "create"],
+    "#quick-new-student": ["students", "create"],
+    "#quick-new-payment": ["finance", "create"],
+    "#quick-new-session": ["timetable", "create"],
+    "#quick-new-notice": ["communication", "create"],
+    "#new-lead-button": ["admissions", "create"],
+    "#new-student": ["students", "create"],
+    "#new-payment": ["finance", "create"],
+    "#new-fee-agreement": ["finance", "create"],
+    "#new-future-payment": ["finance", "create"],
+    "#new-session": ["timetable", "create"],
+    "#new-teaching-assignment": ["timetable", "create"],
+    "#new-assignment": ["academics", "create"],
+    "#new-examination": ["examinations", "create"],
+    "#new-notice": ["communication", "create"],
+    "#new-inventory-item": ["inventory", "create"]
   };
-  Object.entries(actionRoles).forEach(([selector, roles]) => {
+  Object.entries(actionPermissions).forEach(([selector, [module, action]]) => {
     const node = $(selector);
-    if (node) node.hidden = !roles.includes(role);
+    if (node) node.hidden = !canAccess(module, action);
+  });
+  ["#settings-add-account", "#new-master"].forEach(selector => {
+    const node = $(selector);
+    if (node) node.hidden = !isOwner();
   });
   const quickActionPanel = $("#dashboard-quick-actions");
   if (quickActionPanel) quickActionPanel.hidden = !$$('[data-dashboard-action]', quickActionPanel).some(node => !node.hidden);
   $$("[data-owner-edit]").forEach(node => {
     const kind = node.dataset.ownerEdit;
-    const roles = ["agreement","payment"].includes(kind) ? ["owner","accounts","admissions_manager"] : ["session","assignment"].includes(kind) ? ["owner","academic_coordinator"] : ["owner"];
-    node.hidden = !roles.includes(role);
+    const module = { student: "students", lead: "admissions", agreement: "finance", payment: "finance", session: "timetable", assignment: "academics", notice: "communication" }[kind];
+    node.hidden = module ? !canAccess(module, "edit") : !isOwner();
   });
-  $$("[data-inventory-edit]").forEach(node => { node.hidden = !["owner","storekeeper"].includes(role); });
-  $$("[data-teaching-assignment-edit], [data-examination-edit]").forEach(node => { node.hidden = !["owner","academic_coordinator"].includes(role); });
+  $$("[data-inventory-edit], [data-inventory-movement]").forEach(node => { node.hidden = !canAccess("inventory", "edit"); });
+  $$("[data-teaching-assignment-edit]").forEach(node => { node.hidden = !canAccess("timetable", "edit"); });
+  $$("[data-examination-edit]").forEach(node => { node.hidden = !canAccess("examinations", "edit"); });
 }
 
 function handleCommandKeyboard(event) {
@@ -2675,6 +2771,8 @@ function bindEvents() {
     }
     const ownerEdit = event.target.closest("[data-owner-edit]");
     if (ownerEdit) openOwnerEdit(ownerEdit.dataset.ownerEdit, ownerEdit.dataset.editId);
+    const userPermissions = event.target.closest("[data-user-permissions]");
+    if (userPermissions) openUserPermissions(userPermissions.dataset.userPermissions);
     const viewPayments = event.target.closest("[data-view-payments]")?.dataset.viewPayments;
     if (viewPayments) showStudentPayments(viewPayments);
     const ledgerButton = event.target.closest("[data-open-ledger]");

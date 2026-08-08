@@ -63,6 +63,7 @@ class AuthenticatedUser(BaseModel):
     full_name: str = Field(alias="fullName")
     role: str
     must_change_password: bool = Field(alias="mustChangePassword")
+    permissions: dict[str, dict[str, bool]] = Field(default_factory=dict)
     model_config = ConfigDict(populate_by_name=True)
 
 

@@ -216,6 +216,36 @@ class UserUpdate(MobileIdentityMixin):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class ModulePermissionInput(BaseModel):
+    read: bool = False
+    create: bool = False
+    edit: bool = False
+
+    @model_validator(mode="after")
+    def mutations_require_read_access(self):
+        if (self.create or self.edit) and not self.read:
+            raise ValueError("Create and edit access require read access")
+        return self
+
+
+class UserPermissionsUpdate(BaseModel):
+    permissions: dict[
+        Literal[
+            "admissions",
+            "students",
+            "finance",
+            "attendance",
+            "academics",
+            "examinations",
+            "timetable",
+            "communication",
+            "inventory",
+            "reports",
+        ],
+        ModulePermissionInput,
+    ]
+
+
 class BatchUpdate(BatchCreate):
     is_active: bool = Field(alias="isActive")
     model_config = ConfigDict(populate_by_name=True)

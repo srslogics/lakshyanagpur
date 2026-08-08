@@ -1,18 +1,22 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import (
+    Batch,
     Enrollment,
     FeeAgreement,
     FeeInstallment,
     Lead,
     PaymentTransaction,
+    Room,
     Student,
+    Subject,
     User,
 )
 from ..schemas import LEAD_SOURCES, LEAD_STAGES, LeadRead
+from ..permissions import effective_permissions
 from ..security import require_roles
 from .finance import _installment_payload, _payment_payload
 from .students import _list_item
@@ -27,17 +31,9 @@ ERP_ROLES = (
     "accounts",
     "academic_coordinator",
     "faculty",
+    "attendance_operator",
     "storekeeper",
 )
-STUDENT_ROLES = {
-    "owner",
-    "admissions_manager",
-    "front_desk",
-    "accounts",
-    "academic_coordinator",
-}
-FINANCE_ROLES = {"owner", "accounts", "admissions_manager"}
-ADMISSIONS_ROLES = {"owner", "admissions_manager", "counsellor", "front_desk"}
 
 
 def _students(db: Session):
@@ -116,14 +112,15 @@ def bootstrap(
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles(*ERP_ROLES)),
 ):
-    students = _students(db) if actor.role in STUDENT_ROLES else []
-    if actor.role in FINANCE_ROLES:
+    permissions = effective_permissions(db, actor)
+    students = _students(db) if permissions["students"]["read"] else []
+    if permissions["finance"]["read"]:
         agreements, payments, installments = _finance(db)
     else:
         agreements, payments, installments = [], [], []
 
     leads = []
-    if actor.role in ADMISSIONS_ROLES:
+    if permissions["admissions"]["read"]:
         query = db.query(Lead)
         if actor.role == "counsellor":
             query = query.filter(Lead.owner_id == actor.id)
@@ -144,5 +141,21 @@ def bootstrap(
         "admissionsMeta": {
             "stageOrder": list(LEAD_STAGES),
             "sources": list(LEAD_SOURCES),
-        } if actor.role in ADMISSIONS_ROLES else {"stageOrder": [], "sources": []},
+        } if permissions["admissions"]["read"] else {"stageOrder": [], "sources": []},
+    }
+
+
+@router.get("/reference-data")
+def reference_data(
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles(*ERP_ROLES)),
+):
+    permissions = effective_permissions(db, actor)
+    if not any(permissions[module]["read"] for module in ("academics", "examinations", "timetable", "communication")):
+        raise HTTPException(403, "Academic reference data is not available to this account")
+    return {
+        "batches": [{"id": item.id, "name": item.name, "program": item.program} for item in db.query(Batch).filter_by(is_active=True).order_by(Batch.name).all()],
+        "subjects": [{"id": item.id, "name": item.name, "code": item.code, "program": item.program} for item in db.query(Subject).filter_by(is_active=True).order_by(Subject.name).all()],
+        "rooms": [{"id": item.id, "name": item.name, "capacity": item.capacity} for item in db.query(Room).filter_by(is_active=True).order_by(Room.name).all()],
+        "faculty": [{"id": item.id, "fullName": item.full_name} for item in db.query(User).filter(User.is_active.is_(True), User.role.in_(("faculty", "academic_coordinator"))).order_by(User.full_name).all()],
     }

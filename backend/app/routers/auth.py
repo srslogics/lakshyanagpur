@@ -12,6 +12,7 @@ from ..config import settings
 from ..database import get_db
 from ..identity import normalize_mobile
 from ..models import RevokedToken, User
+from ..permissions import effective_permissions
 from ..schemas import BootstrapOwnerRequest, LoginRequest, PasswordChangeRequest, TokenResponse
 from ..security import bearer, create_token, current_user, decode_token, hash_password, verify_password
 from ..services import audit
@@ -67,18 +68,23 @@ def _clear_login_failures(key: str) -> None:
         _login_failures.pop(key, None)
 
 
-def _token_response(user: User):
+def _user_payload(user: User, db: Session):
+    return {
+        "id": user.id,
+        "mobile": user.mobile,
+        "email": user.email,
+        "fullName": user.full_name,
+        "role": user.role,
+        "mustChangePassword": user.must_change_password,
+        "permissions": effective_permissions(db, user),
+    }
+
+
+def _token_response(user: User, db: Session):
     return {
         "access_token": create_token(user),
         "expires_in": settings.access_token_minutes * 60,
-        "user": {
-            "id": user.id,
-            "mobile": user.mobile,
-            "email": user.email,
-            "fullName": user.full_name,
-            "role": user.role,
-            "mustChangePassword": user.must_change_password,
-        },
+        "user": _user_payload(user, db),
     }
 
 
@@ -106,7 +112,7 @@ def bootstrap_owner(payload: BootstrapOwnerRequest, db: Session = Depends(get_db
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _token_response(user)
+    return _token_response(user, db)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -129,19 +135,12 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         _record_login_failure(login_key)
         raise HTTPException(401, "Invalid sign-in details")
     _clear_login_failures(login_key)
-    return _token_response(user)
+    return _token_response(user, db)
 
 
 @router.get("/me")
-def me(user: User = Depends(current_user)):
-    return {
-        "id": user.id,
-        "mobile": user.mobile,
-        "email": user.email,
-        "fullName": user.full_name,
-        "role": user.role,
-        "mustChangePassword": user.must_change_password,
-    }
+def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return _user_payload(user, db)
 
 
 @router.post("/change-password", status_code=204)

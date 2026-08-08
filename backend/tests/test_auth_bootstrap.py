@@ -16,7 +16,10 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
     )
     assert created.status_code == 201
     assert created.json()["token_type"] == "bearer"
-    assert created.json()["user"] == {
+    created_user = created.json()["user"]
+    permissions = created_user.pop("permissions")
+    assert all(value == {"read": True, "create": True, "edit": True} for value in permissions.values())
+    assert created_user == {
         "id": database.query(User).one().id,
         "mobile": "9876543210",
         "email": None,
@@ -161,6 +164,17 @@ def test_operations_exposes_the_daily_timetable_workspace(client):
     assert 'id="timetable-view-tabs"' in response.text
     assert 'id="timetable-faculty-panel"' in response.text
     assert 'id="sessions-table-body"' not in response.text
+
+
+def test_operations_exposes_owner_managed_module_access(client):
+    script = client.get("/app.js")
+    assert script.status_code == 200
+    assert "data-user-permissions" in script.text
+    assert 'data-permission-action="read"' in script.text
+    assert 'data-permission-action="create"' in script.text
+    assert 'data-permission-action="edit"' in script.text
+    assert "/permissions" in script.text
+    assert 'canAccess("attendance", "edit")' in script.text
 
 
 def test_every_application_uses_a_mobile_login_field(client):

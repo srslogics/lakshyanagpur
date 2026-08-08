@@ -37,6 +37,17 @@ class User(TimestampMixin, Base):
     is_test_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
 
 
+class UserModulePermission(TimestampMixin, Base):
+    __tablename__ = "user_module_permissions"
+    __table_args__ = (UniqueConstraint("user_id", "module", name="uq_user_module_permission"),)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("prm"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    module: Mapped[str] = mapped_column(String(40), index=True)
+    can_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_create: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_edit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
 class RevokedToken(Base):
     __tablename__ = "revoked_tokens"
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
