@@ -202,7 +202,7 @@ class FeeInstallmentUpdate(BaseModel):
 class UserCreate(MobileIdentityMixin):
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr | None = None
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     role: Literal["admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
     model_config = ConfigDict(populate_by_name=True)
 
@@ -212,7 +212,7 @@ class UserUpdate(MobileIdentityMixin):
     email: EmailStr | None = None
     role: Literal["owner", "admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
     is_active: bool = Field(alias="isActive")
-    password: str | None = Field(default=None, min_length=10, max_length=128)
+    password: str | None = Field(default=None, min_length=6, max_length=128)
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -264,7 +264,7 @@ class RoomUpdate(RoomCreate):
 class StudentAccessCreate(MobileIdentityMixin):
     student_id: str = Field(alias="studentId")
     email: EmailStr | None = None
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -272,7 +272,7 @@ class ParentAccessCreate(MobileIdentityMixin):
     student_id: str = Field(alias="studentId")
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr | None = None
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     contact_type: Literal["primary_contact", "secondary_contact"] = Field(
         default="primary_contact",
         alias="contactType",

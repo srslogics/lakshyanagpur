@@ -40,7 +40,7 @@
         <h1 id="login-title">Sign in</h1>
         <form id="login-form" novalidate>
           <label for="login-identity"><span id="login-identity-label">Mobile number</span><input id="login-identity" name="identity" type="tel" autocomplete="username" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
-          <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="8" required><button id="password-toggle" type="button" data-password-toggle data-password-label="password" aria-label="Show password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
+          <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="6" required><button id="password-toggle" type="button" data-password-toggle data-password-label="password" aria-label="Show password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
           <div class="form-error hidden" id="login-error" role="alert"></div>
           <button class="primary-button" id="login-button" type="submit"><span id="login-button-label">Sign in</span><span data-icon="arrow"></span></button>
           <p class="login-support login-method-help">Signing in for the first time? Use the institute email issued to you, then add your mobile number.</p>
@@ -68,8 +68,8 @@
         <p class="setup-identity" id="mobile-setup-identity"></p>
         <form id="mobile-setup-form" novalidate>
           <label for="faculty-mobile"><span>Mobile number</span><input id="faculty-mobile" name="mobile" type="tel" autocomplete="tel" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
-          <label><span>Create personal password</span><span class="password-field"><input name="newPassword" type="password" autocomplete="new-password" minlength="10" required><button type="button" data-password-toggle data-password-label="personal password" aria-label="Show personal password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
-          <label><span>Confirm personal password</span><span class="password-field"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" required><button type="button" data-password-toggle data-password-label="confirmed password" aria-label="Show confirmed password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
+          <label><span>Create personal password</span><span class="password-field"><input name="newPassword" type="password" autocomplete="new-password" minlength="6" required><button type="button" data-password-toggle data-password-label="personal password" aria-label="Show personal password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
+          <label><span>Confirm personal password</span><span class="password-field"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="6" required><button type="button" data-password-toggle data-password-label="confirmed password" aria-label="Show confirmed password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
           <div class="form-error hidden" id="mobile-setup-error" role="alert"></div>
           <button class="primary-button" id="mobile-setup-button" type="submit"><span id="mobile-setup-button-label">Activate account</span><span data-icon="arrow"></span></button>
         </form>
@@ -92,9 +92,9 @@
         <h1 id="faculty-password-change-title">Change password</h1>
         <p class="login-support">Replace the temporary password before entering the Faculty portal.</p>
         <form id="faculty-password-change-form" novalidate>
-          <label><span>Temporary password</span><span class="password-field"><input name="currentPassword" type="password" autocomplete="current-password" minlength="8" required><button type="button" data-password-toggle data-password-label="temporary password" aria-label="Show temporary password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
-          <label><span>New password</span><span class="password-field"><input name="newPassword" type="password" autocomplete="new-password" minlength="10" required><button type="button" data-password-toggle data-password-label="new password" aria-label="Show new password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
-          <label><span>Confirm new password</span><span class="password-field"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" required><button type="button" data-password-toggle data-password-label="confirmed password" aria-label="Show confirmed password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
+          <label><span>Temporary password</span><span class="password-field"><input name="currentPassword" type="password" autocomplete="current-password" minlength="6" required><button type="button" data-password-toggle data-password-label="temporary password" aria-label="Show temporary password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
+          <label><span>New password</span><span class="password-field"><input name="newPassword" type="password" autocomplete="new-password" minlength="6" required><button type="button" data-password-toggle data-password-label="new password" aria-label="Show new password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
+          <label><span>Confirm new password</span><span class="password-field"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="6" required><button type="button" data-password-toggle data-password-label="confirmed password" aria-label="Show confirmed password" aria-pressed="false"><span data-icon="eye"></span></button></span></label>
           <div class="form-error hidden" id="faculty-password-change-error" role="alert"></div>
           <button class="primary-button" id="faculty-password-change-button" type="submit">Save personal password <span data-icon="arrow"></span></button>
         </form>

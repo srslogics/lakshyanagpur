@@ -22,7 +22,7 @@ from app.identity import normalize_mobile
 from app.models import User
 from app.security import hash_password, verify_password
 from app.services import audit
-from scripts.provision_student_accounts import generate_temporary_password
+from scripts.provision_student_accounts import shared_temporary_password
 
 
 FACULTY_EMAILS = {
@@ -55,7 +55,7 @@ def provision_faculty_accounts(
     actor: User,
     *,
     apply: bool,
-    password_factory: Callable[[], str] = generate_temporary_password,
+    password_factory: Callable[[], str] = shared_temporary_password,
 ) -> dict:
     if actor.role != "owner" or not actor.is_active:
         raise RuntimeError("An active owner account is required")

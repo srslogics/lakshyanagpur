@@ -12,7 +12,16 @@ from app.identity import normalize_mobile
 from app.models import Student, StudentAccount, User
 from app.security import hash_password, verify_password
 from app.services import audit
-from scripts.provision_faculty_accounts import FACULTY_EMAILS
+
+
+PORTAL_ROLES = (
+    "student",
+    "parent",
+    "parent_student",
+    "faculty",
+    "attendance_operator",
+)
+DEFAULT_SHARED_TEMPORARY_PASSWORD = "Lakshaya@2026"
 
 
 def reset_portal_passwords(
@@ -24,8 +33,8 @@ def reset_portal_passwords(
 ) -> dict:
     if actor.role != "owner" or not actor.is_active:
         raise RuntimeError("An active owner account is required")
-    if len(temporary_password) < 10:
-        raise RuntimeError("The shared temporary password must contain at least 10 characters")
+    if len(temporary_password) < 6:
+        raise RuntimeError("The shared temporary password must contain at least 6 characters")
 
     student_users = (
         db.query(User)
@@ -34,22 +43,23 @@ def reset_portal_passwords(
         .filter(
             User.role == "student",
             User.is_active.is_(True),
+            User.is_test_account.is_(False),
             Student.status == "active",
         )
         .order_by(User.full_name)
         .all()
     )
-    faculty_users = (
+    other_portal_users = (
         db.query(User)
         .filter(
-            User.role == "faculty",
+            User.role.in_(PORTAL_ROLES[1:]),
             User.is_active.is_(True),
-            User.full_name.in_(tuple(FACULTY_EMAILS)),
+            User.is_test_account.is_(False),
         )
         .order_by(User.full_name)
         .all()
     )
-    targets = [*student_users, *faculty_users]
+    targets = [*student_users, *other_portal_users]
     pending = [
         user for user in targets
         if not user.must_change_password
@@ -75,7 +85,9 @@ def reset_portal_passwords(
 
     return {
         "studentAccounts": len(student_users),
-        "facultyAccounts": len(faculty_users),
+        "facultyAccounts": sum(user.role == "faculty" for user in targets),
+        "parentAccounts": sum(user.role in {"parent", "parent_student"} for user in targets),
+        "attendanceAccounts": sum(user.role == "attendance_operator" for user in targets),
         "targetAccounts": len(targets),
         "pendingAccounts": len(pending),
         "resetAccounts": len(pending) if apply else 0,
@@ -87,9 +99,12 @@ def main() -> None:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--actor-mobile")
     args = parser.parse_args()
-    temporary_password = os.getenv("PORTAL_SHARED_TEMP_PASSWORD", "")
-    if len(temporary_password) < 10:
-        raise SystemExit("PORTAL_SHARED_TEMP_PASSWORD must contain at least 10 characters")
+    temporary_password = os.getenv(
+        "PORTAL_SHARED_TEMP_PASSWORD",
+        DEFAULT_SHARED_TEMPORARY_PASSWORD,
+    )
+    if len(temporary_password) < 6:
+        raise SystemExit("PORTAL_SHARED_TEMP_PASSWORD must contain at least 6 characters")
     if args.apply and not args.actor_mobile:
         parser.error("--apply requires --actor-mobile")
 
@@ -121,7 +136,9 @@ def main() -> None:
         else:
             db.rollback()
         print(f"Active student accounts: {result['studentAccounts']}")
-        print(f"Confirmed faculty accounts: {result['facultyAccounts']}")
+        print(f"Faculty accounts: {result['facultyAccounts']}")
+        print(f"Parent accounts: {result['parentAccounts']}")
+        print(f"Attendance accounts: {result['attendanceAccounts']}")
         print(f"Accounts requiring reset: {result['pendingAccounts']}")
         print(f"Accounts reset: {result['resetAccounts']}")
         print("Shared temporary password was not printed.")

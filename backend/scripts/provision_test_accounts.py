@@ -52,8 +52,8 @@ def _passwords_from_environment() -> dict[str, str]:
     passwords: dict[str, str] = {}
     for key, spec in ACCOUNT_SPECS.items():
         password = os.getenv(spec["password_env"], "")
-        if len(password) < 10:
-            raise RuntimeError(f"{spec['password_env']} must contain at least 10 characters")
+        if len(password) < 6:
+            raise RuntimeError(f"{spec['password_env']} must contain at least 6 characters")
         passwords[key] = password
     return passwords
 

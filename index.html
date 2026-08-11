@@ -74,10 +74,10 @@
           <label class="field" for="auth-password">
             <span>Password</span>
             <span class="password-control">
-              <input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required>
+              <input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="6" required>
               <button class="icon-button password-toggle" type="button" data-password-toggle data-password-label="password" aria-label="Show password" aria-pressed="false" data-icon="eye"></button>
             </span>
-            <small class="field-help" id="password-help">Use at least 8 characters.</small>
+            <small class="field-help" id="password-help">Use at least 6 characters.</small>
             <small class="field-error" data-error-for="password"></small>
           </label>
           <div class="auth-error hidden" id="auth-error" role="alert"></div>

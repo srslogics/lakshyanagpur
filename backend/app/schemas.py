@@ -12,7 +12,7 @@ LEAD_SOURCES = ("walk-in", "website", "phone", "whatsapp", "referral", "campaign
 class LoginRequest(BaseModel):
     mobile: str | None = None
     email: EmailStr | None = None
-    password: str = Field(min_length=8, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
 
     @field_validator("mobile")
     @classmethod
@@ -28,7 +28,7 @@ class LoginRequest(BaseModel):
 
 class FacultyMobileActivationRequest(BaseModel):
     mobile: str
-    new_password: str = Field(alias="newPassword", min_length=10, max_length=128)
+    new_password: str = Field(alias="newPassword", min_length=6, max_length=128)
     model_config = ConfigDict(populate_by_name=True)
 
     @field_validator("mobile")
@@ -38,8 +38,8 @@ class FacultyMobileActivationRequest(BaseModel):
 
 
 class PasswordChangeRequest(BaseModel):
-    current_password: str = Field(alias="currentPassword", min_length=8, max_length=128)
-    new_password: str = Field(alias="newPassword", min_length=10, max_length=128)
+    current_password: str = Field(alias="currentPassword", min_length=6, max_length=128)
+    new_password: str = Field(alias="newPassword", min_length=6, max_length=128)
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -47,7 +47,7 @@ class BootstrapOwnerRequest(BaseModel):
     full_name: Annotated[str, Field(min_length=2, max_length=255, alias="fullName")]
     mobile: str
     email: EmailStr | None = None
-    password: str = Field(min_length=10, max_length=128)
+    password: str = Field(min_length=6, max_length=128)
     model_config = ConfigDict(populate_by_name=True)
 
     @field_validator("mobile")

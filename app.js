@@ -162,7 +162,7 @@ function injectIcons(root = document) {
   $$('[data-icon]', root).forEach(node => { if (icons[node.dataset.icon]) node.innerHTML = icon(node.dataset.icon); });
 }
 
-function passwordControl(name, { label = "password", autocomplete = "new-password", minlength = 10, required = false } = {}) {
+function passwordControl(name, { label = "password", autocomplete = "new-password", minlength = 6, required = false } = {}) {
   return `<span class="password-control"><input name="${esc(name)}" type="password" minlength="${minlength}" autocomplete="${esc(autocomplete)}"${required ? " required" : ""}><button class="icon-button password-toggle" type="button" data-password-toggle data-password-label="${esc(label)}" aria-label="Show ${esc(label)}" aria-pressed="false" data-icon="eye"></button></span>`;
 }
 
@@ -227,7 +227,8 @@ function setAuthMode(setup, allowLegacyEmailLogin = false) {
   $("#legacy-login-toggle").classList.toggle("hidden", setup || !allowLegacyEmailLogin);
   $("#auth-title").textContent = setup ? "Create owner" : "Sign in";
   $("#auth-submit-label").textContent = setup ? "Create account" : "Sign in";
-  $("#password-help").textContent = setup ? "Use at least 10 characters." : "Use at least 8 characters.";
+  $("#password-help").textContent = "Use at least 6 characters.";
+  $("#auth-password").minLength = 6;
   $("#auth-password").autocomplete = setup ? "new-password" : "current-password";
 }
 
@@ -333,7 +334,7 @@ async function handleAuth(event) {
   if (state.setupRequired && fullName.length < 2) { $('[data-error-for="fullName"]').textContent = "Enter the owner’s full name."; invalid = true; }
   if (legacyEmail && !/^\S+@\S+\.\S+$/.test(identity)) { $('[data-error-for="mobile"]').textContent = "Enter the existing owner email address."; invalid = true; }
   if (!legacyEmail && !mobile) { $('[data-error-for="mobile"]').textContent = "Enter a valid 10-digit Indian mobile number."; invalid = true; }
-  if (password.length < (state.setupRequired ? 10 : 8)) { $('[data-error-for="password"]').textContent = `Use at least ${state.setupRequired ? 10 : 8} characters.`; invalid = true; }
+  if (password.length < 6) { $('[data-error-for="password"]').textContent = "Use at least 6 characters."; invalid = true; }
   if (invalid) return;
   const button = $("#auth-submit"); button.disabled = true; $("#auth-submit-label").textContent = state.setupRequired ? "Creating…" : "Signing in…";
   try {

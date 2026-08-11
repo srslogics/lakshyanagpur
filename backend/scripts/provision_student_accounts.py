@@ -29,6 +29,10 @@ from app.services import audit
 
 
 PORTAL_ACCOUNT_LIMIT = 100
+DEFAULT_SHARED_TEMPORARY_PASSWORD = os.getenv(
+    "PORTAL_SHARED_TEMP_PASSWORD",
+    "Lakshaya@2026",
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +62,15 @@ def generate_temporary_password() -> str:
     return "".join(characters)
 
 
+def shared_temporary_password() -> str:
+    """Return the institute-wide first-login password for new portal accounts."""
+    if len(DEFAULT_SHARED_TEMPORARY_PASSWORD) < 6:
+        raise RuntimeError(
+            "PORTAL_SHARED_TEMP_PASSWORD must contain at least 6 characters"
+        )
+    return DEFAULT_SHARED_TEMPORARY_PASSWORD
+
+
 def _canonical_mobile(student: Student) -> str | None:
     if not student.mobile or not student.mobile.strip():
         return None
@@ -72,7 +85,7 @@ def provision_student_accounts(
     actor: User,
     *,
     apply: bool,
-    password_factory: Callable[[], str] = generate_temporary_password,
+    password_factory: Callable[[], str] = shared_temporary_password,
 ) -> dict:
     if actor.role != "owner" or not actor.is_active:
         raise RuntimeError("An active owner account is required")
