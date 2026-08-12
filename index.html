@@ -28,7 +28,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=54">
+  <link rel="stylesheet" href="/styles.css?v=55">
   <link rel="stylesheet" href="/auth-shared.css?v=8">
 </head>
 <body>
@@ -86,6 +86,25 @@
           </button>
         </form>
         <p class="technology-credit">Technology partner · <a href="https://srslogics.com" target="_blank" rel="noopener">SRS Logics</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="auth-screen hidden" id="operations-password-change-screen" aria-labelledby="operations-password-change-title">
+    <div class="auth-brand-panel">
+      <div class="auth-brand-content"><div class="official-logo-card auth-official-logo"><img src="/lakshya-logo-576.png?v=20260804-no-tm" width="576" height="384" alt="Lakshya — IIT-JEE, MHT-CET and NEET"></div></div>
+      <div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div>
+    </div>
+    <div class="auth-form-panel">
+      <div class="auth-form-wrap">
+        <div class="auth-heading"><p class="eyebrow">Account security</p><h2 id="operations-password-change-title">Create your password</h2><p>Replace the temporary password before entering Operations.</p></div>
+        <form class="auth-form" id="operations-password-change-form" novalidate>
+          <label class="field"><span>Temporary password</span><span class="password-control"><input name="currentPassword" type="password" minlength="6" autocomplete="current-password" required><button class="icon-button password-toggle" type="button" data-password-toggle data-password-label="temporary password" aria-label="Show temporary password" aria-pressed="false" data-icon="eye"></button></span></label>
+          <label class="field"><span>New password</span><span class="password-control"><input name="newPassword" type="password" minlength="6" autocomplete="new-password" required><button class="icon-button password-toggle" type="button" data-password-toggle data-password-label="new password" aria-label="Show new password" aria-pressed="false" data-icon="eye"></button></span><small class="field-help">Use at least 6 characters and choose something personal.</small></label>
+          <label class="field"><span>Confirm new password</span><span class="password-control"><input name="confirmPassword" type="password" minlength="6" autocomplete="new-password" required><button class="icon-button password-toggle" type="button" data-password-toggle data-password-label="confirmed password" aria-label="Show confirmed password" aria-pressed="false" data-icon="eye"></button></span></label>
+          <div class="auth-error hidden" id="operations-password-change-error" role="alert"></div>
+          <button class="button button-primary button-large" id="operations-password-change-button" type="submit"><span>Save password</span><span data-icon="arrow-right"></span></button>
+        </form>
       </div>
     </div>
   </section>
@@ -323,7 +342,7 @@
         </section>
 
         <section class="app-view" id="settings" aria-labelledby="settings-heading">
-          <div class="page-heading settings-page-heading"><div><h2 id="settings-heading">Settings</h2><p>Manage access, academic records and activity history.</p></div><div class="heading-actions settings-heading-actions"><button class="button button-secondary" id="settings-add-account" type="button"><span data-icon="plus"></span>Add account</button><button class="button button-primary" id="new-master" type="button"><span data-icon="plus"></span>Academic setup</button></div></div>
+          <div class="page-heading settings-page-heading"><div><h2 id="settings-heading">Settings</h2><p>Manage access, academic records and activity history.</p></div><div class="heading-actions settings-heading-actions"><button class="button button-secondary" id="settings-add-account" type="button"><span data-icon="plus"></span>Create account</button><button class="button button-primary" id="new-master" type="button"><span data-icon="plus"></span>Academic setup</button></div></div>
           <div class="settings-tabs" role="tablist" aria-label="Settings sections"><button class="active" id="settings-accounts-tab" type="button" role="tab" data-settings-section="accounts" aria-controls="settings-accounts-panel" aria-selected="true">Accounts</button><button id="settings-academics-tab" type="button" role="tab" data-settings-section="academics" aria-controls="settings-academics-panel" aria-selected="false">Academic setup</button><button id="settings-audit-tab" type="button" role="tab" data-settings-section="audit" aria-controls="settings-audit-panel" aria-selected="false">Audit trail</button></div>
           <section class="settings-panel" id="settings-accounts-panel" data-settings-panel="accounts" role="tabpanel" aria-labelledby="settings-accounts-tab">
             <div class="compact-metrics" id="settings-metrics"></div>
@@ -359,6 +378,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="/app.js?v=67" defer></script>
+  <script src="/app.js?v=68" defer></script>
 </body>
 </html>

@@ -56,6 +56,20 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
     return {
         "users": [_user_payload(item, permissions_by_user.get(item.id, [])) for item in users],
         "permissionModules": [{"key": module, "label": MODULE_LABELS[module]} for module in MODULES],
+        "rolePermissionDefaults": {
+            role: role_default_permissions(role)
+            for role in (
+                "director",
+                "admissions_manager",
+                "counsellor",
+                "front_desk",
+                "accounts",
+                "academic_coordinator",
+                "faculty",
+                "attendance_operator",
+                "storekeeper",
+            )
+        },
         "batches": [_batch(item) for item in db.query(Batch).order_by(Batch.program, Batch.name).all()],
         "subjects": [_subject(item) for item in db.query(Subject).order_by(Subject.program, Subject.name).all()],
         "rooms": [_room(item) for item in db.query(Room).order_by(Room.name).all()],
@@ -106,6 +120,10 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User 
     email = str(payload.email).lower() if payload.email else None
     if email and db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
+    if payload.permissions is not None and set(payload.permissions) != set(MODULES):
+        raise HTTPException(422, "Submit permissions for every Operations module")
+    if payload.permissions is not None and payload.role in {"student", "parent", "parent_student"}:
+        raise HTTPException(409, "Portal accounts cannot access Operations modules")
     row = User(
         mobile=payload.mobile,
         email=email,
@@ -114,10 +132,23 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User 
         password_hash=hash_password(payload.password),
         must_change_password=True,
     )
-    db.add(row); db.flush()
-    audit(db, actor, "settings.user.create", "user", row.id, after={"mobile": row.mobile, "email": row.email, "role": row.role})
+    db.add(row)
+    db.flush()
+    permission_rows = []
+    if payload.permissions is not None:
+        for module in MODULES:
+            values = payload.permissions[module]
+            permission_rows.append(UserModulePermission(
+                user_id=row.id,
+                module=module,
+                can_read=values.read,
+                can_create=values.create,
+                can_edit=values.edit,
+            ))
+        db.add_all(permission_rows)
+    audit(db, actor, "settings.user.create", "user", row.id, after={"mobile": row.mobile, "email": row.email, "role": row.role, "accessMode": "custom" if permission_rows else "recommended"})
     db.commit()
-    return _user_payload(row)
+    return _user_payload(row, permission_rows)
 
 
 @router.patch("/users/{user_id}")

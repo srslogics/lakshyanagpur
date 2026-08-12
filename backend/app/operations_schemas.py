@@ -199,23 +199,6 @@ class FeeInstallmentUpdate(BaseModel):
     status: Literal["scheduled", "cancelled"] = "scheduled"
 
 
-class UserCreate(MobileIdentityMixin):
-    full_name: str = Field(alias="fullName", min_length=2, max_length=255)
-    email: EmailStr | None = None
-    password: str = Field(min_length=6, max_length=128)
-    role: Literal["admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class UserUpdate(MobileIdentityMixin):
-    full_name: str = Field(alias="fullName", min_length=2, max_length=255)
-    email: EmailStr | None = None
-    role: Literal["owner", "admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
-    is_active: bool = Field(alias="isActive")
-    password: str | None = Field(default=None, min_length=6, max_length=128)
-    model_config = ConfigDict(populate_by_name=True)
-
-
 class ModulePermissionInput(BaseModel):
     read: bool = False
     create: bool = False
@@ -228,8 +211,7 @@ class ModulePermissionInput(BaseModel):
         return self
 
 
-class UserPermissionsUpdate(BaseModel):
-    permissions: dict[
+ModulePermissions = dict[
         Literal[
             "admissions",
             "students",
@@ -244,6 +226,28 @@ class UserPermissionsUpdate(BaseModel):
         ],
         ModulePermissionInput,
     ]
+
+
+class UserCreate(MobileIdentityMixin):
+    full_name: str = Field(alias="fullName", min_length=2, max_length=255)
+    email: EmailStr | None = None
+    password: str = Field(min_length=6, max_length=128)
+    role: Literal["director", "admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
+    permissions: ModulePermissions | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class UserUpdate(MobileIdentityMixin):
+    full_name: str = Field(alias="fullName", min_length=2, max_length=255)
+    email: EmailStr | None = None
+    role: Literal["owner", "director", "admissions_manager", "counsellor", "front_desk", "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper", "student", "parent", "parent_student"]
+    is_active: bool = Field(alias="isActive")
+    password: str | None = Field(default=None, min_length=6, max_length=128)
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class UserPermissionsUpdate(BaseModel):
+    permissions: ModulePermissions
 
 
 class BatchUpdate(BatchCreate):

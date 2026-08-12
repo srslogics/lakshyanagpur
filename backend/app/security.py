@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .database import get_db
 from .models import RevokedToken, User
-from .permissions import action_for_request, explicit_permission, module_for_request
+from .permissions import action_for_request, explicit_permission, module_for_request, role_default_permissions
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -88,11 +88,14 @@ def require_roles(*roles: str):
             return user
         module = module_for_request(request)
         if module:
-            override = explicit_permission(db, user.id, module, action_for_request(request))
+            action = action_for_request(request)
+            override = explicit_permission(db, user.id, module, action)
             if override is not None:
                 if override:
                     return user
                 raise HTTPException(403, "You do not have permission to perform this action")
+            if role_default_permissions(user.role).get(module, {}).get(action, False):
+                return user
         if user.role not in roles:
             raise HTTPException(403, "You do not have permission to perform this action")
         return user

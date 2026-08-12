@@ -24,6 +24,7 @@ from ..operations_schemas import (
     NoticeCreate,
     NoticeUpdate,
 )
+from ..permissions import has_permission
 from ..security import require_roles
 from ..services import audit
 
@@ -159,7 +160,7 @@ def _faculty_can_access(db: Session, faculty_id: str, thread: CommunicationThrea
 
 
 def _can_access_thread(db: Session, user: User, thread: CommunicationThread) -> bool:
-    if user.role in ROLES:
+    if user.role in ROLES or has_permission(db, user, "communication", "read"):
         return True
     if user.role in PORTAL_CREATOR_ROLES:
         return _linked_student(db, user).id == thread.student_id
@@ -286,7 +287,7 @@ def communication_inbox(
         ],
         "subjects": subjects,
         "canCreate": user.role in PORTAL_CREATOR_ROLES,
-        "canAnnounce": user.role in ROLES,
+        "canAnnounce": has_permission(db, user, "communication", "create"),
     }
 
 
@@ -362,7 +363,7 @@ def thread_detail(
         **_serialize_thread(row),
         "messages": _serialize_messages(db, thread.id),
         "canReply": thread.status == "open",
-        "canClose": user.role in ROLES,
+        "canClose": has_permission(db, user, "communication", "edit"),
     }
 
 

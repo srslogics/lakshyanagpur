@@ -41,6 +41,7 @@ const loadedResources = new Set();
 const resourceLoads = new Map();
 const ROLE_VIEWS = {
   owner: Object.keys({dashboard:1,admissions:1,students:1,finance:1,attendance:1,academics:1,examinations:1,timetable:1,communication:1,inventory:1,reports:1,settings:1}),
+  director: ["dashboard", "admissions", "students", "finance", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"],
   admissions_manager: ["dashboard","admissions","students","finance","communication"],
   counsellor: ["dashboard","admissions"],
   front_desk: ["dashboard","admissions","students","timetable","communication"],
@@ -280,6 +281,7 @@ async function refreshServiceWorker() {
 
 function showBootError(title, message) {
   $("#auth-screen").classList.add("hidden");
+  $("#operations-password-change-screen").classList.add("hidden");
   $("#app-shell").classList.add("hidden");
   $("#boot-screen").classList.remove("hidden");
   $("#boot-screen").classList.add("has-error");
@@ -309,6 +311,7 @@ function resetAuthForm() {
 function showAuth(message = "") {
   closeAccountMenu();
   $("#boot-screen").classList.add("hidden");
+  $("#operations-password-change-screen").classList.add("hidden");
   $("#auth-screen").classList.remove("hidden");
   $("#app-shell").classList.add("hidden");
   if (message) { $("#auth-error").textContent = message; $("#auth-error").classList.remove("hidden"); }
@@ -345,6 +348,7 @@ async function handleAuth(event) {
     state.token = result.access_token; sessionStorage.setItem("lakshya_token", state.token);
     state.user = result.user;
     sessionStorage.setItem("lakshya_user", JSON.stringify(state.user));
+    if (state.user.mustChangePassword) { showOperationsPasswordChange(); return; }
     await enterWorkspace();
   } catch (error) {
     $("#auth-error").textContent = error.message; $("#auth-error").classList.remove("hidden");
@@ -355,7 +359,55 @@ async function handleAuth(event) {
   }
 }
 
+function showOperationsPasswordChange() {
+  $("#boot-screen").classList.add("hidden");
+  $("#auth-screen").classList.add("hidden");
+  $("#app-shell").classList.add("hidden");
+  $("#operations-password-change-screen").classList.remove("hidden");
+  $("#operations-password-change-error").classList.add("hidden");
+  resetPasswordVisibility($("#operations-password-change-screen"));
+  setTimeout(() => $('#operations-password-change-form input[name="currentPassword"]')?.focus(), 10);
+}
+
+async function submitOperationsPasswordChange(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const data = new FormData(form);
+  const currentPassword = String(data.get("currentPassword") || "");
+  const newPassword = String(data.get("newPassword") || "");
+  const confirmPassword = String(data.get("confirmPassword") || "");
+  const error = $("#operations-password-change-error");
+  error.classList.add("hidden");
+  if (newPassword !== confirmPassword) {
+    error.textContent = "The new passwords do not match.";
+    error.classList.remove("hidden");
+    return;
+  }
+  if (newPassword === currentPassword) {
+    error.textContent = "Choose a personal password different from the temporary password.";
+    error.classList.remove("hidden");
+    return;
+  }
+  const button = $("#operations-password-change-button");
+  button.disabled = true;
+  try {
+    const mobile = state.user?.mobile || "";
+    await api("/api/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
+    clearSession();
+    form.reset();
+    showAuth("Password saved. Sign in with your new password.");
+    $("#auth-mobile").value = mobile;
+  } catch (requestError) {
+    error.textContent = requestError.message;
+    error.classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function enterWorkspace() {
+  if (state.user?.mustChangePassword) { showOperationsPasswordChange(); return; }
   if (!ROLE_VIEWS[state.user?.role] && !OPERATIONS_MODULES.some(module => canAccess(module, "read"))) {
     const portal = state.user?.role === "parent" ? "Parent portal" : ["student","parent_student"].includes(state.user?.role) ? "Student portal" : state.user?.role === "attendance_operator" ? "Attendance Desk" : "assigned portal";
     clearSession();
@@ -1158,6 +1210,7 @@ function settingsAccountLabel(role = "") {
     faculty: "Faculty portal",
     attendance_operator: "Attendance desk",
     owner: "Owner",
+    director: "Director",
     academic_coordinator: "Academic coordinator",
     admissions_manager: "Admissions manager",
     counsellor: "Counsellor",
@@ -1318,7 +1371,7 @@ function renderSettings() {
 }
 
 function openSettingsAccountPicker() {
-  openDrawer("Add account", `<div class="settings-access-picker"><p>Choose where this person will sign in.</p><button type="button" data-settings-account-type="student"><span>${icon("users")}</span><span><strong>Student</strong><small>Link an enrolled student to the Student portal.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="parent"><span>${icon("shield")}</span><span><strong>Parent</strong><small>Link a parent or contact to one student.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="faculty"><span>${icon("book")}</span><span><strong>Faculty</strong><small>Create access for a teacher or professor.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="attendance"><span>${icon("calendar-check")}</span><span><strong>Attendance desk</strong><small>Create access for the attendance operator.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="staff"><span>${icon("building")}</span><span><strong>Other staff</strong><small>Admissions, accounts, front desk or administration.</small></span>${icon("chevron-right")}</button></div>`);
+  openDrawer("Add account", `<div class="settings-access-picker"><p>Choose which application this person will use.</p><button type="button" data-settings-account-type="operations"><span>${icon("building")}</span><span><strong>Operations team</strong><small>Directors, coordinators, admissions, accounts and office staff. Assign module access while creating the login.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="student"><span>${icon("users")}</span><span><strong>Student</strong><small>Link an enrolled student to the Student portal.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="parent"><span>${icon("shield")}</span><span><strong>Parent</strong><small>Link a parent or contact to one student.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="faculty"><span>${icon("book")}</span><span><strong>Faculty</strong><small>Create access for a teacher or professor.</small></span>${icon("chevron-right")}</button><button type="button" data-settings-account-type="attendance"><span>${icon("calendar-check")}</span><span><strong>Attendance desk</strong><small>Create access for the attendance operator.</small></span>${icon("chevron-right")}</button></div>`);
 }
 
 async function importAcademicData(event) {
@@ -2404,6 +2457,88 @@ async function submitAttendance(event) {
   catch (error) { showFormError("#attendance-form-error", error); button.disabled = false; }
 }
 
+function operationsRoleOptions(current = "") {
+  return [
+    ["director", "Director / leadership"],
+    ["academic_coordinator", "Academic coordinator"],
+    ["admissions_manager", "Admissions manager"],
+    ["counsellor", "Counsellor"],
+    ["front_desk", "Front desk"],
+    ["accounts", "Accounts"],
+    ["storekeeper", "Storekeeper"],
+  ].map(([value, label]) => `<option value="${value}"${selected(value, current)}>${label}</option>`).join("");
+}
+
+function createAccountPermissionRows(permissions = {}) {
+  const modules = state.masters.permissionModules?.length
+    ? state.masters.permissionModules
+    : OPERATIONS_MODULES.map(key => ({ key, label: PERMISSION_MODULE_LABELS[key] }));
+  return modules.map(module => {
+    const permission = permissions[module.key] || { read: false, create: false, edit: false };
+    return `<label class="permission-row" data-create-permission-module="${esc(module.key)}"><span><strong>${esc(module.label)}</strong><small>Choose what this person can do here.</small></span><select data-create-permission-level aria-label="Access level for ${esc(module.label)}">${permissionLevelOptions(permissionLevel(permission))}</select></label>`;
+  }).join("");
+}
+
+function updateOperationsAccountAccess(form, role = form.elements.role.value, preserveCustom = false) {
+  const defaults = state.masters.rolePermissionDefaults?.[role] || {};
+  const summary = permissionSummary(defaults);
+  $("[data-create-role-summary]", form).textContent = `${summary}. Automatically follows the ${settingsAccountLabel(role).toLowerCase()} role.`;
+  if (!preserveCustom) {
+    $$('[data-create-permission-module]', form).forEach(row => {
+      const permission = defaults[row.dataset.createPermissionModule] || {};
+      $('[data-create-permission-level]', row).value = permissionLevel(permission);
+    });
+  }
+}
+
+function openOperationsAccountForm() {
+  const initialRole = "director";
+  const defaults = state.masters.rolePermissionDefaults?.[initialRole] || {};
+  openDrawer("Create Operations account", `<form class="auth-form operations-account-form" id="operations-account-form"><div class="inline-notice">${icon("shield")}<span>Create a secure Operations login and decide what this person can access.<small>They must change the temporary password after their first sign-in.</small></span></div><section class="account-form-section"><div class="account-form-section-head"><span>1</span><div><strong>Person and login</strong><small>Used to identify and securely sign in this person.</small></div></div><label class="field"><span>Full name</span><input name="fullName" autocomplete="name" required></label><div class="form-pair"><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional)</small></span><input name="email" type="email" autocomplete="email"></label></div><label class="field"><span>Temporary password</span>${passwordControl("password", { label: "temporary password", required: true })}<small>Minimum 6 characters. The user will be asked to replace it after first sign-in.</small></label></section><section class="account-form-section"><div class="account-form-section-head"><span>2</span><div><strong>Role</strong><small>Starts the account with a safe, recommended access profile.</small></div></div><label class="field"><span>Organisation role</span><select name="role">${operationsRoleOptions(initialRole)}</select></label></section><section class="account-form-section"><div class="account-form-section-head"><span>3</span><div><strong>Operations access</strong><small>Use the role recommendation or customize only what is different.</small></div></div><fieldset class="permission-mode"><legend class="sr-only">How should access be assigned?</legend><label class="permission-mode-card"><input type="radio" name="accessMode" value="recommended" checked><span>${icon("shield")}</span><span><strong>Recommended for this role</strong><small data-create-role-summary>${esc(permissionSummary(defaults))}. Automatically follows the director role.</small></span></label><label class="permission-mode-card"><input type="radio" name="accessMode" value="custom"><span>${icon("settings")}</span><span><strong>Custom access</strong><small>Choose a clear access level for each Operations module.</small></span></label></fieldset><div class="permission-custom" data-create-permission-custom hidden><div class="permission-custom-head"><div><strong>Module access</strong><small>Start with a preset, then adjust only the exceptions.</small></div><div class="permission-presets"><button class="button button-secondary button-small" type="button" data-create-permission-preset="view">View all</button><button class="button button-secondary button-small" type="button" data-create-permission-preset="full">Full control</button><button class="button button-quiet button-small" type="button" data-create-permission-preset="none">Clear</button></div></div><div class="permission-matrix">${createAccountPermissionRows(defaults)}</div></div></section>${formError("operations-account-error")}<button class="button button-primary button-large" type="submit">${icon("user")}Create Operations account</button></form>`, true);
+  const form = $("#operations-account-form");
+  form.addEventListener("change", event => {
+    if (event.target.name === "accessMode") {
+      $("[data-create-permission-custom]", form).hidden = event.target.value !== "custom";
+    } else if (event.target.name === "role") {
+      updateOperationsAccountAccess(form, event.target.value, form.elements.accessMode.value === "custom");
+    }
+  });
+  form.addEventListener("click", event => {
+    const preset = event.target.closest("[data-create-permission-preset]")?.dataset.createPermissionPreset;
+    if (!preset) return;
+    $$('[data-create-permission-level]', form).forEach(select => { select.value = preset; });
+  });
+  form.addEventListener("submit", submitOperationsAccount);
+}
+
+async function submitOperationsAccount(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const button = $('button[type="submit"]', form);
+  button.disabled = true;
+  const payload = {
+    fullName: String(data.get("fullName") || "").trim(),
+    mobile: String(data.get("mobile") || "").trim(),
+    email: String(data.get("email") || "").trim() || null,
+    password: String(data.get("password") || ""),
+    role: data.get("role"),
+  };
+  if (data.get("accessMode") === "custom") {
+    payload.permissions = Object.fromEntries($$('[data-create-permission-module]', form).map(row => [row.dataset.createPermissionModule, permissionFromLevel($('[data-create-permission-level]', row).value)]));
+  }
+  try {
+    await api("/api/settings/users", { method: "POST", body: JSON.stringify(payload) });
+    state.masters = await api("/api/settings/bootstrap");
+    closeDetail();
+    renderSettings();
+    toast("Operations account created.");
+  } catch (error) {
+    showFormError("#operations-account-error", error);
+    button.disabled = false;
+  }
+}
+
 function openUserForm(presetRole = "") {
   const accessConfig = {
     faculty: {
@@ -2512,7 +2647,7 @@ async function openOwnerEdit(kind, id) {
     fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><label class="field"><span>Message</span><textarea name="body" required>${esc(item.body)}</textarea></label><div class="form-pair"><label class="field"><span>Audience</span><select name="audience">${ownerStatusOptions(["all","parents","students","faculty","batch"], item.audience)}</select></label><label class="field"><span>Channel</span><select name="channel">${ownerStatusOptions(["in_app","email","sms","whatsapp"], item.channel)}</select></label></div><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
   } else if (kind === "user" || kind === "access-user") {
     title = "Edit user access";
-    fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" value="${esc(item.mobile || "")}" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional contact only)</small></span><input name="email" type="email" autocomplete="email" value="${esc(item.email || "")}"></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","attendance_operator","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span>${passwordControl("password", { label: "new password" })}<small>Leave blank to keep the existing password.</small></label>`;
+    fields = `<label class="field"><span>Full name</span><input name="fullName" value="${esc(item.fullName)}" autocomplete="name" required></label><label class="field"><span>Mobile number</span><input name="mobile" type="tel" inputmode="tel" autocomplete="tel" value="${esc(item.mobile || "")}" placeholder="10-digit mobile number" maxlength="16" required></label><label class="field"><span>Email <small>(optional contact only)</small></span><input name="email" type="email" autocomplete="email" value="${esc(item.email || "")}"></label><div class="form-pair"><label class="field"><span>Role</span><select name="role">${ownerStatusOptions(["owner","director","admissions_manager","counsellor","front_desk","accounts","academic_coordinator","faculty","attendance_operator","storekeeper","student","parent","parent_student"], item.role)}</select></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Account active</span></label></div><label class="field"><span>New password</span>${passwordControl("password", { label: "new password" })}<small>Leave blank to keep the existing password.</small></label>`;
   } else if (kind === "batch") {
     title = "Edit batch"; fields = `<label class="field"><span>Name</span><input name="name" value="${esc(item.name)}" required></label><label class="field"><span>Program</span><input name="program" value="${esc(item.program)}" required></label><label class="check-field"><input name="isActive" type="checkbox"${checked(item.isActive)}><span>Batch active</span></label>`;
   } else if (kind === "subject") {
@@ -2755,6 +2890,7 @@ function exportStudents() {
 function bindEvents() {
   $("#boot-retry").addEventListener("click", () => window.location.reload());
   $("#auth-form").addEventListener("submit", handleAuth);
+  $("#operations-password-change-form").addEventListener("submit", submitOperationsPasswordChange);
   $("#legacy-login-toggle").addEventListener("click", () => {
     setLegacyLoginMode(!state.legacyEmailLogin);
     $("#auth-mobile").focus();
@@ -2779,7 +2915,7 @@ function bindEvents() {
     else if (settingsAccountType === "parent") openParentAccessForm();
     else if (settingsAccountType === "faculty") openUserForm("faculty");
     else if (settingsAccountType === "attendance") openUserForm("attendance_operator");
-    else if (settingsAccountType === "staff") openUserForm();
+    else if (settingsAccountType === "operations") openOperationsAccountForm();
     const batchButton = event.target.closest("[data-student-batch]");
     if (batchButton) {
       studentHierarchyState.batch = batchButton.dataset.studentBatch;

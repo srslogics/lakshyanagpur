@@ -25,6 +25,7 @@ from .students import _list_item
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 ERP_ROLES = (
     "owner",
+    "director",
     "admissions_manager",
     "counsellor",
     "front_desk",

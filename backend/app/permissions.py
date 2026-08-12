@@ -37,6 +37,7 @@ _READ = {"read": True, "create": False, "edit": False}
 _NONE = {"read": False, "create": False, "edit": False}
 
 ROLE_DEFAULTS = {
+    "director": {module: _READ for module in MODULES},
     "admissions_manager": {
         "admissions": _FULL,
         "students": _READ,

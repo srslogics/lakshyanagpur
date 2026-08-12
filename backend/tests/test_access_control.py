@@ -12,6 +12,76 @@ def permissions_payload(**overrides):
     return {"permissions": permissions}
 
 
+def test_owner_can_create_operations_account_with_custom_access(client, database, owner_headers):
+    custom_permissions = permissions_payload(
+        students={"read": True, "create": False, "edit": True},
+        reports={"read": True, "create": False, "edit": False},
+    )["permissions"]
+    response = client.post(
+        "/api/settings/users",
+        headers=owner_headers,
+        json={
+            "fullName": "Institute Director",
+            "mobile": "9000000015",
+            "email": "director@example.com",
+            "password": "Lakshaya@2026",
+            "role": "director",
+            "permissions": custom_permissions,
+        },
+    )
+    assert response.status_code == 201
+    created = response.json()
+    assert created["role"] == "director"
+    assert created["hasCustomPermissions"] is True
+    assert created["permissions"] == custom_permissions
+    assert database.query(UserModulePermission).filter_by(user_id=created["id"]).count() == len(MODULES)
+
+    login = client.post(
+        "/api/auth/login",
+        json={"mobile": "9000000015", "password": "Lakshaya@2026"},
+    )
+    assert login.status_code == 200
+    assert login.json()["user"]["permissions"] == custom_permissions
+
+
+def test_director_recommended_access_is_read_only(client, database, owner_headers):
+    response = client.post(
+        "/api/settings/users",
+        headers=owner_headers,
+        json={
+            "fullName": "Read Only Director",
+            "mobile": "9000000016",
+            "password": "Lakshaya@2026",
+            "role": "director",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["hasCustomPermissions"] is False
+    assert response.json()["permissions"] == role_default_permissions("director")
+    assert all(
+        access == {"read": True, "create": False, "edit": False}
+        for access in response.json()["permissions"].values()
+    )
+    director = database.get(User, response.json()["id"])
+    director.must_change_password = False
+    database.commit()
+    headers = {"Authorization": f"Bearer {create_token(director)}"}
+    assert client.get("/api/students", headers=headers).status_code == 200
+    assert client.post(
+        "/api/admissions/leads",
+        headers=headers,
+        json={
+            "student": "Read Only Attempt",
+            "mobile": "9876543210",
+            "parent": "Parent",
+            "program": "JEE",
+            "source": "walk-in",
+            "counsellor": "Director",
+            "nextAction": "Review",
+        },
+    ).status_code == 403
+
+
 def test_owner_can_assign_per_user_module_actions(client, database, owner_headers):
     staff = User(
         mobile="9000000010",

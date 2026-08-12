@@ -175,6 +175,9 @@ def test_operations_exposes_owner_managed_module_access(client):
     assert 'value="recommended"' in script.text
     assert 'value="custom"' in script.text
     assert 'method: "DELETE"' in script.text
+    assert "Create Operations account" in script.text
+    assert 'data-settings-account-type="operations"' in script.text
+    assert "data-create-permission-module" in script.text
     assert "/permissions" in script.text
     assert 'canAccess("attendance", "edit")' in script.text
 
@@ -210,6 +213,16 @@ def test_every_password_field_has_an_accessible_visibility_control(client):
         assert response.status_code == 200
         assert "function togglePassword" in response.text
         assert 'closest("[data-password-toggle]")' in response.text
+
+
+def test_operations_has_first_login_password_change_flow(client):
+    page = client.get("/")
+    script = client.get("/app.js")
+    assert page.status_code == 200
+    assert 'id="operations-password-change-screen"' in page.text
+    assert 'id="operations-password-change-form"' in page.text
+    assert "showOperationsPasswordChange" in script.text
+    assert 'api("/api/auth/change-password"' in script.text
 
 
 def test_portal_service_workers_only_delete_their_own_old_caches(client):
