@@ -9,6 +9,7 @@ const icons = {
   check:'<path d="m5 12 4 4L19 6"/>',
   close:'<path d="m6 6 12 12M18 6 6 18"/>',
   calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4m8-4v4M3 10h18"/>',
+  upload:'<path d="M12 16V4m-5 5 5-5 5 5M5 20h14"/>',
   "chevron-left":'<path d="m15 18-6-6 6-6"/>',
   "chevron-right":'<path d="m9 18 6-6-6-6"/>'
 };
@@ -27,7 +28,8 @@ const state = {
   lastFocus: null,
   confirmTimer: null,
   identity: (() => { try { return JSON.parse(localStorage.getItem("lakshya_attendance_user") || "null"); } catch { return null; } })(),
-  online: navigator.onLine
+  online: navigator.onLine,
+  biometric: null
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -123,7 +125,7 @@ async function resilientFetch(path, options = {}) {
 }
 
 async function api(path, options = {}) {
-  const headers = {"Content-Type":"application/json", ...(options.headers || {})};
+  const headers = {...(options.body instanceof FormData ? {} : {"Content-Type":"application/json"}), ...(options.headers || {})};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   const response = await resilientFetch(path, {...options, headers});
   let body = {};
@@ -140,6 +142,158 @@ async function api(path, options = {}) {
     throw error;
   }
   return body;
+}
+
+function biometricSheet() {
+  return state.biometric?.sheets?.find(item => item.name === $("#biometric-sheet").value) || state.biometric?.sheets?.[0];
+}
+
+function optionMarkup(headers, selected, optional = false) {
+  return `${optional ? '<option value="">Not used</option>' : ""}${headers.map(header => `<option value="${esc(header)}" ${header === selected ? "selected" : ""}>${esc(header)}</option>`).join("")}`;
+}
+
+function renderBiometricSheet() {
+  const sheet = biometricSheet();
+  if (!sheet) return;
+  const detected = sheet.detected || {};
+  $("#biometric-device-column").innerHTML = optionMarkup(sheet.headers, detected.device_id || sheet.headers[0]);
+  $("#biometric-name-column").innerHTML = optionMarkup(sheet.headers, detected.name || "", true);
+  $("#biometric-datetime-column").innerHTML = optionMarkup(sheet.headers, detected.datetime || "", true);
+  $("#biometric-date-column").innerHTML = optionMarkup(sheet.headers, detected.date || "", true);
+  $("#biometric-time-column").innerHTML = optionMarkup(sheet.headers, detected.time || "", true);
+  $("#biometric-preview-head").innerHTML = `<tr>${sheet.headers.map(header => `<th>${esc(header)}</th>`).join("")}</tr>`;
+  $("#biometric-preview-body").innerHTML = sheet.rows.length ? sheet.rows.map(row => `<tr>${sheet.headers.map(header => `<td>${esc(row[header] || "")}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${sheet.headers.length || 1}">No preview rows</td></tr>`;
+}
+
+function biometricSelection() {
+  if (state.biometric?.sourceFormat === "essl_form_j") {
+    return {
+      previewToken:state.biometric.previewToken,
+      sheetName:state.biometric.sheets[0].name,
+      deviceIdColumn:"Device Code",
+      nameColumn:"Student Name",
+      datetimeColumn:null,
+      dateColumn:"Date",
+      timeColumn:"InTime"
+    };
+  }
+  return {
+    previewToken:state.biometric.previewToken,
+    sheetName:$("#biometric-sheet").value,
+    deviceIdColumn:$("#biometric-device-column").value,
+    nameColumn:$("#biometric-name-column").value || null,
+    datetimeColumn:$("#biometric-datetime-column").value || null,
+    dateColumn:$("#biometric-date-column").value || null,
+    timeColumn:$("#biometric-time-column").value || null
+  };
+}
+
+async function chooseBiometricFile() {
+  const file = $("#biometric-file").files[0];
+  if (!file) return;
+  const button = $("#choose-biometric-file");
+  const idle = button.innerHTML;
+  button.disabled = true;
+  button.textContent = "Reading file…";
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    state.biometric = await api("/api/attendance/biometric-imports/preview", {method:"POST", body:form});
+    $("#biometric-source").textContent = `${state.biometric.sourceName} · ${state.biometric.device.name} · ${state.biometric.device.serialNumber}`;
+    $("#biometric-sheet").innerHTML = state.biometric.sheets.map(sheet => `<option value="${esc(sheet.name)}">${esc(sheet.name)} · ${sheet.rowCount} rows</option>`).join("");
+    $("#biometric-stage-file").classList.remove("hidden");
+    $("#biometric-stage-mapping").classList.add("hidden");
+    $("#analyze-biometric").classList.remove("hidden");
+    $("#import-biometric").classList.add("hidden");
+    $("#back-biometric").classList.add("hidden");
+    renderBiometricSheet();
+    $(".mapping-grid", $("#biometric-stage-file")).classList.toggle("hidden", state.biometric.sourceFormat === "essl_form_j");
+    $(".mapping-help", $("#biometric-stage-file")).textContent = state.biometric.sourceFormat === "essl_form_j"
+      ? `eSSL Form J detected · ${state.biometric.report.identityCount} device identities · ${state.biometric.report.reportMonth}`
+      : "Use either one date-and-time column, or separate date and time columns.";
+    $("#biometric-dialog").classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    $("#close-biometric").focus();
+  } catch (error) { toast(error.message); }
+  finally {
+    button.disabled = false;
+    button.innerHTML = idle;
+    injectIcons(button);
+    $("#biometric-file").value = "";
+  }
+}
+
+async function analyzeBiometric() {
+  const button = $("#analyze-biometric");
+  button.disabled = true;
+  button.textContent = "Analysing…";
+  const error = $("#biometric-analyze-error");
+  error.classList.add("hidden");
+  try {
+    state.biometric.analysis = await api("/api/attendance/biometric-imports/analyze", {method:"POST", body:JSON.stringify(biometricSelection())});
+    renderBiometricMappings();
+    $("#biometric-stage-file").classList.add("hidden");
+    $("#biometric-stage-mapping").classList.remove("hidden");
+    button.classList.add("hidden");
+    $("#import-biometric").classList.remove("hidden");
+    $("#back-biometric").classList.remove("hidden");
+  } catch (requestError) {
+    error.textContent = typeof requestError.message === "string" ? requestError.message : "Unable to analyse this file.";
+    error.classList.remove("hidden");
+  } finally { button.disabled = false; button.textContent = "Review device IDs"; }
+}
+
+function renderBiometricMappings() {
+  const analysis = state.biometric.analysis;
+  $("#biometric-summary").innerHTML = [
+    metric("Rows read", analysis.rowsSeen), metric("Daily punches", analysis.uniqueAttendanceDays),
+    metric("Duplicates removed", analysis.duplicateRows), metric("Date range", `${analysis.dateFrom} – ${analysis.dateTo}`)
+  ].join("");
+  const studentOptions = state.biometric.students.map(student => `<option value="${esc(student.id)}">${esc(student.fullName)} · ${esc(student.admissionNumber)} · ${esc(student.batch || "")}</option>`).join("");
+  $("#biometric-mappings").innerHTML = analysis.deviceUsers.map(person => `
+    <article class="mapping-row" data-device-user-id="${esc(person.deviceUserId)}">
+      <div><strong>Device ID ${esc(person.deviceUserId)}</strong><span>${esc(person.deviceName || "Name not supplied")} · ${person.dayCount} ${person.dayCount === 1 ? "day" : "days"}</span></div>
+      <select data-device-student aria-label="Student for device ID ${esc(person.deviceUserId)}"><option value="">Choose student</option>${studentOptions}</select>
+      <label class="ignore-device"><input type="checkbox" data-device-ignore> Ignore this ID</label>
+    </article>`).join("");
+  analysis.deviceUsers.forEach(person => {
+    const row = $(`[data-device-user-id="${CSS.escape(person.deviceUserId)}"]`, $("#biometric-mappings"));
+    $("[data-device-student]", row).value = person.studentId || "";
+    $("[data-device-ignore]", row).checked = Boolean(person.ignore);
+    $("[data-device-student]", row).disabled = Boolean(person.ignore);
+  });
+}
+
+function closeBiometric() {
+  $("#biometric-dialog").classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+async function importBiometric() {
+  const mappings = $$('[data-device-user-id]', $("#biometric-mappings")).map(row => ({
+    deviceUserId:row.dataset.deviceUserId,
+    studentId:$("[data-device-student]", row).value || null,
+    ignore:$("[data-device-ignore]", row).checked
+  }));
+  const incomplete = mappings.find(item => !item.studentId && !item.ignore);
+  const error = $("#biometric-import-error");
+  if (incomplete) {
+    error.textContent = `Choose a student or ignore device ID ${incomplete.deviceUserId}.`;
+    error.classList.remove("hidden");
+    return;
+  }
+  const button = $("#import-biometric");
+  button.disabled = true;
+  button.textContent = "Importing…";
+  error.classList.add("hidden");
+  try {
+    const result = await api("/api/attendance/biometric-imports", {method:"POST", body:JSON.stringify({...biometricSelection(), mappings})});
+    closeBiometric();
+    await loadDesk(result.message);
+  } catch (requestError) {
+    error.textContent = requestError.message;
+    error.classList.remove("hidden");
+  } finally { button.disabled = false; button.textContent = "Import draft registers"; }
 }
 
 function clearSession() {
@@ -507,7 +661,10 @@ async function openRegister(sessionId, trigger) {
   document.body.style.overflow = "hidden";
   $("#close-register").focus();
   try {
-    const result = await api(`/api/attendance/sessions/${encodeURIComponent(sessionId)}`);
+    const resource = session.registerKind && session.registerKind !== "scheduled"
+      ? "manual-registers"
+      : "sessions";
+    const result = await api(`/api/attendance/${resource}/${encodeURIComponent(sessionId)}`);
     applyRegister(result);
   } catch (error) {
     $("#roster-list").innerHTML = empty("Unable to load roster", error.message);
@@ -518,12 +675,12 @@ function applyRegister(result) {
   state.activeSession = result.session;
   state.roster = result.entries.map(item => ({...item}));
   state.locked = result.session.registerStatus === "submitted";
-  state.upcoming = result.session.registerKind !== "manual"
+  state.upcoming = result.session.registerKind === "scheduled"
     && asInstant(result.session.startsAt).getTime() > Date.now();
-  $("#register-title").textContent = result.session.registerKind === "manual"
+  $("#register-title").textContent = result.session.registerKind !== "scheduled"
     ? `${result.session.batch} attendance`
     : `${result.session.subject} · ${result.session.batch} · ${result.session.program || result.session.stream || ""}`;
-  $("#register-meta").textContent = result.session.registerKind === "manual"
+  $("#register-meta").textContent = result.session.registerKind !== "scheduled"
     ? `${dateLong(result.session.startsAt)} · ${result.session.batch} roster`
     : `${dateLong(result.session.startsAt)} · ${timeText(result.session.startsAt)}–${timeText(result.session.endsAt)} · ${result.session.faculty} · ${result.session.room}`;
   renderRoster();
@@ -648,7 +805,7 @@ async function saveAttendance(submit = false) {
   button.textContent = submit ? "Submitting…" : "Saving…";
   $("#attendance-error").classList.add("hidden");
   try {
-    const resource = state.activeSession.registerKind === "manual"
+    const resource = state.activeSession.registerKind !== "scheduled"
       ? "manual-registers"
       : "sessions";
     await api(`/api/attendance/${resource}/${encodeURIComponent(state.activeSession.id)}${submit ? "/submit" : ""}`, {
@@ -742,6 +899,28 @@ function bindEvents() {
   $("#today-button").addEventListener("click", () => setDate(localDateKey()));
   $("#working-date").addEventListener("change", event => { if (event.target.value) setDate(event.target.value); });
   $("#manual-register-form").addEventListener("submit", openManualRegister);
+  $("#choose-biometric-file").addEventListener("click", () => $("#biometric-file").click());
+  $("#biometric-file").addEventListener("change", chooseBiometricFile);
+  $("#biometric-sheet").addEventListener("change", renderBiometricSheet);
+  $("#analyze-biometric").addEventListener("click", analyzeBiometric);
+  $("#import-biometric").addEventListener("click", importBiometric);
+  $("#close-biometric").addEventListener("click", closeBiometric);
+  $("#cancel-biometric").addEventListener("click", closeBiometric);
+  $("#back-biometric").addEventListener("click", () => {
+    $("#biometric-stage-file").classList.remove("hidden");
+    $("#biometric-stage-mapping").classList.add("hidden");
+    $("#analyze-biometric").classList.remove("hidden");
+    $("#import-biometric").classList.add("hidden");
+    $("#back-biometric").classList.add("hidden");
+  });
+  $("#biometric-mappings").addEventListener("change", event => {
+    const row = event.target.closest("[data-device-user-id]");
+    if (!row) return;
+    const ignore = $("[data-device-ignore]", row);
+    const student = $("[data-device-student]", row);
+    if (event.target === ignore) { student.disabled = ignore.checked; if (ignore.checked) student.value = ""; }
+    if (event.target === student && student.value) { ignore.checked = false; student.disabled = false; }
+  });
   window.addEventListener("online", () => setConnectionState(true));
   window.addEventListener("offline", () => setConnectionState(false));
   $("#class-search").addEventListener("input", event => { state.search = event.target.value; renderSessions(); });

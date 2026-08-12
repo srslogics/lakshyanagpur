@@ -314,6 +314,24 @@ def attendance_portal_bootstrap(
         .all()
     )
     sessions = _session_summaries(db, rows)
+    desk_registers = (
+        db.query(AttendanceRegister)
+        .filter(
+            AttendanceRegister.register_kind.in_(("manual", "biometric")),
+            AttendanceRegister.attendance_date == selected_day,
+        )
+        .order_by(AttendanceRegister.batch_name)
+        .all()
+    )
+    for register in desk_registers:
+        student_count = len(_eligible_manual_students(
+            db,
+            register.batch_name,
+            register.stream_name,
+            register.subject_name,
+        ))
+        marked_count = db.query(AttendanceEntry).filter_by(register_id=register.id).count()
+        sessions.append(_manual_register_summary(register, student_count, marked_count))
     now = datetime.now(timezone.utc)
     pending = [
         item for item in sessions
@@ -388,7 +406,10 @@ def attendance_portal_bootstrap(
 def _manual_register(db: Session, register_id: str):
     register = (
         db.query(AttendanceRegister)
-        .filter_by(id=register_id, register_kind="manual")
+        .filter(
+            AttendanceRegister.id == register_id,
+            AttendanceRegister.register_kind.in_(("manual", "biometric")),
+        )
         .first()
     )
     if not register:
@@ -409,10 +430,10 @@ def _manual_register_summary(
     ).astimezone(timezone.utc)
     return {
         "id": register.id,
-        "registerKind": "manual",
+        "registerKind": register.register_kind,
         "batch": register.batch_name,
         "stream": "" if batch_wide else register.stream_name,
-        "subject": BATCH_WIDE_SUBJECT if batch_wide else register.subject_name,
+        "subject": register.subject_name,
         "faculty": "Attendance Desk",
         "room": "Attendance Desk" if batch_wide else register.stream_name,
         "startsAt": starts_at,
@@ -450,7 +471,7 @@ def _manual_register_payload(db: Session, register: AttendanceRegister):
             "status": (
                 entries[student.id].status
                 if student.id in entries
-                else "present"
+                else ("absent" if register.register_kind == "biometric" else "present")
             ),
             "reason": (
                 entries[student.id].reason

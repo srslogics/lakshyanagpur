@@ -181,7 +181,7 @@ def attendance_rows(db: Session, student: Student):
         .filter(
             AttendanceEntry.student_id == student.id,
             AttendanceRegister.status == "submitted",
-            AttendanceRegister.register_kind == "manual",
+            AttendanceRegister.register_kind.in_(("manual", "biometric")),
         )
         .order_by(AttendanceRegister.attendance_date.desc())
         .all()
@@ -197,7 +197,11 @@ def attendance_rows(db: Session, student: Student):
         "status": entry.status,
         "rawStatus": None,
         "reason": entry.reason,
-        "source": "manual_register",
+        "source": (
+            "biometric_register"
+            if register.register_kind == "biometric"
+            else "manual_register"
+        ),
     } for entry, register in manual]
     daily = (
         db.query(DailyAttendanceEntry)

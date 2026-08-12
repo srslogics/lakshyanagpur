@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png?v=20260804-no-tm">
   <link rel="icon" href="../pwa-icon-192.png?v=20260804-no-tm">
   <link rel="stylesheet" href="../auth-shared.css?v=8">
-  <link rel="stylesheet" href="./styles.css?v=7">
+  <link rel="stylesheet" href="./styles.css?v=8">
 </head>
 <body>
   <a class="skip-link" href="#attendance-main">Skip to attendance</a>
@@ -102,6 +102,20 @@
 
       <section class="metric-grid" id="metric-grid" aria-label="Daily attendance summary"></section>
 
+      <section class="biometric-import" aria-labelledby="biometric-heading">
+        <div class="biometric-copy">
+          <p class="eyebrow">BIOMETRIC DEVICE</p>
+          <h2 id="biometric-heading">Import fingerprint attendance</h2>
+          <p>Export the attendance file from the institute computer, then review and import its earliest daily punch.</p>
+          <div class="device-spec"><strong>X2008</strong><span>Serial ABFR220607313</span><span>192.168.1.201</span><span>TCP 4370</span></div>
+        </div>
+        <div class="biometric-action">
+          <input class="sr-only" id="biometric-file" type="file" accept=".pdf,.csv,.txt,.xls,.xlsx,application/pdf,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          <button class="primary-button" id="choose-biometric-file" type="button"><span data-icon="upload"></span>Select attendance file</button>
+          <small>eSSL Form J PDF, CSV, TXT, XLS or XLSX · Maximum 5 MB</small>
+        </div>
+      </section>
+
       <section class="quick-register" aria-labelledby="quick-register-heading">
         <div class="quick-register-head">
           <div>
@@ -175,7 +189,40 @@
     </section>
   </div>
 
+  <div class="dialog-backdrop hidden" id="biometric-dialog" role="dialog" aria-modal="true" aria-labelledby="biometric-dialog-title">
+    <section class="register-dialog biometric-dialog-card">
+      <header>
+        <div><p class="eyebrow">BIOMETRIC IMPORT</p><h2 id="biometric-dialog-title">Review attendance export</h2><p id="biometric-source"></p></div>
+        <button class="icon-button" type="button" id="close-biometric" aria-label="Close biometric import"><span data-icon="close"></span></button>
+      </header>
+      <div class="biometric-dialog-body">
+        <div class="biometric-stage" id="biometric-stage-file">
+          <div class="mapping-grid">
+            <label><span>Worksheet</span><select id="biometric-sheet"></select></label>
+            <label><span>Device ID column</span><select id="biometric-device-column"></select></label>
+            <label><span>Name column <em>optional</em></span><select id="biometric-name-column"></select></label>
+            <label><span>Date and time column</span><select id="biometric-datetime-column"></select></label>
+            <label><span>Date column</span><select id="biometric-date-column"></select></label>
+            <label><span>Time column</span><select id="biometric-time-column"></select></label>
+          </div>
+          <p class="mapping-help">Use either one date-and-time column, or separate date and time columns.</p>
+          <div class="file-preview-wrap"><table class="file-preview"><thead id="biometric-preview-head"></thead><tbody id="biometric-preview-body"></tbody></table></div>
+          <div class="dialog-error hidden" id="biometric-analyze-error" role="alert"></div>
+        </div>
+        <div class="biometric-stage hidden" id="biometric-stage-mapping">
+          <div class="import-summary" id="biometric-summary"></div>
+          <div class="mapping-list" id="biometric-mappings"></div>
+          <div class="dialog-error hidden" id="biometric-import-error" role="alert"></div>
+        </div>
+      </div>
+      <footer class="biometric-footer">
+        <button class="secondary-button" id="cancel-biometric" type="button">Cancel</button>
+        <span class="footer-actions"><button class="secondary-button hidden" id="back-biometric" type="button">Back</button><button class="primary-button" id="analyze-biometric" type="button">Review device IDs</button><button class="primary-button hidden" id="import-biometric" type="button">Import draft registers</button></span>
+      </footer>
+    </section>
+  </div>
+
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=15" defer></script>
+  <script src="./app.js?v=17" defer></script>
 </body>
 </html>
