@@ -1,5 +1,5 @@
 from app.models import AuditLog, Batch, Subject, User, UserModulePermission
-from app.permissions import MODULES
+from app.permissions import MODULES, role_default_permissions
 from app.security import create_token, hash_password
 
 
@@ -94,6 +94,81 @@ def test_owner_and_portal_permission_boundaries(client, database, owner_headers)
         json=payload,
         headers=owner_headers,
     ).status_code == 409
+    assert client.delete(
+        f"/api/settings/users/{owner.id}/permissions",
+        headers=owner_headers,
+    ).status_code == 409
+    assert client.delete(
+        f"/api/settings/users/{parent.id}/permissions",
+        headers=owner_headers,
+    ).status_code == 409
+
+
+def test_owner_can_restore_recommended_role_access(client, database, owner_headers):
+    staff = User(
+        mobile="9000000013",
+        full_name="Accounts Reset Test",
+        role="accounts",
+        password_hash=hash_password("Password123!"),
+    )
+    database.add(staff)
+    database.commit()
+    custom = client.put(
+        f"/api/settings/users/{staff.id}/permissions",
+        json=permissions_payload(admissions={"read": True, "create": True, "edit": True}),
+        headers=owner_headers,
+    )
+    assert custom.status_code == 200
+    assert database.query(UserModulePermission).filter_by(user_id=staff.id).count() == len(MODULES)
+
+    restored = client.delete(
+        f"/api/settings/users/{staff.id}/permissions",
+        headers=owner_headers,
+    )
+    assert restored.status_code == 200
+    assert restored.json() == {
+        "userId": staff.id,
+        "permissions": role_default_permissions("accounts"),
+        "hasCustomPermissions": False,
+    }
+    assert database.query(UserModulePermission).filter_by(user_id=staff.id).count() == 0
+    assert database.query(AuditLog).filter_by(
+        action="settings.user.permissions.reset",
+        entity_id=staff.id,
+    ).count() == 1
+
+
+def test_changing_role_removes_stale_custom_access(client, database, owner_headers):
+    staff = User(
+        mobile="9000000014",
+        full_name="Role Change Test",
+        role="accounts",
+        password_hash=hash_password("Password123!"),
+    )
+    database.add(staff)
+    database.commit()
+    response = client.put(
+        f"/api/settings/users/{staff.id}/permissions",
+        json=permissions_payload(finance={"read": True, "create": True, "edit": True}),
+        headers=owner_headers,
+    )
+    assert response.status_code == 200
+
+    updated = client.patch(
+        f"/api/settings/users/{staff.id}",
+        json={
+            "fullName": staff.full_name,
+            "mobile": staff.mobile,
+            "email": None,
+            "role": "front_desk",
+            "isActive": True,
+        },
+        headers=owner_headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["hasCustomPermissions"] is False
+    assert updated.json()["permissions"] == role_default_permissions("front_desk")
+    assert database.query(UserModulePermission).filter_by(user_id=staff.id).count() == 0
 
 
 def test_mutating_permissions_require_view_access(client, database, owner_headers):

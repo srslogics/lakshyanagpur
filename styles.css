@@ -573,7 +573,7 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .settings-account-surface > .surface-head { align-items: center; margin: 0; padding: 20px 22px; border-bottom: 1px solid var(--line); }
 .settings-account-surface > .surface-head p, .settings-audit .surface-head p { margin: 5px 0 0; color: var(--ink-500); font-size: .7rem; line-height: 1.45; }
 .settings-account-toolbar { border-bottom: 1px solid var(--line); }
-.settings-account-head, .settings-account-row { display: grid; grid-template-columns: minmax(250px,1.35fr) minmax(145px,.72fr) minmax(175px,.85fr) 88px 188px; align-items: center; gap: 16px; }
+.settings-account-head, .settings-account-row { display: grid; grid-template-columns: minmax(250px,1.35fr) minmax(145px,.72fr) minmax(175px,.85fr) 88px 224px; align-items: center; gap: 16px; }
 .settings-account-head { min-height: 42px; padding: 0 20px; color: var(--ink-500); background: var(--surface); font-size: .62rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .settings-account-list { max-height: min(620px,calc(100dvh - 380px)); overflow-y: auto; overscroll-behavior: contain; }
 .settings-account-row { min-height: 70px; padding: 11px 20px; border-top: 1px solid var(--line); transition: background var(--motion-fast); }
@@ -585,25 +585,41 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .settings-account-row strong { color: var(--ink-900); font-size: .75rem; }
 .settings-account-row small { margin-top: 4px; color: var(--ink-500); font-size: .64rem; }
 .settings-account-edit { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.permission-form { display: grid; gap: 18px; }
+.permission-form { display: grid; gap: 20px; }
 .permission-person { display: flex; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-muted); }
 .permission-person > span { width: 42px; height: 42px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 12px; color: var(--forest-900); background: var(--gold-300); font: 800 .72rem/1 "Manrope",sans-serif; }
 .permission-person strong, .permission-person small { display: block; }
 .permission-person strong { color: var(--ink-900); font-size: .82rem; }
 .permission-person small { margin-top: 4px; color: var(--ink-500); font-size: .68rem; }
-.permission-presets { display: flex; flex-wrap: wrap; gap: 7px; }
-.permission-matrix-head, .permission-row { display: grid; grid-template-columns: minmax(150px,1fr) repeat(3,54px); align-items: center; gap: 6px; }
-.permission-matrix-head { padding: 0 12px; color: var(--ink-500); font-size: .59rem; font-weight: 800; letter-spacing: .06em; text-align: center; text-transform: uppercase; }
-.permission-matrix-head span:first-child { text-align: left; }
+.permission-mode { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.permission-mode legend { margin-bottom: 10px; color: var(--ink-900); font: 800 .8rem/1.3 "Manrope",sans-serif; }
+.permission-mode-card { min-height: 76px; display: grid; grid-template-columns: 20px 42px minmax(0,1fr); align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; transition: border-color var(--motion-fast),background var(--motion-fast),box-shadow var(--motion-fast); }
+.permission-mode-card:hover { border-color: var(--line-strong); background: var(--forest-50); }
+.permission-mode-card:has(input:checked) { border-color: var(--forest-700); background: var(--forest-50); box-shadow: 0 0 0 3px rgba(25,94,76,.08); }
+.permission-mode-card input { width: 17px; height: 17px; margin: 0; accent-color: var(--forest-800); }
+.permission-mode-card > span:nth-of-type(1) { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: var(--forest-800); background: var(--gold-100); }
+.permission-mode-card > span:nth-of-type(1) svg { width: 18px; height: 18px; }
+.permission-mode-card strong, .permission-mode-card small { display: block; }
+.permission-mode-card strong { color: var(--ink-900); font-size: .76rem; }
+.permission-mode-card small { margin-top: 4px; color: var(--ink-500); font-size: .66rem; line-height: 1.45; }
+.permission-custom { display: grid; gap: 12px; }
+.permission-custom[hidden] { display: none; }
+.permission-custom-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.permission-custom-head strong, .permission-custom-head small { display: block; }
+.permission-custom-head strong { color: var(--ink-900); font-size: .8rem; }
+.permission-custom-head small { margin-top: 4px; color: var(--ink-500); font-size: .66rem; line-height: 1.45; }
+.permission-presets { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .permission-matrix { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
-.permission-row { min-width: 0; margin: 0; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); }
+.permission-row { min-width: 0; display: grid; grid-template-columns: minmax(0,1fr) minmax(180px,220px); align-items: center; gap: 18px; margin: 0; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); }
 .permission-row:last-child { border-bottom: 0; }
-.permission-row > strong { min-width: 0; color: var(--ink-800); font-size: .72rem; font-weight: 750; }
-.permission-row label { min-height: 32px; display: grid; place-items: center; border-radius: 8px; cursor: pointer; }
-.permission-row label:hover { background: var(--forest-50); }
-.permission-row input { width: 17px; height: 17px; margin: 0; accent-color: var(--forest-800); }
-.permission-row label span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.permission-help { margin: -4px 0 0; color: var(--ink-500); font-size: .68rem; line-height: 1.55; }
+.permission-row:hover { background: var(--forest-50); }
+.permission-row > span { min-width: 0; }
+.permission-row strong, .permission-row small { display: block; }
+.permission-row strong { color: var(--ink-800); font-size: .74rem; font-weight: 800; }
+.permission-row small { margin-top: 3px; color: var(--ink-500); font-size: .63rem; line-height: 1.4; }
+.permission-row select { width: 100%; min-height: 44px; padding: 0 34px 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; color: var(--ink-900); background: var(--surface); font: 700 .7rem/1 "Inter",sans-serif; cursor: pointer; }
+.permission-row select:focus-visible { border-color: var(--forest-700); outline: 3px solid rgba(25,94,76,.12); }
+.permission-help { margin: -2px 0 0; color: var(--ink-500); font-size: .68rem; line-height: 1.55; }
 .settings-access-picker { display: grid; gap: 8px; }
 .settings-access-picker > p { margin: 0 0 8px; color: var(--ink-500); font-size: .78rem; line-height: 1.5; }
 .settings-access-picker > button { width: 100%; min-height: 70px; display: grid; grid-template-columns: 42px minmax(0,1fr) 20px; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 13px; color: var(--ink-900); background: var(--surface); text-align: left; cursor: pointer; transition: border-color var(--motion-fast),background var(--motion-fast),transform var(--motion-fast); }
@@ -631,6 +647,13 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
   .settings-account-login { grid-area: login; }
   .settings-account-status { grid-area: status; justify-self: end; }
   .settings-account-edit { grid-area: edit; }
+  .permission-mode-card { grid-template-columns: 18px 38px minmax(0,1fr); gap: 10px; padding: 12px; }
+  .permission-mode-card > span:nth-of-type(1) { width: 36px; height: 36px; }
+  .permission-custom-head { align-items: stretch; flex-direction: column; }
+  .permission-presets { justify-content: flex-start; }
+  .permission-presets .button { flex: 1; }
+  .permission-row { grid-template-columns: 1fr; gap: 9px; padding: 13px; }
+  .permission-row select { font-size: 16px; }
 }
 .settings-helper { margin: 10px 0 0; color: var(--ink-500); font-size: .74rem; line-height: 1.5; }
 .settings-helper.error { color: var(--danger); font-weight: 700; }

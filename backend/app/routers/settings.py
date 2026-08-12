@@ -6,7 +6,7 @@ from ..database import get_db
 from ..importers.academic_workbook import AcademicImportConflict, import_manifest as import_academic_manifest
 from ..models import AcademicImportBatch, AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User, UserModulePermission
 from ..operations_schemas import BatchCreate, BatchUpdate, ParentAccessCreate, RoomCreate, RoomUpdate, StudentAccessCreate, SubjectCreate, SubjectUpdate, UserCreate, UserPermissionsUpdate, UserUpdate
-from ..permissions import MODULE_LABELS, MODULES, permissions_from_rows
+from ..permissions import MODULE_LABELS, MODULES, permissions_from_rows, role_default_permissions
 from ..security import hash_password, require_roles
 from ..services import audit
 
@@ -36,6 +36,7 @@ def _user_payload(row: User, permission_rows: list[UserModulePermission] | None 
         "role": row.role,
         "isActive": row.is_active,
         "permissions": permissions_from_rows(row, by_module),
+        "roleDefaultPermissions": role_default_permissions(row.role),
         "hasCustomPermissions": bool(permission_rows) and row.role != "owner",
     }
 
@@ -132,8 +133,11 @@ def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db)
     row.full_name = payload.full_name.strip()
     row.mobile = payload.mobile
     row.email = str(payload.email).lower() if payload.email else None
+    role_changed = row.role != payload.role
     row.role = payload.role
     row.is_active = payload.is_active
+    if role_changed:
+        db.query(UserModulePermission).filter_by(user_id=row.id).delete(synchronize_session=False)
     if payload.password:
         row.password_hash = hash_password(payload.password)
         row.must_change_password = True
@@ -195,6 +199,39 @@ def update_user_permissions(
     )
     db.commit()
     return {"userId": row.id, "permissions": after, "hasCustomPermissions": True}
+
+
+@router.delete("/users/{user_id}/permissions")
+def reset_user_permissions(
+    user_id: str,
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("owner")),
+):
+    row = db.get(User, user_id)
+    if not row or row.is_test_account:
+        raise HTTPException(404, "User not found")
+    if row.role == "owner":
+        raise HTTPException(409, "Owner accounts always have full access")
+    if row.role in {"student", "parent", "parent_student"}:
+        raise HTTPException(409, "Portal accounts cannot access Operations modules")
+    existing = {
+        item.module: item
+        for item in db.query(UserModulePermission).filter_by(user_id=row.id).all()
+    }
+    before = permissions_from_rows(row, existing)
+    db.query(UserModulePermission).filter_by(user_id=row.id).delete(synchronize_session=False)
+    after = role_default_permissions(row.role)
+    audit(
+        db,
+        actor,
+        "settings.user.permissions.reset",
+        "user",
+        row.id,
+        before=before,
+        after=after,
+    )
+    db.commit()
+    return {"userId": row.id, "permissions": after, "hasCustomPermissions": False}
 
 
 @router.post("/student-access", status_code=201)

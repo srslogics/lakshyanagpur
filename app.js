@@ -1174,7 +1174,38 @@ function canConfigureOperationsAccess(item) {
 
 function settingsPermissionsButton(item) {
   if (!canConfigureOperationsAccess(item)) return "";
-  return `<button class="button button-secondary button-small" type="button" data-user-permissions="${esc(item.id)}">${icon("shield")}Access</button>`;
+  return `<button class="button button-secondary button-small" type="button" data-user-permissions="${esc(item.id)}">${icon("shield")}Manage access</button>`;
+}
+
+function permissionLevel(permission = {}) {
+  if (!permission.read) return "none";
+  if (permission.create && permission.edit) return "full";
+  if (permission.create) return "add";
+  if (permission.edit) return "edit";
+  return "view";
+}
+
+function permissionFromLevel(level) {
+  return {
+    read: level !== "none",
+    create: ["add", "full"].includes(level),
+    edit: ["edit", "full"].includes(level),
+  };
+}
+
+const permissionLevelOptions = selected => [
+  ["none", "No access"],
+  ["view", "View only"],
+  ["add", "View and add"],
+  ["edit", "View and edit"],
+  ["full", "Full control"],
+].map(([value, label]) => `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`).join("");
+
+function permissionSummary(permissions = {}) {
+  const visible = Object.values(permissions).filter(item => item.read).length;
+  const managed = Object.values(permissions).filter(item => item.create || item.edit).length;
+  if (!visible) return "No Operations access";
+  return `${visible} module${visible === 1 ? "" : "s"}${managed ? ` · ${managed} manageable` : " · view only"}`;
 }
 
 function renderSettingsAccounts() {
@@ -1195,7 +1226,7 @@ function renderSettingsAccounts() {
     const parent = parentLinks.get(item.id);
     const context = student?.admissionNumber || (parent ? `${parent.studentName} · ${parent.admissionNumber}` : item.email || "Institute account");
     const accessCopy = canConfigureOperationsAccess(item)
-      ? `${Object.values(item.permissions || {}).filter(permission => permission.read).length} modules`
+      ? item.hasCustomPermissions ? `Custom · ${permissionSummary(item.permissions)}` : "Recommended access"
       : settingsAccountGroup(item.role) === "staff" ? "Operations" : "Portal access";
     return `<div class="settings-account-row"><span class="settings-account-identity"><i>${esc(initials(item.fullName))}</i><span><strong>${esc(item.fullName)}</strong><small>${esc(context)}</small></span></span><span class="settings-account-access"><strong>${esc(settingsAccountLabel(item.role))}</strong><small>${esc(accessCopy)}</small></span><span class="settings-account-login"><strong>${esc(mobileLabel(item.mobile))}</strong><small>${item.mobile ? "Mobile login" : "Setup required"}</small></span><span class="settings-account-status">${status(item.isActive ? "active" : "inactive")}</span><span class="settings-account-edit">${settingsPermissionsButton(item)}${ownerEditButton("user", item.id)}</span></div>`;
   }).join("") : emptyState("search", "No matching accounts", "Try another name, mobile number or access type.");
@@ -1210,29 +1241,22 @@ function openUserPermissions(userId) {
   const modules = state.masters.permissionModules?.length
     ? state.masters.permissionModules
     : OPERATIONS_MODULES.map(key => ({ key, label: PERMISSION_MODULE_LABELS[key] }));
+  const roleDefaults = user.roleDefaultPermissions || user.permissions || {};
   const rows = modules.map(module => {
     const permission = user.permissions?.[module.key] || { read: false, create: false, edit: false };
-    return `<div class="permission-row" role="group" aria-label="${esc(module.label)} permissions" data-permission-module="${esc(module.key)}"><strong>${esc(module.label)}</strong><label><input type="checkbox" data-permission-action="read"${checked(permission.read)}><span>View</span></label><label><input type="checkbox" data-permission-action="create"${checked(permission.create)}><span>Add</span></label><label><input type="checkbox" data-permission-action="edit"${checked(permission.edit)}><span>Edit</span></label></div>`;
+    return `<label class="permission-row" data-permission-module="${esc(module.key)}"><span><strong>${esc(module.label)}</strong><small>Choose what this person can do here.</small></span><select data-permission-level aria-label="Access level for ${esc(module.label)}">${permissionLevelOptions(permissionLevel(permission))}</select></label>`;
   }).join("");
-  openDrawer("Module access", `<form class="permission-form" id="user-permissions-form" data-user-id="${esc(user.id)}"><div class="permission-person"><span>${esc(initials(user.fullName))}</span><div><strong>${esc(user.fullName)}</strong><small>${esc(settingsAccountLabel(user.role))} · ${user.hasCustomPermissions ? "Custom access" : "Role defaults"}</small></div></div><div class="permission-presets" aria-label="Permission presets"><button class="button button-secondary button-small" type="button" data-permission-preset="read">View only</button><button class="button button-secondary button-small" type="button" data-permission-preset="full">Full access</button><button class="button button-quiet button-small" type="button" data-permission-preset="none">Clear</button></div><div class="permission-matrix-head" aria-hidden="true"><span>Module</span><span>View</span><span>Add</span><span>Edit</span></div><div class="permission-matrix">${rows}</div><p class="permission-help">Add and Edit always require View access. Changes apply to this person only and are enforced by the server.</p>${formError("user-permissions-error")}<button class="button button-primary button-large" type="submit">${icon("shield")}Save access</button></form>`);
+  const recommendedSummary = permissionSummary(roleDefaults);
+  openDrawer("Manage access", `<form class="permission-form" id="user-permissions-form" data-user-id="${esc(user.id)}"><div class="permission-person"><span>${esc(initials(user.fullName))}</span><div><strong>${esc(user.fullName)}</strong><small>${esc(settingsAccountLabel(user.role))}</small></div></div><fieldset class="permission-mode"><legend>How should access be assigned?</legend><label class="permission-mode-card"><input type="radio" name="accessMode" value="recommended"${checked(!user.hasCustomPermissions)}><span>${icon("shield")}</span><span><strong>Recommended for this role</strong><small>${esc(recommendedSummary)}. Automatically follows the ${esc(settingsAccountLabel(user.role).toLowerCase())} role.</small></span></label><label class="permission-mode-card"><input type="radio" name="accessMode" value="custom"${checked(user.hasCustomPermissions)}><span>${icon("settings")}</span><span><strong>Custom access</strong><small>Choose one clear access level for each module.</small></span></label></fieldset><section class="permission-custom" data-permission-custom${user.hasCustomPermissions ? "" : " hidden"}><div class="permission-custom-head"><div><strong>Module access</strong><small>Start with a preset, then adjust only what is different.</small></div><div class="permission-presets"><button class="button button-secondary button-small" type="button" data-permission-preset="view">View all</button><button class="button button-secondary button-small" type="button" data-permission-preset="full">Full control</button><button class="button button-quiet button-small" type="button" data-permission-preset="none">Clear</button></div></div><div class="permission-matrix">${rows}</div></section><p class="permission-help">Recommended access stays aligned with the person’s role. Custom access overrides it only for this account.</p>${formError("user-permissions-error")}<button class="button button-primary button-large" type="submit">${icon("shield")}Save access</button></form>`, true);
   const form = $("#user-permissions-form");
   form.addEventListener("change", event => {
-    const row = event.target.closest("[data-permission-module]");
-    if (!row) return;
-    const read = $('[data-permission-action="read"]', row);
-    const create = $('[data-permission-action="create"]', row);
-    const edit = $('[data-permission-action="edit"]', row);
-    if (event.target === read && !read.checked) { create.checked = false; edit.checked = false; }
-    if ((event.target === create || event.target === edit) && event.target.checked) read.checked = true;
+    if (event.target.name !== "accessMode") return;
+    $("[data-permission-custom]", form).hidden = event.target.value !== "custom";
   });
   form.addEventListener("click", event => {
     const preset = event.target.closest("[data-permission-preset]")?.dataset.permissionPreset;
     if (!preset) return;
-    $$('[data-permission-module]', form).forEach(row => {
-      $('[data-permission-action="read"]', row).checked = preset !== "none";
-      $('[data-permission-action="create"]', row).checked = preset === "full";
-      $('[data-permission-action="edit"]', row).checked = preset === "full";
-    });
+    $$('[data-permission-level]', form).forEach(select => { select.value = preset; });
   });
   form.addEventListener("submit", submitUserPermissions);
 }
@@ -1242,18 +1266,15 @@ async function submitUserPermissions(event) {
   const form = event.currentTarget;
   const button = $('button[type="submit"]', form);
   button.disabled = true;
-  const permissions = Object.fromEntries($$('[data-permission-module]', form).map(row => [row.dataset.permissionModule, {
-    read: $('[data-permission-action="read"]', row).checked,
-    create: $('[data-permission-action="create"]', row).checked,
-    edit: $('[data-permission-action="edit"]', row).checked,
-  }]));
+  const recommended = form.elements.accessMode.value === "recommended";
+  const permissions = Object.fromEntries($$('[data-permission-module]', form).map(row => [row.dataset.permissionModule, permissionFromLevel($('[data-permission-level]', row).value)]));
   try {
-    const result = await api(`/api/settings/users/${encodeURIComponent(form.dataset.userId)}/permissions`, { method: "PUT", body: JSON.stringify({ permissions }) });
+    const result = await api(`/api/settings/users/${encodeURIComponent(form.dataset.userId)}/permissions`, recommended ? { method: "DELETE" } : { method: "PUT", body: JSON.stringify({ permissions }) });
     const user = state.masters.users.find(item => item.id === form.dataset.userId);
-    if (user) { user.permissions = result.permissions; user.hasCustomPermissions = true; }
+    if (user) { user.permissions = result.permissions; user.roleDefaultPermissions = recommended ? result.permissions : user.roleDefaultPermissions; user.hasCustomPermissions = result.hasCustomPermissions; }
     closeDetail();
     renderSettingsAccounts();
-    toast("Module access updated.");
+    toast(recommended ? "Recommended role access restored." : "Custom access saved.");
   } catch (error) {
     showFormError("#user-permissions-error", error);
     button.disabled = false;

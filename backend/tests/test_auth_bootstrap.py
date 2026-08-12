@@ -170,9 +170,11 @@ def test_operations_exposes_owner_managed_module_access(client):
     script = client.get("/app.js")
     assert script.status_code == 200
     assert "data-user-permissions" in script.text
-    assert 'data-permission-action="read"' in script.text
-    assert 'data-permission-action="create"' in script.text
-    assert 'data-permission-action="edit"' in script.text
+    assert "data-permission-level" in script.text
+    assert 'name="accessMode"' in script.text
+    assert 'value="recommended"' in script.text
+    assert 'value="custom"' in script.text
+    assert 'method: "DELETE"' in script.text
     assert "/permissions" in script.text
     assert 'canAccess("attendance", "edit")' in script.text
 
