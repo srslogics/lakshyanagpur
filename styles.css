@@ -91,6 +91,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .auth-brand-panel::before { content: ""; position: absolute; inset: 0; z-index: -2; opacity: .32; background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px); background-size: 48px 48px; }
 .auth-brand-panel::after { content: ""; position: absolute; width: 520px; height: 520px; right: -220px; top: -210px; z-index: -1; border-radius: 50%; background: rgba(214,185,30,.18); filter: blur(2px); }
 .auth-brand-content { display: flex; width: 100%; align-items: center; justify-content: center; position: relative; z-index: 2; }
+.auth-brand-stack { width: min(100%, 680px); display: grid; gap: 44px; align-content: center; }
 .official-logo-card { width: fit-content; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; padding: 7px 10px; border: 1px solid rgba(255,255,255,.16); border-radius: 14px; background: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.16); }
 .official-logo-card img { width: 220px; height: auto; display: block; }
 .auth-official-logo { align-self: center; }

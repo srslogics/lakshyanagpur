@@ -192,6 +192,16 @@ def test_every_application_uses_a_mobile_login_field(client):
         assert "Email address" not in response.text
 
 
+def test_every_login_presents_the_published_vision_and_academic_leadership(client):
+    for path in ("/", "/student-app/", "/parent-app/", "/faculty-app/", "/attendance-app/"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "Build capability, not temporary confidence." in response.text
+        assert "Dr. Vinay Barhate" in response.text
+        assert "Dr. Pravin K. Dakhole" in response.text
+        assert 'href="/lakshya-site/about"' in response.text
+
+
 def test_every_password_field_has_an_accessible_visibility_control(client):
     app_paths = ("/", "/student-app/", "/parent-app/", "/faculty-app/", "/attendance-app/")
     script_paths = (

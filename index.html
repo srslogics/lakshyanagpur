@@ -28,8 +28,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=55">
-  <link rel="stylesheet" href="/auth-shared.css?v=8">
+  <link rel="stylesheet" href="/styles.css?v=56">
+  <link rel="stylesheet" href="/auth-shared.css?v=9">
 </head>
 <body>
   <div class="boot-screen" id="boot-screen" role="status" aria-live="polite">
@@ -46,8 +46,20 @@
   <section class="auth-screen hidden" id="auth-screen" aria-labelledby="auth-title">
     <div class="auth-brand-panel">
       <div class="auth-brand-content">
-        <div class="official-logo-card auth-official-logo">
-          <img src="/lakshya-logo-576.png?v=20260804-no-tm" width="576" height="384" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
+        <div class="auth-brand-stack">
+          <div class="official-logo-card auth-official-logo">
+            <img src="/lakshya-logo-576.png?v=20260804-no-tm" width="576" height="384" alt="Lakshya — IIT-JEE, MHT-CET and NEET">
+          </div>
+          <section class="institution-login-story" aria-label="Lakshya Institute vision and academic leadership">
+            <p class="institution-story-kicker">38 years of academic experience with Directors</p>
+            <h1>Build capability, not temporary confidence.</h1>
+            <p class="institution-story-copy">Deep understanding, deliberate practice, measured progress and personal support prepare every student to perform with composure.</p>
+            <div class="institution-directors" aria-label="Academic leadership">
+              <span><strong>Dr. Vinay Barhate</strong><small>Director · Engineering and academic leadership</small></span>
+              <span><strong>Dr. Pravin K. Dakhole</strong><small>Director · Education, research and institutional leadership</small></span>
+            </div>
+            <a href="/lakshya-site/about" target="_blank" rel="noopener">Explore Lakshya’s vision <span aria-hidden="true">↗</span></a>
+          </section>
         </div>
       </div>
       <div class="auth-orbit auth-orbit-one"></div><div class="auth-orbit auth-orbit-two"></div>
@@ -85,6 +97,12 @@
             <span id="auth-submit-label">Sign in</span><span data-icon="arrow-right"></span>
           </button>
         </form>
+        <section class="institution-login-story institution-login-story-mobile" aria-label="Lakshya Institute vision and academic leadership">
+          <p class="institution-story-kicker">Academic leadership</p>
+          <h1>Build capability, not temporary confidence.</h1>
+          <p class="institution-story-copy">Led by Dr. Vinay Barhate and Dr. Pravin K. Dakhole.</p>
+          <a href="/lakshya-site/about" target="_blank" rel="noopener">About Lakshya <span aria-hidden="true">↗</span></a>
+        </section>
         <p class="technology-credit">Technology partner · <a href="https://srslogics.com" target="_blank" rel="noopener">SRS Logics</a></p>
       </div>
     </div>
