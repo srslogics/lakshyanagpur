@@ -204,3 +204,21 @@ def test_revision_rejects_changed_controls(database):
     owner = database.query(User).filter_by(role="owner").one()
     with pytest.raises(AdmissionRevisionConflict):
         import_revision(database, payload, owner, apply=False)
+
+
+def test_revision_matches_renamed_student_by_legacy_id(database):
+    payload = manifest()
+    seed_manifest_students(database, payload)
+    row = payload["records"][1]
+    student = database.query(Student).filter_by(
+        full_name=row["normalized"]["studentName"]
+    ).one()
+    student.full_name = "Nancy Magare (corrected)"
+    student.legacy_import_id = row["originalLegacyId"]
+    database.commit()
+
+    owner = database.query(User).filter_by(role="owner").one()
+    preview = import_revision(database, payload, owner, apply=False)
+
+    assert preview["applied"] is False
+    assert preview["alreadyApplied"] is False

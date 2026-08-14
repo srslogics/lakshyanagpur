@@ -75,16 +75,32 @@ def _validate(manifest: dict) -> None:
         raise AdmissionRevisionConflict("Admission revision does not match the client control totals")
 
 
-def _students_by_name(db: Session) -> dict[str, Student]:
-    result: dict[str, Student] = {}
+def _student_indexes(db: Session) -> tuple[dict[str, Student], dict[str, Student]]:
+    by_name: dict[str, Student] = {}
+    by_legacy_id: dict[str, Student] = {}
     for student in db.query(Student).filter(Student.is_test_account.is_(False)).all():
         key = _name_key(student.full_name)
-        if key in result:
+        if key in by_name:
             raise AdmissionRevisionConflict(
                 f"More than one student matches the name {student.full_name}"
             )
-        result[key] = student
-    return result
+        by_name[key] = student
+        if student.legacy_import_id:
+            by_legacy_id[student.legacy_import_id] = student
+    return by_name, by_legacy_id
+
+
+def _match_student(
+    row: dict,
+    by_name: dict[str, Student],
+    by_legacy_id: dict[str, Student],
+) -> Student | None:
+    # The legacy admission ID is immutable. Names can be corrected by the owner,
+    # so only use the normalized name as a fallback for older/manual records.
+    legacy_id = row.get("originalLegacyId")
+    if legacy_id and legacy_id in by_legacy_id:
+        return by_legacy_id[legacy_id]
+    return by_name.get(_name_key(row["normalized"]["studentName"]))
 
 
 def _agreement(db: Session, student: Student) -> FeeAgreement:
@@ -118,7 +134,7 @@ def _new_payments(row: dict, cutoff: str) -> list[dict]:
 
 def _preview(db: Session, manifest: dict) -> dict:
     _validate(manifest)
-    by_name = _students_by_name(db)
+    by_name, by_legacy_id = _student_indexes(db)
     revision_id = manifest["revisionId"]
     already_applied = db.query(AuditLog).filter_by(
         action="admission.revision.import",
@@ -145,7 +161,7 @@ def _preview(db: Session, manifest: dict) -> dict:
     cutoff = manifest["paymentCutoff"]
     for row in manifest["records"]:
         data = row["normalized"]
-        student = by_name.get(_name_key(data["studentName"]))
+        student = _match_student(row, by_name, by_legacy_id)
         if row["action"] == "create":
             if student:
                 raise AdmissionRevisionConflict(
@@ -204,7 +220,9 @@ def _preview(db: Session, manifest: dict) -> dict:
             review_required.append({"name": student.full_name, "issues": row["issues"]})
 
     for retained in manifest.get("retainedMissingRecords", []):
-        student = by_name.get(_name_key(retained["studentName"]))
+        student = by_legacy_id.get(retained.get("originalLegacyId"))
+        if not student:
+            student = by_name.get(_name_key(retained["studentName"]))
         if not student:
             raise AdmissionRevisionConflict(
                 f"Retained student not found: {retained['studentName']}"
@@ -337,7 +355,7 @@ def import_revision(
         return preview
 
     revision_id = manifest["revisionId"]
-    by_name = _students_by_name(db)
+    by_name, by_legacy_id = _student_indexes(db)
     cutoff = manifest["paymentCutoff"]
     payment_line = 0
     created_students = []
@@ -346,10 +364,12 @@ def import_revision(
 
     for row in manifest["records"]:
         data = row["normalized"]
-        student = by_name.get(_name_key(data["studentName"]))
+        student = _match_student(row, by_name, by_legacy_id)
         if row["action"] == "create":
             student = _create_student(db, row, actor, revision_id)
             by_name[_name_key(student.full_name)] = student
+            if student.legacy_import_id:
+                by_legacy_id[student.legacy_import_id] = student
             created_students.append(student.full_name)
         elif not student:
             raise AdmissionRevisionConflict(f"Student not found: {data['studentName']}")
