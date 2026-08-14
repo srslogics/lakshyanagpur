@@ -147,6 +147,21 @@ source ledger for review rather than being promoted into operational data.
 
 The other interface areas remain product shells. Finance transactions, attendance locking, inventory movements, academics, communication adapters, and reporting still need their domain migrations and APIs before those modules should be treated as production-complete.
 
+## Revised admission register
+
+Client-issued revisions are processed as updates to the shared register, never
+as a second admission import. Build the reviewed JSON locally, then preview it
+in **Settings → Academic setup → Admission register** before applying it:
+
+```bash
+node scripts/build_admission_revision.mjs "/path/to/Admission Sheet.xlsx"
+```
+
+The revision importer is idempotent. It closes forfeited students' outstanding
+balances through auditable ledger credits, creates confirmed post-cutoff
+payments once, and retains contradictory or missing values for review instead
+of guessing.
+
 You can deploy either by using the included `render.yaml` blueprint or by creating the web service manually in the Render dashboard.
 
 ## Build approach

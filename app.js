@@ -1355,6 +1355,25 @@ function renderSettings() {
   $("#settings-account-filter").value = settingsAccountFilter;
   renderSettingsAccounts();
   const academicImport = masters.academicImports?.[0];
+  const admissionRevision = masters.admissionRevision;
+  $("#admission-revision-status").textContent = admissionRevision ? "Updated" : "Not updated";
+  $("#admission-revision-message").textContent = admissionRevision
+    ? "The latest client revision is active across every portal."
+    : "Owner-only. Select the reviewed admission revision JSON file.";
+  $("#admission-revision-message").classList.remove("error");
+  $("#settings-admission-revision").innerHTML = admissionRevision
+    ? masterRows([admissionRevision], item => {
+        const summary = item.summary || {};
+        const controls = summary.controls || {};
+        const changed = Array.isArray(summary.statusChanges) ? summary.statusChanges.length : 0;
+        const payments = Array.isArray(summary.payments) ? summary.payments.length : 0;
+        return [
+          `${controls.activeRows || 0} active · ${controls.cancelledRows || 0} forfeited`,
+          `${changed} status changes · ${payments} payments`,
+          "ready",
+        ];
+      })
+    : `<div class="master-empty">No revised admission register imported</div>`;
   $("#academic-import-status").textContent = academicImport ? "Loaded" : "Not loaded";
   $("#academic-import-message").textContent = academicImport
     ? "Import completed. Source rows remain auditable."
@@ -1368,6 +1387,61 @@ function renderSettings() {
   $("#settings-rooms").innerHTML = masterRows(masters.rooms || [], item => [item.name, `${item.capacity} seats`, item.isActive ? "active" : "inactive"], "room");
   $("#settings-audit").innerHTML = auditRows(state.audit);
   showSettingsSection(settingsSection);
+}
+
+async function importAdmissionRevision(event) {
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  if (!file) return;
+  input.disabled = true;
+  $("#admission-revision-status").textContent = "Reviewing…";
+  $("#admission-revision-message").textContent = "Reconciling students, cancellations and payment totals…";
+  $("#admission-revision-message").classList.remove("error");
+  try {
+    const payload = JSON.parse(await file.text());
+    const preview = await api("/api/settings/imports/admission-revision", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const newCount = preview.newStudents?.length || 0;
+    const statusCount = preview.statusChanges?.length || 0;
+    const paymentCount = preview.payments?.length || 0;
+    const reviewCount = preview.reviewRequired?.length || 0;
+    const confirmed = window.confirm(
+      `Apply this admission update?\n\n${newCount} new student\n${statusCount} status changes\n${paymentCount} payment entries\n${reviewCount} records kept for review\n\nThis is recorded in the audit trail and cannot create duplicate entries.`,
+    );
+    if (!confirmed) {
+      $("#admission-revision-status").textContent = "Not applied";
+      $("#admission-revision-message").textContent = "Preview completed. No records were changed.";
+      return;
+    }
+    const result = await api("/api/settings/imports/admission-revision?apply=true", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const [masters, workspace] = await Promise.all([
+      api("/api/settings/bootstrap"),
+      api("/api/workspace/bootstrap"),
+    ]);
+    state.masters = masters;
+    state.students = workspace.students || [];
+    state.agreements = workspace.agreements || [];
+    state.payments = workspace.payments || [];
+    state.installments = workspace.installments || [];
+    state.leads = workspace.leads || [];
+    state.stages = workspace.admissionsMeta?.stageOrder || [];
+    renderAll();
+    toast(result.alreadyApplied ? "This admission update was already applied." : "Admission register updated across all portals.");
+  } catch (error) {
+    const message = error instanceof SyntaxError ? "Select the reviewed admission revision JSON file." : error.message;
+    $("#admission-revision-status").textContent = "Failed";
+    $("#admission-revision-message").textContent = message;
+    $("#admission-revision-message").classList.add("error");
+    toast(message, "error");
+  } finally {
+    input.value = "";
+    input.disabled = false;
+  }
 }
 
 function openSettingsAccountPicker() {
@@ -3021,6 +3095,7 @@ function bindEvents() {
   $("#examination-search").addEventListener("input", renderExaminations);
   $("#examination-status-filter").addEventListener("change", renderExaminations);
   $("#academic-import-file").addEventListener("change", importAcademicData);
+  $("#admission-revision-file").addEventListener("change", importAdmissionRevision);
   $("#settings-account-search").addEventListener("input", event => { settingsAccountSearch = event.target.value; renderSettingsAccounts(); });
   $("#settings-account-filter").addEventListener("change", event => { settingsAccountFilter = event.target.value; renderSettingsAccounts(); });
   $(".settings-tabs").addEventListener("keydown", event => {

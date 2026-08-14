@@ -121,7 +121,27 @@ def _eligible_manual_students(
 
 
 def _attendance_catalog(db: Session):
-    rows = (
+    roster_rows = (
+        db.query(
+            Student.id,
+            StudentAcademicProfile.batch_name,
+            StudentAcademicProfile.source_stream,
+        )
+        .join(
+            StudentAcademicProfile,
+            StudentAcademicProfile.student_id == Student.id,
+        )
+        .join(Enrollment, Enrollment.student_id == Student.id)
+        .filter(
+            Student.status == "active",
+            Enrollment.is_active.is_(True),
+            Enrollment.batch == StudentAcademicProfile.batch_name,
+            StudentAcademicProfile.source_stream.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    subject_rows = (
         db.query(
             Student.id,
             StudentAcademicProfile.batch_name,
@@ -149,7 +169,7 @@ def _attendance_catalog(db: Session):
     group_students = {}
     stream_students = {}
     subject_students = {}
-    for student_id, batch_name, stream_name, subject_name in rows:
+    for student_id, batch_name, stream_name in roster_rows:
         if batch_name not in {"Tatva", "Essential"}:
             continue
         group_students.setdefault(batch_name, set()).add(student_id)
@@ -157,6 +177,9 @@ def _attendance_catalog(db: Session):
             (batch_name, stream_name),
             set(),
         ).add(student_id)
+    for student_id, batch_name, stream_name, subject_name in subject_rows:
+        if batch_name not in {"Tatva", "Essential"}:
+            continue
         subject_students.setdefault(
             (batch_name, stream_name, subject_name),
             set(),

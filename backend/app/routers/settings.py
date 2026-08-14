@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..importers.academic_workbook import AcademicImportConflict, import_manifest as import_academic_manifest
+from ..importers.admission_revision import AdmissionRevisionConflict, import_revision as import_admission_revision
 from ..models import AcademicImportBatch, AuditLog, Batch, ParentAccount, Room, Student, StudentAccount, Subject, User, UserModulePermission
 from ..operations_schemas import BatchCreate, BatchUpdate, ParentAccessCreate, RoomCreate, RoomUpdate, StudentAccessCreate, SubjectCreate, SubjectUpdate, UserCreate, UserPermissionsUpdate, UserUpdate
 from ..permissions import MODULE_LABELS, MODULES, permissions_from_rows, role_default_permissions
@@ -53,6 +54,15 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
         .limit(10)
         .all()
     )
+    latest_admission_revision = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.action == "admission.revision.import",
+            AuditLog.entity_type == "admission_revision",
+        )
+        .order_by(AuditLog.created_at.desc())
+        .first()
+    )
     return {
         "users": [_user_payload(item, permissions_by_user.get(item.id, [])) for item in users],
         "permissionModules": [{"key": module, "label": MODULE_LABELS[module]} for module in MODULES],
@@ -84,6 +94,11 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
             "unresolvedItems": item.unresolved_items,
             "createdAt": item.created_at,
         } for item in academic_imports],
+        "admissionRevision": None if not latest_admission_revision else {
+            "id": latest_admission_revision.entity_id,
+            "createdAt": latest_admission_revision.created_at,
+            "summary": latest_admission_revision.after or {},
+        },
         "studentAccess": [{"userId": account.user_id, "studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "mobile": account_user.mobile, "email": account_user.email, "isActive": account_user.is_active} for account, student, account_user in db.query(StudentAccount, Student, User).join(Student, Student.id == StudentAccount.student_id).join(User, User.id == StudentAccount.user_id).filter(Student.is_test_account.is_(False), User.is_test_account.is_(False)).order_by(Student.full_name).all()],
         "parentAccess": [{
             "userId": account.user_id,
@@ -110,6 +125,21 @@ def import_academic_workbook(
     try:
         return import_academic_manifest(db, payload, actor_id=actor.id)
     except AcademicImportConflict as error:
+        raise HTTPException(409, str(error)) from error
+
+
+@router.post("/imports/admission-revision")
+def import_revised_admission_register(
+    payload: dict,
+    apply: bool = Query(False),
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_roles("owner")),
+):
+    """Preview or apply a client-issued revision to the shared student register."""
+    try:
+        return import_admission_revision(db, payload, actor, apply=apply)
+    except AdmissionRevisionConflict as error:
+        db.rollback()
         raise HTTPException(409, str(error)) from error
 
 

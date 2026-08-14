@@ -302,6 +302,11 @@ def setup_manual_attendance_catalog(database):
             full_name="Boards Student",
             status="active",
         ),
+        Student(
+            admission_number="LI-2026-M004",
+            full_name="New Student Awaiting Subjects",
+            status="active",
+        ),
     ]
     database.add_all([operator, imported, *students])
     database.flush()
@@ -309,6 +314,7 @@ def setup_manual_attendance_catalog(database):
         (students[0], "Tatva", "JEE", ("Physics", "Chemistry")),
         (students[1], "Tatva", "NEET", ("Physics", "Biology")),
         (students[2], "Essential", "Boards", ("Physics",)),
+        (students[3], "Essential", "MHT-CET", ()),
     ]
     for index, (student, batch, stream, subjects) in enumerate(definitions, 1):
         database.add(Enrollment(
@@ -350,13 +356,18 @@ def test_operator_selects_only_group_for_manual_attendance(
     bootstrap = client.get("/api/attendance/bootstrap", headers=headers)
     assert bootstrap.status_code == 200
     catalog = bootstrap.json()["catalog"]
-    assert catalog["studentCount"] == 3
+    assert catalog["studentCount"] == 4
     assert [item["name"] for item in catalog["groups"]] == [
         "Tatva",
         "Essential",
     ]
     tatva = next(item for item in catalog["groups"] if item["name"] == "Tatva")
+    essential = next(item for item in catalog["groups"] if item["name"] == "Essential")
     assert tatva["studentCount"] == 2
+    assert essential["studentCount"] == 2
+    mht_cet = next(item for item in essential["streams"] if item["name"] == "MHT-CET")
+    assert mht_cet["studentCount"] == 1
+    assert mht_cet["subjects"] == []
     assert [item["name"] for item in tatva["streams"]] == ["JEE", "NEET"]
     jee = next(item for item in tatva["streams"] if item["name"] == "JEE")
     assert jee["studentCount"] == 1
