@@ -78,13 +78,14 @@ def _validate(manifest: dict) -> None:
 def _student_indexes(db: Session) -> tuple[dict[str, Student], dict[str, Student]]:
     by_name: dict[str, Student] = {}
     by_legacy_id: dict[str, Student] = {}
+    ambiguous_names: set[str] = set()
     for student in db.query(Student).filter(Student.is_test_account.is_(False)).all():
         key = _name_key(student.full_name)
         if key in by_name:
-            raise AdmissionRevisionConflict(
-                f"More than one student matches the name {student.full_name}"
-            )
-        by_name[key] = student
+            by_name.pop(key)
+            ambiguous_names.add(key)
+        elif key not in ambiguous_names:
+            by_name[key] = student
         if student.legacy_import_id:
             by_legacy_id[student.legacy_import_id] = student
     return by_name, by_legacy_id
@@ -103,16 +104,13 @@ def _match_student(
     return by_name.get(_name_key(row["normalized"]["studentName"]))
 
 
-def _agreement(db: Session, student: Student) -> FeeAgreement:
-    agreement = (
+def _agreement(db: Session, student: Student) -> FeeAgreement | None:
+    return (
         db.query(FeeAgreement)
         .filter_by(student_id=student.id)
         .order_by(FeeAgreement.created_at.desc(), FeeAgreement.id.desc())
         .first()
     )
-    if not agreement:
-        raise AdmissionRevisionConflict(f"Fee agreement not found for {student.full_name}")
-    return agreement
 
 
 def _current_paid(db: Session, agreement: FeeAgreement) -> int:
@@ -151,6 +149,7 @@ def _preview(db: Session, manifest: dict) -> dict:
             "statusChanges": [],
             "payments": [],
             "reviewRequired": [],
+            "skippedRows": [],
             "retainedMissingStudents": manifest.get("retainedMissingRecords", []),
         }
 
@@ -158,15 +157,33 @@ def _preview(db: Session, manifest: dict) -> dict:
     status_changes = []
     payments = []
     review_required = []
+    skipped_rows = []
     cutoff = manifest["paymentCutoff"]
     for row in manifest["records"]:
         data = row["normalized"]
         student = _match_student(row, by_name, by_legacy_id)
         if row["action"] == "create":
             if student:
-                raise AdmissionRevisionConflict(
-                    f"New admission already matches {student.full_name}"
-                )
+                review_required.append({
+                    "name": student.full_name,
+                    "issues": ["New-admission row already exists; the existing record will be preserved"],
+                })
+                skipped_rows.append({"name": data["studentName"], "reason": "already_exists"})
+                continue
+            if not data.get("primaryMobile"):
+                review_required.append({
+                    "name": data["studentName"],
+                    "issues": ["New student was not created because the mobile number is missing"],
+                })
+                skipped_rows.append({"name": data["studentName"], "reason": "mobile_missing"})
+                continue
+            if db.query(User).filter_by(mobile=data["primaryMobile"]).first():
+                review_required.append({
+                    "name": data["studentName"],
+                    "issues": [f"New student was not created because mobile {data['primaryMobile']} is already assigned"],
+                })
+                skipped_rows.append({"name": data["studentName"], "reason": "mobile_in_use"})
+                continue
             new_students.append({
                 "name": data["studentName"],
                 "mobile": data["primaryMobile"],
@@ -176,7 +193,12 @@ def _preview(db: Session, manifest: dict) -> dict:
             })
             continue
         if not student:
-            raise AdmissionRevisionConflict(f"Student not found: {data['studentName']}")
+            review_required.append({
+                "name": data["studentName"],
+                "issues": ["Existing student could not be matched; this row will be skipped"],
+            })
+            skipped_rows.append({"name": data["studentName"], "reason": "student_not_matched"})
+            continue
         if row["action"] == "status_change" and row["recordStatus"] == "cancelled":
             if student.status != "forfeited":
                 status_changes.append({"name": student.full_name, "to": "forfeited"})
@@ -185,10 +207,22 @@ def _preview(db: Session, manifest: dict) -> dict:
                 review_required.append({"name": student.full_name, "issues": row["issues"]})
             continue
         agreement = _agreement(db, student)
+        if not agreement:
+            review_required.append({
+                "name": student.full_name,
+                "issues": ["Fee agreement is missing; student details are preserved for manual review"],
+            })
+            skipped_rows.append({"name": student.full_name, "reason": "fee_agreement_missing"})
+            continue
         if agreement.agreed_amount != int(data["agreedFee"]):
-            raise AdmissionRevisionConflict(
-                f"Agreed fee changed for {student.full_name}; review it in Finance before import"
-            )
+            review_required.append({
+                "name": student.full_name,
+                "issues": [
+                    f"Live agreed fee is ₹{agreement.agreed_amount:,} while the client revision states "
+                    f"₹{int(data['agreedFee']):,}; the live agreement will be preserved"
+                ],
+            })
+            continue
         latest = _new_payments(row, cutoff)
         expected_delta = int(data["registrationTotal"]) - int(data["baselinePaid"] or 0)
         latest_total = sum(int(payment["amount"] or 0) for payment in latest)
@@ -203,11 +237,14 @@ def _preview(db: Session, manifest: dict) -> dict:
             })
             continue
         if current_paid not in {int(data["baselinePaid"] or 0), int(data["registrationTotal"])}:
-            raise AdmissionRevisionConflict(
-                f"Current ledger total for {student.full_name} is ₹{current_paid:,}; "
-                f"expected either the 3 August baseline ₹{int(data['baselinePaid'] or 0):,} "
-                f"or the revised total ₹{int(data['registrationTotal']):,}"
-            )
+            review_required.append({
+                "name": student.full_name,
+                "issues": [
+                    f"Live ledger is ₹{current_paid:,} while the client revision states "
+                    f"₹{int(data['registrationTotal']):,}; the live ledger was preserved",
+                ],
+            })
+            continue
         if current_paid == int(data["baselinePaid"] or 0):
             payments.extend({
                 "name": student.full_name,
@@ -224,9 +261,12 @@ def _preview(db: Session, manifest: dict) -> dict:
         if not student:
             student = by_name.get(_name_key(retained["studentName"]))
         if not student:
-            raise AdmissionRevisionConflict(
-                f"Retained student not found: {retained['studentName']}"
-            )
+            review_required.append({
+                "name": retained["studentName"],
+                "issues": [f"Retained student could not be matched. {retained['reason']}"],
+            })
+            skipped_rows.append({"name": retained["studentName"], "reason": "retained_student_not_matched"})
+            continue
         review_required.append({
             "name": student.full_name,
             "issues": [retained["reason"]],
@@ -241,6 +281,7 @@ def _preview(db: Session, manifest: dict) -> dict:
         "statusChanges": status_changes,
         "payments": payments,
         "reviewRequired": review_required,
+        "skippedRows": skipped_rows,
         "retainedMissingStudents": manifest.get("retainedMissingRecords", []),
     }
 
@@ -366,18 +407,21 @@ def import_revision(
         data = row["normalized"]
         student = _match_student(row, by_name, by_legacy_id)
         if row["action"] == "create":
+            if student or not data.get("primaryMobile") or db.query(User).filter_by(mobile=data.get("primaryMobile")).first():
+                continue
             student = _create_student(db, row, actor, revision_id)
             by_name[_name_key(student.full_name)] = student
             if student.legacy_import_id:
                 by_legacy_id[student.legacy_import_id] = student
             created_students.append(student.full_name)
         elif not student:
-            raise AdmissionRevisionConflict(f"Student not found: {data['studentName']}")
+            continue
 
         before = {
             "status": student.status,
             "dataQualityStatus": student.data_quality_status,
         }
+        runtime_issues: list[str] = []
         if row["action"] == "status_change" and row["recordStatus"] == "cancelled":
             previous_status = student.status
             if previous_status != "forfeited":
@@ -413,20 +457,34 @@ def import_revision(
                 profile = db.get(StudentAcademicProfile, student.id)
                 if profile:
                     profile.source_stream = canonical_program(data["program"])
-            if row["action"] == "create" or expected_delta == latest_total:
+            finance_ready = bool(
+                agreement and agreement.agreed_amount == int(data["agreedFee"])
+            )
+            if agreement and not finance_ready:
+                runtime_issues.append(
+                    f"Live agreed fee is ₹{agreement.agreed_amount:,} while the client revision states "
+                    f"₹{int(data['agreedFee']):,}; the live agreement was preserved"
+                )
+            elif not agreement:
+                runtime_issues.append(
+                    "Fee agreement is missing; student details were preserved for manual review"
+                )
+            if finance_ready and (row["action"] == "create" or expected_delta == latest_total):
                 agreement.legacy_registration_total = int(data["registrationTotal"])
-            if row["action"] != "create":
+            if row["action"] != "create" and finance_ready:
                 current_paid = _current_paid(db, agreement)
                 baseline_paid = int(data["baselinePaid"] or 0)
                 revised_paid = int(data["registrationTotal"])
                 if current_paid not in {baseline_paid, revised_paid}:
-                    raise AdmissionRevisionConflict(
-                        f"Current ledger total for {student.full_name} no longer reconciles"
+                    runtime_issues.append(
+                        f"Live ledger is ₹{current_paid:,} while the client revision states "
+                        f"₹{revised_paid:,}; the live ledger was preserved"
                     )
                 payments_to_create = (
                     _new_payments(row, cutoff)
                     if current_paid == baseline_paid
                     and revised_paid > baseline_paid
+                    and expected_delta == latest_total
                     else []
                 )
                 for payment in payments_to_create:
@@ -456,6 +514,7 @@ def import_revision(
             student.status == "active"
             and (
                 row.get("issues")
+                or runtime_issues
                 or (
                     row["recordStatus"] == "active"
                     and int(data["registrationTotal"]) - int(data["baselinePaid"] or 0)
@@ -468,7 +527,7 @@ def import_revision(
             "status": student.status,
             "dataQualityStatus": student.data_quality_status,
             "source": row["raw"],
-            "issues": row.get("issues", []),
+            "issues": [*row.get("issues", []), *runtime_issues],
         }
         db.add(AuditLog(
             actor_id=actor.id,

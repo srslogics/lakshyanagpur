@@ -222,3 +222,113 @@ def test_revision_matches_renamed_student_by_legacy_id(database):
 
     assert preview["applied"] is False
     assert preview["alreadyApplied"] is False
+
+
+def test_revision_preserves_live_ledger_mismatch_for_review(database):
+    payload = manifest()
+    seed_manifest_students(database, payload)
+    row = payload["records"][1]
+    student = database.query(Student).filter_by(
+        full_name=row["normalized"]["studentName"]
+    ).one()
+    agreement = database.query(FeeAgreement).filter_by(student_id=student.id).one()
+    database.add(PaymentTransaction(
+        student_id=student.id,
+        fee_agreement_id=agreement.id,
+        transaction_date=date(2026, 8, 12),
+        amount=2_000,
+        method="upi",
+        transaction_type="payment",
+        source_note="Live payment entered after the snapshot",
+        status="posted",
+        reconciliation_status="ready",
+    ))
+    database.commit()
+
+    owner = database.query(User).filter_by(role="owner").one()
+    preview = import_revision(database, payload, owner, apply=False)
+    review = next(item for item in preview["reviewRequired"] if item["name"] == student.full_name)
+    assert "live ledger was preserved" in review["issues"][0]
+
+    result = import_revision(database, payload, owner, apply=True)
+    assert result["applied"] is True
+    assert _paid_total(database, agreement) == int(row["normalized"]["baselinePaid"]) + 2_000
+    assert database.get(Student, student.id).data_quality_status == "review"
+
+
+def _paid_total(database, agreement):
+    return sum(
+        payment_effect(item)
+        for item in database.query(PaymentTransaction).filter_by(
+            fee_agreement_id=agreement.id
+        )
+    )
+
+
+def test_preflight_reports_all_recoverable_conflicts_and_apply_continues(database):
+    payload = manifest()
+    seed_manifest_students(database, payload)
+
+    unmatched_row = payload["records"][1]
+    unmatched = database.query(Student).filter_by(
+        full_name=unmatched_row["normalized"]["studentName"]
+    ).one()
+    unmatched.full_name = "Owner-renamed unmatched record"
+    unmatched.legacy_import_id = None
+
+    missing_fee_row = payload["records"][2]
+    missing_fee_student = database.query(Student).filter_by(
+        full_name=missing_fee_row["normalized"]["studentName"]
+    ).one()
+    missing_fee = database.query(FeeAgreement).filter_by(
+        student_id=missing_fee_student.id
+    ).one()
+    database.query(PaymentTransaction).filter_by(fee_agreement_id=missing_fee.id).delete()
+    database.query(FinanceHandoff).filter_by(student_id=missing_fee_student.id).delete()
+    database.delete(missing_fee)
+
+    changed_fee_row = payload["records"][3]
+    changed_fee_student = database.query(Student).filter_by(
+        full_name=changed_fee_row["normalized"]["studentName"]
+    ).one()
+    changed_fee = database.query(FeeAgreement).filter_by(
+        student_id=changed_fee_student.id
+    ).one()
+    changed_fee.agreed_amount += 1_000
+
+    database.add(User(
+        mobile=payload["records"][0]["normalized"]["primaryMobile"],
+        full_name="Existing mobile owner",
+        password_hash="not-used",
+        role="student",
+        is_active=True,
+        is_test_account=False,
+    ))
+    database.commit()
+
+    owner = database.query(User).filter_by(role="owner").one()
+    preview = import_revision(database, payload, owner, apply=False)
+    reasons = {item["reason"] for item in preview["skippedRows"]}
+    assert {"student_not_matched", "fee_agreement_missing", "mobile_in_use"} <= reasons
+    review_names = {item["name"] for item in preview["reviewRequired"]}
+    assert unmatched_row["normalized"]["studentName"] in review_names
+    assert missing_fee_student.full_name in review_names
+    assert changed_fee_student.full_name in review_names
+
+    result = import_revision(database, payload, owner, apply=True)
+    assert result["applied"] is True
+    assert database.query(Student).filter_by(full_name="New Student").count() == 0
+
+
+def test_unrelated_duplicate_names_do_not_block_preflight(database):
+    payload = manifest()
+    seed_manifest_students(database, payload)
+    add_existing_student(database, "Duplicate Name", agreed=40_000, paid=0)
+    add_existing_student(database, "Duplicate Name", agreed=40_000, paid=0)
+    database.commit()
+
+    owner = database.query(User).filter_by(role="owner").one()
+    preview = import_revision(database, payload, owner, apply=False)
+
+    assert preview["alreadyApplied"] is False
+    assert preview["skippedRows"] == []
