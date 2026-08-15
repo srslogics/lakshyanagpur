@@ -23,6 +23,8 @@ const icons = {
 
 const views = new Set(["home", "schedule", "assignments", "examinations", "attendance", "messages", "notices", "profile", "more"]);
 const overflowViews = new Set(["examinations", "messages", "notices", "profile", "more"]);
+const CONSENT_VERSION = "student-parent-v1-2026-08-15";
+const CONSENT_STORAGE_PREFIX = "lakshya_student_consent_";
 const titles = {
   home: "Home",
   schedule: "Schedule",
@@ -51,6 +53,35 @@ const state = {
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const consentStorageKey = (mobile = "") => `${CONSENT_STORAGE_PREFIX}${String(mobile).replace(/\D/g, "").slice(-10)}`;
+
+function consentRemembered(mobile = "") {
+  const key = consentStorageKey(mobile);
+  if (key === CONSENT_STORAGE_PREFIX) return false;
+  try { return localStorage.getItem(key) === CONSENT_VERSION; } catch { return false; }
+}
+
+function syncConsentVisibility() {
+  const section = $("#login-consent");
+  const checkbox = $("#login-consent-checkbox");
+  if (!section || !checkbox) return;
+  const remembered = consentRemembered($("#login-mobile")?.value);
+  section.classList.toggle("hidden", remembered);
+  checkbox.required = !remembered;
+  if (remembered) checkbox.checked = false;
+}
+
+function rememberConsent(mobile) {
+  const key = consentStorageKey(mobile);
+  if (key === CONSENT_STORAGE_PREFIX) return;
+  try { localStorage.setItem(key, CONSENT_VERSION); } catch {}
+}
+
+function forgetConsent(mobile) {
+  const key = consentStorageKey(mobile);
+  if (key === CONSENT_STORAGE_PREFIX) return;
+  try { localStorage.removeItem(key); } catch {}
+}
 const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.spark}</svg>`;
 const esc = (value = "") => String(value ?? "").replace(/[&<>'"]/g, (character) => ({
   "&": "&amp;",
@@ -193,6 +224,8 @@ function showLogin(message = "") {
   $("#student-shell").classList.add("hidden");
   $("#login-screen").classList.remove("hidden");
   $("#login-password").value = "";
+  $("[name=consentAccepted]", $("#login-form")).checked = false;
+  syncConsentVisibility();
   resetPasswordVisibility($("#login-screen"));
   $("#login-error").textContent = message;
   $("#login-error").classList.toggle("hidden", !message);
@@ -296,6 +329,9 @@ async function login(event) {
       body: JSON.stringify({
         mobile: String(form.get("mobile")).trim(),
         password: String(form.get("password")),
+        consentAccepted: form.get("consentAccepted") === "on",
+        consentVersion: CONSENT_VERSION,
+        portal: "student",
       }),
     });
     state.token = result.access_token;
@@ -303,6 +339,7 @@ async function login(event) {
     if (!["student", "parent_student"].includes(account.role)) {
       throw new Error("This login is not assigned to the Student portal.");
     }
+    rememberConsent(form.get("mobile"));
     state.identity = account;
     localStorage.setItem("lakshya_student_token", state.token);
     localStorage.setItem("lakshya_student_user", JSON.stringify(account));
@@ -312,6 +349,9 @@ async function login(event) {
     }
     await loadPortal();
   } catch (error) {
+    if (error.status === 400 && /Consent and Terms/i.test(error.message)) {
+      forgetConsent($("#login-mobile").value);
+    }
     if (state.token && error.status !== 401 && (error.transient || error.status === 0)) {
       showStartupError(error);
     } else {
@@ -498,6 +538,55 @@ function renderHome() {
       <time class="${itemState === "overdue" ? "overdue-text" : ""}">${itemState === "overdue" ? "Overdue" : dateText(item.dueAt)}</time>
     </button>`;
   }).join("") || empty("book", "No open assignments", "Published work will appear here after it is assigned.");
+  const now = Date.now();
+  const examRows = [...(examinations || [])];
+  const upcomingExams = examRows
+    .filter((item) => item.status === "scheduled" && validDate(item.scheduledAt) && asInstant(item.scheduledAt).getTime() >= now)
+    .sort((a, b) => asInstant(a.scheduledAt) - asInstant(b.scheduledAt));
+  const publishedResults = examRows
+    .filter((item) => item.status === "published")
+    .sort((a, b) => asInstant(b.publishedAt || b.scheduledAt) - asInstant(a.publishedAt || a.scheduledAt));
+  const awaitingResult = examRows
+    .filter((item) => item.status === "marks_entry" || (item.status === "scheduled" && validDate(item.scheduledAt) && asInstant(item.scheduledAt).getTime() < now))
+    .sort((a, b) => asInstant(b.scheduledAt) - asInstant(a.scheduledAt))[0];
+  const dashboardExams = [];
+  const nextExam = upcomingExams[0];
+  if (nextExam) {
+    dashboardExams.push(`<button class="home-exam-card next" type="button" data-go="examinations">
+      <span class="home-exam-icon">${icon("exam")}</span>
+      <span class="home-exam-content">
+        <span class="home-exam-head"><span class="home-exam-kicker">Next examination</span><span class="exam-state neutral">Scheduled</span></span>
+        <strong>${esc(nextExam.name)}</strong>
+        <small>${esc(nextExam.subject)} · ${esc(nextExam.faculty)}</small>
+        <span class="home-exam-details"><span><em>Date</em><b>${dateText(nextExam.scheduledAt)}</b></span><span><em>Time</em><b>${timeText(nextExam.scheduledAt)}</b></span><span><em>Duration</em><b>${esc(nextExam.durationMinutes)} min</b></span></span>
+      </span>
+    </button>`);
+  }
+  const latestResult = publishedResults[0];
+  if (latestResult) {
+    const graded = latestResult.resultStatus === "graded" && latestResult.marksObtained !== null;
+    const resultLabel = graded ? `${latestResult.marksObtained} / ${latestResult.maxMarks}` : titleCase(latestResult.resultStatus);
+    dashboardExams.push(`<button class="home-exam-card result" type="button" data-go="examinations">
+      <span class="home-exam-icon">${icon("check")}</span>
+      <span class="home-exam-content">
+        <span class="home-exam-head"><span class="home-exam-kicker">Latest result</span><span class="exam-state ${graded ? (latestResult.qualified ? "qualified" : "review") : "neutral"}">${esc(resultLabel)}</span></span>
+        <strong>${esc(latestResult.name)}</strong>
+        <small>${esc(latestResult.subject)} · ${dateText(latestResult.scheduledAt)}</small>
+        <span class="home-result-summary"><b>${graded ? `${esc(latestResult.percentage)}%` : "Published"}</b><em>${graded ? (latestResult.qualified ? "Qualified" : "Below pass mark") : "Open examinations for details"}</em></span>
+      </span>
+    </button>`);
+  } else if (awaitingResult) {
+    dashboardExams.push(`<button class="home-exam-card pending" type="button" data-go="examinations">
+      <span class="home-exam-icon">${icon("clock")}</span>
+      <span class="home-exam-content">
+        <span class="home-exam-head"><span class="home-exam-kicker">Result pending</span><span class="exam-state neutral">Evaluation underway</span></span>
+        <strong>${esc(awaitingResult.name)}</strong>
+        <small>${esc(awaitingResult.subject)} · ${dateText(awaitingResult.scheduledAt)}</small>
+        <span class="home-result-summary"><b>${esc(awaitingResult.maxMarks)} marks</b><em>The result will appear here after publication.</em></span>
+      </span>
+    </button>`);
+  }
+  $("#home-examinations").innerHTML = dashboardExams.join("") || empty("exam", "No examinations published", "Upcoming examinations and released results will appear here.");
   const notice = notices[0];
   $("#latest-notice").innerHTML = notice
     ? `<article class="notice-preview"><strong>${esc(notice.title)}</strong><span>${esc(notice.body)}</span><time>${dateLong(notice.publishedAt)}</time></article>`
@@ -831,6 +920,7 @@ function resetPasswordVisibility(root = document) {
 function bindEvents() {
   $("#login-form").addEventListener("submit", login);
   $$("input", $("#login-form")).forEach(field => field.addEventListener("input", clearLoginError));
+  $("#login-mobile").addEventListener("input", syncConsentVisibility);
   $("#password-change-form").addEventListener("submit", changePassword);
   $("#signout-button").addEventListener("click", logout);
   $("#sidebar-signout").addEventListener("click", logout);

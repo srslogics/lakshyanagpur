@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..identity import normalize_mobile
-from ..models import RevokedToken, User
+from ..models import AuditLog, RevokedToken, User
 from ..permissions import effective_permissions
 from ..schemas import BootstrapOwnerRequest, LoginRequest, PasswordChangeRequest, TokenResponse
 from ..security import bearer, create_token, current_user, decode_token, hash_password, verify_password
@@ -20,6 +20,8 @@ from ..services import audit
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 LOGIN_FAILURE_LIMIT = 8
 LOGIN_FAILURE_WINDOW_SECONDS = 10 * 60
+STUDENT_PARENT_CONSENT_VERSION = "student-parent-v1-2026-08-15"
+STUDENT_PARENT_ROLES = frozenset({"student", "parent_student", "parent"})
 _login_failures: dict[str, deque[float]] = {}
 _login_failures_lock = Lock()
 
@@ -66,6 +68,52 @@ def _record_login_failure(key: str) -> None:
 def _clear_login_failures(key: str) -> None:
     with _login_failures_lock:
         _login_failures.pop(key, None)
+
+
+def _record_student_parent_consent(
+    db: Session,
+    user: User,
+    payload: LoginRequest,
+    request: Request,
+) -> None:
+    if user.role not in STUDENT_PARENT_ROLES:
+        return
+    latest = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.actor_id == user.id,
+            AuditLog.action == "auth.consent.accept",
+            AuditLog.entity_type == "user",
+            AuditLog.entity_id == user.id,
+        )
+        .order_by(AuditLog.created_at.desc())
+        .first()
+    )
+    if latest and (latest.after or {}).get("version") == STUDENT_PARENT_CONSENT_VERSION:
+        return
+    if not payload.consent_accepted or payload.consent_version != STUDENT_PARENT_CONSENT_VERSION:
+        raise HTTPException(
+            400,
+            "Read and accept the Student and Parent Consent and Terms before signing in.",
+        )
+    portal = payload.portal or ("parent" if user.role == "parent" else "student")
+    audit(
+        db,
+        user,
+        "auth.consent.accept",
+        "user",
+        user.id,
+        after={
+            "version": STUDENT_PARENT_CONSENT_VERSION,
+            "portal": portal,
+            "clientIp": request.client.host if request.client else None,
+            "userAgent": request.headers.get("user-agent", "")[:512],
+            "necessaryServiceCommunications": True,
+            "marketingConsentIncluded": False,
+            "publicityConsentIncluded": False,
+        },
+    )
+    db.commit()
 
 
 def _user_payload(user: User, db: Session):
@@ -135,6 +183,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         _record_login_failure(login_key)
         raise HTTPException(401, "Invalid sign-in details")
     _clear_login_failures(login_key)
+    _record_student_parent_consent(db, user, payload, request)
     return _token_response(user, db)
 
 

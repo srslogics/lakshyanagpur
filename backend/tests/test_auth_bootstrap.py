@@ -1,4 +1,4 @@
-from app.models import User
+from app.models import AuditLog, User
 from app.security import hash_password
 
 
@@ -79,6 +79,17 @@ def test_frontend_shell_is_served(client):
     assert versioned_asset.status_code == 200
     assert "immutable" in versioned_asset.headers["cache-control"]
     assert client.get("/student-app/sw.js").headers["cache-control"] == "no-cache"
+
+    for portal_path in ("/student-app/", "/parent-app/"):
+        portal = client.get(portal_path)
+        assert portal.status_code == 200
+        assert 'name="consentAccepted"' in portal.text
+        assert 'href="/legal/student-parent-consent.html"' in portal.text
+
+    legal_terms = client.get("/legal/student-parent-consent.html")
+    assert legal_terms.status_code == 200
+    assert "Student and Parent Consent and Terms" in legal_terms.text
+    assert "does not include promotional marketing" in legal_terms.text
 
 
 def test_frontend_and_api_responses_include_launch_security_headers(client):
@@ -315,7 +326,13 @@ def test_temporary_password_requires_replacement_and_revokes_the_session(
     database.commit()
     login = client.post(
         "/api/auth/login",
-        json={"mobile": user.mobile, "password": "Lakshya@2026!"},
+        json={
+            "mobile": user.mobile,
+            "password": "Lakshya@2026!",
+            "consentAccepted": True,
+            "consentVersion": "student-parent-v1-2026-08-15",
+            "portal": "student",
+        },
     )
     assert login.status_code == 200
     assert login.json()["user"]["mustChangePassword"] is True
@@ -346,10 +363,67 @@ def test_temporary_password_requires_replacement_and_revokes_the_session(
     assert client.get("/api/auth/me", headers=headers).status_code == 401
     replacement_login = client.post(
         "/api/auth/login",
-        json={"mobile": user.mobile, "password": "PersonalPass456!"},
+        json={
+            "mobile": user.mobile,
+            "password": "PersonalPass456!",
+            "consentAccepted": True,
+            "consentVersion": "student-parent-v1-2026-08-15",
+            "portal": "student",
+        },
     )
     assert replacement_login.status_code == 200
     assert replacement_login.json()["user"]["mustChangePassword"] is False
+
+
+def test_student_parent_login_requires_and_records_current_consent(client, database):
+    user = User(
+        mobile="9876540092",
+        full_name="Consent Student",
+        role="student",
+        password_hash=hash_password("Password123!"),
+    )
+    database.add(user)
+    database.commit()
+
+    missing = client.post(
+        "/api/auth/login",
+        json={"mobile": user.mobile, "password": "Password123!"},
+    )
+    assert missing.status_code == 400
+    assert "Consent and Terms" in missing.json()["detail"]
+
+    accepted = client.post(
+        "/api/auth/login",
+        json={
+            "mobile": user.mobile,
+            "password": "Password123!",
+            "consentAccepted": True,
+            "consentVersion": "student-parent-v1-2026-08-15",
+            "portal": "student",
+        },
+        headers={"User-Agent": "Lakshya consent test"},
+    )
+    assert accepted.status_code == 200
+    rows = database.query(AuditLog).filter_by(
+        actor_id=user.id,
+        action="auth.consent.accept",
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].after["version"] == "student-parent-v1-2026-08-15"
+    assert rows[0].after["marketingConsentIncluded"] is False
+
+    accepted_again = client.post(
+        "/api/auth/login",
+        json={
+            "mobile": user.mobile,
+            "password": "Password123!",
+        },
+    )
+    assert accepted_again.status_code == 200
+    assert database.query(AuditLog).filter_by(
+        actor_id=user.id,
+        action="auth.consent.accept",
+    ).count() == 1
 
 
 def test_legacy_email_login_can_be_enabled_during_mobile_migration(client, monkeypatch):

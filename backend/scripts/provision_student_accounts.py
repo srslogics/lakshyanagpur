@@ -279,6 +279,9 @@ def verify_credentials(
             payload = json.dumps({
                 "mobile": normalize_mobile(row["Mobile number"]),
                 "password": row["Temporary password"],
+                "consentAccepted": True,
+                "consentVersion": "student-parent-v1-2026-08-15",
+                "portal": "student",
             }).encode()
             request = urllib.request.Request(
                 f"{base_url}/api/auth/login",

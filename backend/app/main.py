@@ -30,6 +30,7 @@ PARENT_APP_DIR = FRONTEND_DIR / "parent-app"
 FACULTY_APP_DIR = FRONTEND_DIR / "faculty-app"
 ATTENDANCE_APP_DIR = FRONTEND_DIR / "attendance-app"
 LAKSHYA_SITE_DIR = FRONTEND_DIR / "lakshya-site"
+LEGAL_DIR = FRONTEND_DIR / "legal"
 PUBLIC_SITE_PAGES = frozenset({
     "about",
     "contact",
@@ -202,6 +203,9 @@ if FACULTY_APP_DIR.exists():
 
 if ATTENDANCE_APP_DIR.exists():
     app.mount("/attendance-app", StaticFiles(directory=ATTENDANCE_APP_DIR, html=True), name="attendance-app")
+
+if LEGAL_DIR.exists():
+    app.mount("/legal", StaticFiles(directory=LEGAL_DIR, html=True), name="legal")
 
 if LAKSHYA_SITE_DIR.exists():
     app.mount(

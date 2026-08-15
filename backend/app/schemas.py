@@ -13,6 +13,10 @@ class LoginRequest(BaseModel):
     mobile: str | None = None
     email: EmailStr | None = None
     password: str = Field(min_length=6, max_length=128)
+    consent_accepted: bool = Field(default=False, alias="consentAccepted")
+    consent_version: str | None = Field(default=None, alias="consentVersion", max_length=64)
+    portal: Literal["student", "parent", "faculty", "attendance", "operations"] | None = None
+    model_config = ConfigDict(populate_by_name=True)
 
     @field_validator("mobile")
     @classmethod

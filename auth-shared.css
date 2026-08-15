@@ -368,6 +368,71 @@
   font-weight: 500;
 }
 
+.login-consent {
+  display: grid;
+  gap: 9px;
+  padding-top: 2px;
+  color: #454650;
+}
+
+.login-consent h2 {
+  margin: 0;
+  color: #25262d;
+  font: 700 .78rem/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.login-consent-copy {
+  max-height: 126px;
+  overflow: auto;
+  padding: 10px 11px;
+  border: 1px solid #d9d7d0;
+  border-radius: 3px;
+  color: #5f6067;
+  background: #fafafa;
+  font: 400 .69rem/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  scrollbar-width: thin;
+}
+
+.login-consent-copy:focus-visible {
+  outline: 2px solid #303578;
+  outline-offset: 2px;
+}
+
+.login-consent-copy p {
+  margin: 0 0 8px;
+}
+
+.login-consent-copy p:last-child {
+  margin-bottom: 0;
+}
+
+.login-card .login-consent-check {
+  grid-template-columns: 17px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  color: #34353d;
+  font: 500 .74rem/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.login-card .login-consent-check input {
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+  padding: 0;
+  border-radius: 2px;
+  accent-color: #242961;
+}
+
+.login-card .login-consent-check span {
+  font: inherit;
+}
+
+.login-consent-check a {
+  color: #242961;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .login-card .primary-button {
   min-height: 52px;
   border-radius: 13px;
@@ -395,12 +460,16 @@
   }
 
   .login-screen {
+    width: 100%;
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .login-brand {
+    width: 100%;
+    min-width: 0;
     grid-column: 1;
     grid-row: 1;
     min-height: auto;
@@ -422,11 +491,30 @@
   }
 
   .login-card {
+    width: 100%;
+    min-width: 0;
     grid-column: 1;
     grid-row: 2;
     min-height: 0;
     align-content: start;
     padding: 38px max(22px, env(safe-area-inset-right)) max(36px, env(safe-area-inset-bottom)) max(22px, env(safe-area-inset-left));
+  }
+
+  .login-form-wrap,
+  .login-brand .institution-login-story {
+    width: 100%;
+    max-width: calc(100vw - 44px);
+    min-width: 0;
+  }
+
+  .login-brand .institution-login-story {
+    overflow: hidden;
+  }
+
+  .institution-login-story h1,
+  .institution-login-story h2,
+  .login-consent-check span {
+    overflow-wrap: anywhere;
   }
 
   .login-brand .institution-login-story,

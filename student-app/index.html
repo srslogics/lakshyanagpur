@@ -15,8 +15,8 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png?v=20260804-no-tm">
   <link rel="icon" href="../pwa-icon-192.png?v=20260804-no-tm">
   <link rel="stylesheet" href="../portal-shared.css?v=4">
-  <link rel="stylesheet" href="./styles.css?v=14">
-  <link rel="stylesheet" href="../auth-shared.css?v=9">
+  <link rel="stylesheet" href="./styles.css?v=15">
+  <link rel="stylesheet" href="../auth-shared.css?v=12">
 </head>
 <body>
   <a class="skip-link" href="#student-main">Skip to content</a>
@@ -47,6 +47,20 @@
         <form id="login-form">
           <label><span>Mobile number</span><input id="login-mobile" name="mobile" type="tel" autocomplete="username" inputmode="tel" placeholder="10-digit mobile number" maxlength="16" required></label>
           <label><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="6" required><button id="password-toggle" type="button" data-password-toggle data-password-label="password" aria-label="Show password" aria-pressed="false"><span data-icon="eye"></span></button></span><small class="field-help">Use at least 6 characters.</small></label>
+          <section class="login-consent" id="login-consent" aria-labelledby="student-consent-title">
+            <h2 id="student-consent-title">Consent and portal terms</h2>
+            <div class="login-consent-copy" tabindex="0">
+              <p>This portal processes identification, contact, enrolment, attendance, academic, examination, communication, security and related administrative records to provide Institute services.</p>
+              <p>Attendance records may include classroom entries and biometric-device identifiers and timestamps. Fingerprint images or templates are not uploaded to this ERP unless a separate notice and consent process is completed.</p>
+              <p>Academic results are not guaranteed. Accounts must not be shared. Institute rules, the written fee and refund policy, child-safety duties and rights available under applicable law continue to apply.</p>
+              <p>If the student is under 18, the person accepting these terms confirms that they are the parent or lawful guardian, or that the parent or lawful guardian has already authorised the student’s portal use.</p>
+              <p>This consent covers necessary service communications. It does not include optional promotional messages or publicity use of photographs or videos.</p>
+            </div>
+            <label class="login-consent-check">
+              <input id="login-consent-checkbox" name="consentAccepted" type="checkbox" required>
+              <span>I have read and agree to the <a href="/legal/student-parent-consent.html" target="_blank" rel="noopener">Student and Parent Consent and Terms</a>.</span>
+            </label>
+          </section>
           <div class="form-error hidden" id="login-error" role="alert"></div>
           <button class="primary-button" id="login-button" type="submit">Sign in <span data-icon="arrow"></span></button>
         </form>
@@ -116,6 +130,7 @@
         <div class="dashboard-grid">
           <section class="content-block next-panel"><div class="section-head"><h2>Next class</h2><button type="button" data-go="schedule">View schedule</button></div><div id="next-class"></div></section>
           <section class="content-block work-panel"><div class="section-head"><h2>Assignments</h2><button type="button" data-go="assignments">View all</button></div><div class="stack-list" id="home-assignments"></div></section>
+          <section class="content-block home-examination-panel"><div class="section-head"><h2>Examinations</h2><button type="button" data-go="examinations">View all</button></div><div class="home-examination-grid" id="home-examinations"></div></section>
           <section class="content-block notice-panel"><div class="section-head"><h2>Latest notice</h2><button type="button" data-go="notices">View all</button></div><div id="latest-notice"></div></section>
         </div>
       </section>
@@ -204,6 +219,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=20" defer></script>
+  <script src="./app.js?v=23" defer></script>
 </body>
 </html>
