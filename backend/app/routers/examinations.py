@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import (
     Batch,
-    Enrollment,
     Examination,
     ExaminationParticipant,
     ExaminationResult,
@@ -19,7 +18,7 @@ from ..models import (
 )
 from ..operations_schemas import ExaminationCreate, ExaminationMarksSave, ExaminationUpdate
 from ..security import require_roles
-from ..services import audit
+from ..services import SubjectRosterResolver, audit
 
 router = APIRouter(prefix="/api/examinations", tags=["examinations"])
 ROLES = ("owner", "academic_coordinator", "faculty")
@@ -29,19 +28,8 @@ def _can_manage(actor: User, exam: Examination) -> bool:
     return actor.role in ("owner", "academic_coordinator") or exam.faculty_id == actor.id
 
 
-def _active_roster(db: Session, batch: Batch):
-    return (
-        db.query(Student)
-        .join(Enrollment, Enrollment.student_id == Student.id)
-        .filter(
-            Enrollment.is_active.is_(True),
-            Enrollment.batch == batch.name,
-            Enrollment.program == batch.program,
-            Student.status == "active",
-        )
-        .order_by(Student.full_name)
-        .all()
-    )
+def _active_roster(db: Session, batch: Batch, subject: Subject):
+    return SubjectRosterResolver(db).students_for(batch, subject)
 
 
 def _snapshot_roster(
@@ -195,7 +183,7 @@ def _validate_references(db: Session, payload, actor: User):
                 403,
                 "Faculty can schedule examinations only for assigned batches and subjects",
             )
-    if not _active_roster(db, batch):
+    if not _active_roster(db, batch, subject):
         raise HTTPException(409, "This batch has no active enrolled students")
     return batch, subject, faculty
 
@@ -230,7 +218,7 @@ def create_examination(
     )
     db.add(exam)
     db.flush()
-    roster = _active_roster(db, batch)
+    roster = _active_roster(db, batch, subject)
     _snapshot_roster(db, exam, roster)
     audit(
         db,
@@ -323,7 +311,7 @@ def update_examination(
         db.query(ExaminationParticipant).filter_by(exam_id=exam.id).delete(
             synchronize_session=False,
         )
-        _snapshot_roster(db, exam, _active_roster(db, batch))
+        _snapshot_roster(db, exam, _active_roster(db, batch, subject))
     audit(
         db,
         actor,

@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,6 @@ from ..models import (
     Assignment,
     Batch,
     ClassSession,
-    Enrollment,
     FacultyTeachingAssignment,
     Notice,
     RevokedToken,
@@ -22,7 +21,7 @@ from ..models import (
 )
 from ..schemas import FacultyMobileActivationRequest
 from ..security import bearer, current_user, decode_token, hash_password, require_roles, verify_password
-from ..services import audit
+from ..services import SubjectRosterResolver, audit
 from .examinations import _exam_rows, _serialize_many
 
 router = APIRouter(prefix="/api/faculty", tags=["faculty portal"])
@@ -111,47 +110,10 @@ def bootstrap(
         .order_by(Batch.name, Subject.name)
         .all()
     )
-    batch_names = {
-        batch.name
-        for _, batch, _ in teaching_assignment_rows
-    } | {
-        batch.name
-        for _, batch, _, _ in session_rows
-    }
-    student_count_rows = (
-        db.query(
-            Enrollment.batch,
-            Enrollment.program,
-            func.count(func.distinct(Enrollment.student_id)),
-        )
-        .filter(Enrollment.is_active.is_(True), Enrollment.batch.in_(batch_names))
-        .group_by(Enrollment.batch, Enrollment.program)
-        .all()
-    ) if batch_names else []
-    student_counts = {
-        (batch_name, program): count
-        for batch_name, program, count in student_count_rows
-    }
-    batch_totals = {
-        batch_name: count
-        for batch_name, count in (
-            db.query(
-                Enrollment.batch,
-                func.count(func.distinct(Enrollment.student_id)),
-            )
-            .filter(
-                Enrollment.is_active.is_(True),
-                Enrollment.batch.in_(batch_names),
-            )
-            .group_by(Enrollment.batch)
-            .all()
-        )
-    } if batch_names else {}
+    roster = SubjectRosterResolver(db)
 
-    def roster_count(batch):
-        if batch.program == "All programs":
-            return batch_totals.get(batch.name, 0)
-        return student_counts.get((batch.name, batch.program), 0)
+    def roster_count(batch, subject):
+        return roster.count_for(batch, subject)
 
     sessions = []
     teaching_pairs = {
@@ -163,7 +125,7 @@ def bootstrap(
             "subjectId": subject.id,
             "subject": subject.name,
             "subjectCode": subject.code,
-            "studentCount": roster_count(batch),
+            "studentCount": roster_count(batch, subject),
         }
         for assignment, batch, subject in teaching_assignment_rows
     }
@@ -185,7 +147,7 @@ def bootstrap(
             "endsAt": _aware(session.ends_at),
             "status": session.status,
             "notes": session.notes,
-            "studentCount": roster_count(batch),
+            "studentCount": roster_count(batch, subject),
         })
     assignment_rows = (
         db.query(Assignment, Batch, Subject)
@@ -206,7 +168,7 @@ def bootstrap(
         "dueAt": _aware(assignment.due_at),
         "externalUrl": assignment.external_url,
         "status": assignment.status,
-        "recipientCount": roster_count(batch),
+        "recipientCount": roster_count(batch, subject),
         "createdAt": _aware(assignment.created_at),
     } for assignment, batch, subject in assignment_rows]
 

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -7,62 +6,44 @@ from ..models import (
     Assignment,
     AssignmentRecipient,
     Batch,
-    Enrollment,
     FacultyTeachingAssignment,
-    Student,
     Subject,
     User,
 )
 from ..operations_schemas import AssignmentCreate, AssignmentUpdate
 from ..security import require_roles
-from ..services import audit
+from ..services import SubjectRosterResolver, audit
 
 router = APIRouter(prefix="/api/academics", tags=["academics"])
 ROLES = ("owner", "academic_coordinator", "faculty")
 
 
 def _assignments(db: Session):
-    counts = (
-        db.query(
-            Enrollment.batch.label("batch_name"),
-            Enrollment.program.label("program"),
-            func.count(func.distinct(Enrollment.student_id)).label("recipients"),
-        )
-        .filter(Enrollment.is_active.is_(True))
-        .group_by(Enrollment.batch, Enrollment.program)
-        .subquery()
-    )
     return (
-        db.query(Assignment, Batch, Subject, func.coalesce(counts.c.recipients, 0))
+        db.query(Assignment, Batch, Subject)
         .join(Batch, Batch.id == Assignment.batch_id)
         .join(Subject, Subject.id == Assignment.subject_id)
-        .outerjoin(
-            counts,
-            (counts.c.batch_name == Batch.name)
-            & (counts.c.program == Batch.program),
-        )
     )
 
 
-def _progress_counts(db: Session, assignment_ids: list[str]):
-    if not assignment_ids:
+def _progress_counts(db: Session, eligible_by_assignment: dict[str, set[str]]):
+    if not eligible_by_assignment:
         return {}
     rows = (
         db.query(
             AssignmentRecipient.assignment_id,
-            AssignmentRecipient.status,
-            func.count(AssignmentRecipient.student_id),
-        )
-        .filter(AssignmentRecipient.assignment_id.in_(assignment_ids))
-        .group_by(
-            AssignmentRecipient.assignment_id,
+            AssignmentRecipient.student_id,
             AssignmentRecipient.status,
         )
+        .filter(AssignmentRecipient.assignment_id.in_(eligible_by_assignment))
         .all()
     )
     counts: dict[str, dict[str, int]] = {}
-    for assignment_id, status, count in rows:
-        counts.setdefault(assignment_id, {})[status] = count
+    for assignment_id, student_id, status in rows:
+        if student_id not in eligible_by_assignment[assignment_id]:
+            continue
+        statuses = counts.setdefault(assignment_id, {})
+        statuses[status] = statuses.get(status, 0) + 1
     return counts
 
 
@@ -76,10 +57,21 @@ def list_assignments(db: Session = Depends(get_db), user: User = Depends(require
     query = _assignments(db)
     if user.role == "faculty": query = query.filter(Assignment.created_by == user.id)
     rows = query.order_by(Assignment.due_at.desc()).all()
-    progress = _progress_counts(db, [row.id for row, *_ in rows])
+    roster = SubjectRosterResolver(db)
+    eligible = {
+        assignment.id: roster.student_ids_for(batch, subject)
+        for assignment, batch, subject in rows
+    }
+    progress = _progress_counts(db, eligible)
     return [
-        _serialize(*row, progress.get(row[0].id, {}))
-        for row in rows
+        _serialize(
+            assignment,
+            batch,
+            subject,
+            len(eligible[assignment.id]),
+            progress.get(assignment.id, {}),
+        )
+        for assignment, batch, subject in rows
     ]
 
 
@@ -102,16 +94,7 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
             403,
             "Faculty can publish only to assigned batches and subjects",
         )
-    recipient_count = (
-        db.query(func.count(func.distinct(Enrollment.student_id)))
-        .filter(
-            Enrollment.is_active.is_(True),
-            Enrollment.batch == batch.name,
-            Enrollment.program == batch.program,
-        )
-        .scalar()
-        or 0
-    )
+    recipient_count = SubjectRosterResolver(db).count_for(batch, subject)
     if not recipient_count:
         raise HTTPException(409, "This batch has no active enrolled students")
     row = Assignment(batch_id=batch.id, subject_id=subject.id, title=payload.title.strip(), instructions=payload.instructions.strip(), due_at=payload.due_at, external_url=str(payload.external_url), status=payload.status, created_by=actor.id)
@@ -134,26 +117,16 @@ def assignment_progress(
     if actor.role == "faculty" and assignment.created_by != actor.id:
         raise HTTPException(403, "Faculty can view only their own assignments")
     batch = db.get(Batch, assignment.batch_id)
-    if not batch:
-        raise HTTPException(409, "Assignment batch is no longer available")
+    subject = db.get(Subject, assignment.subject_id)
+    if not batch or not subject:
+        raise HTTPException(409, "Assignment batch or subject is no longer available")
     recipients = {
         row.student_id: row
         for row in db.query(AssignmentRecipient)
         .filter_by(assignment_id=assignment.id)
         .all()
     }
-    students = (
-        db.query(Student)
-        .join(Enrollment, Enrollment.student_id == Student.id)
-        .filter(
-            Enrollment.is_active.is_(True),
-            Enrollment.batch == batch.name,
-            Enrollment.program == batch.program,
-            Student.status == "active",
-        )
-        .order_by(Student.full_name)
-        .all()
-    )
+    students = SubjectRosterResolver(db).students_for(batch, subject)
     return {
         "assignmentId": assignment.id,
         "recipientCount": len(students),
@@ -205,16 +178,7 @@ def publish_assignment(
             after={"status": "published"},
         )
         db.commit()
-    recipients = (
-        db.query(func.count(func.distinct(Enrollment.student_id)))
-        .filter(
-            Enrollment.is_active.is_(True),
-            Enrollment.batch == batch.name,
-            Enrollment.program == batch.program,
-        )
-        .scalar()
-        or 0
-    )
+    recipients = SubjectRosterResolver(db).count_for(batch, subject)
     return _serialize(row, batch, subject, recipients)
 
 
@@ -255,10 +219,5 @@ def update_assignment(
     row.status = payload.status
     audit(db, actor, "academics.assignment.update", "assignment", row.id, before=before, after=payload.model_dump(by_alias=True, mode="json"))
     db.commit()
-    recipients = (
-        db.query(func.count(func.distinct(Enrollment.student_id)))
-        .filter(Enrollment.is_active.is_(True), Enrollment.batch == batch.name, Enrollment.program == batch.program)
-        .scalar()
-        or 0
-    )
+    recipients = SubjectRosterResolver(db).count_for(batch, subject)
     return _serialize(row, batch, subject, recipients)

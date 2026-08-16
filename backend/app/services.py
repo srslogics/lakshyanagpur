@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .models import (
     AuditLog,
+    Batch,
     Enrollment,
     FeeAgreement,
     FinanceHandoff,
@@ -17,6 +18,7 @@ from .models import (
     StudentAcademicProfile,
     StudentGuardian,
     StudentSubjectSelection,
+    Subject,
     User,
     new_id,
 )
@@ -100,6 +102,93 @@ def canonical_program(value: str) -> str:
     return (value or "").strip()
 
 
+def canonical_subject(value: str) -> str:
+    """Return the single subject label used across imports and every portal."""
+    normalized = "".join(character for character in (value or "").casefold() if character.isalnum())
+    aliases = {
+        "math": "Maths",
+        "maths": "Maths",
+        "mathematics": "Maths",
+        "phy": "Physics",
+        "physics": "Physics",
+        "chem": "Chemistry",
+        "chemistry": "Chemistry",
+        "bio": "Biology",
+        "biology": "Biology",
+    }
+    return aliases.get(normalized, (value or "").strip())
+
+
+class SubjectRosterResolver:
+    """Resolve student eligibility consistently for a batch and subject.
+
+    Active students are matched by batch, by the batch's program (unless the
+    timetable batch intentionally spans all programs), and by their recorded
+    subject selections. Legacy students without subject rows retain the former
+    batch-wide behaviour instead of disappearing from every roster.
+    """
+
+    def __init__(self, db: Session):
+        enrollment_rows = (
+            db.query(Student, Enrollment.batch, Enrollment.program)
+            .join(Enrollment, Enrollment.student_id == Student.id)
+            .filter(
+                Student.status == "active",
+                Student.is_test_account.is_(False),
+                Enrollment.is_active.is_(True),
+            )
+            .order_by(Enrollment.created_at.desc(), Enrollment.id.desc())
+            .all()
+        )
+        self._students = []
+        seen_students = set()
+        for student, batch_name, program in enrollment_rows:
+            if student.id in seen_students:
+                continue
+            seen_students.add(student.id)
+            self._students.append((student, batch_name, program))
+
+        self._subjects: dict[str, set[str]] = {}
+        for student_id, subject_name in db.query(
+            StudentSubjectSelection.student_id,
+            StudentSubjectSelection.subject_name,
+        ).filter(StudentSubjectSelection.student_id.in_(seen_students)).all():
+            self._subjects.setdefault(student_id, set()).add(
+                canonical_subject(subject_name)
+            )
+
+    def students_for(self, batch: Batch, subject: Subject | str):
+        subject_name = canonical_subject(
+            subject.name if isinstance(subject, Subject) else subject
+        )
+        students = []
+        for student, batch_name, program in self._students:
+            if batch_name != batch.name:
+                continue
+            if batch.program != "All programs" and program != batch.program:
+                continue
+            selections = self._subjects.get(student.id, set())
+            if selections and subject_name not in selections:
+                continue
+            students.append(student)
+        return sorted(students, key=lambda student: student.full_name.casefold())
+
+    def student_ids_for(self, batch: Batch, subject: Subject | str) -> set[str]:
+        return {student.id for student in self.students_for(batch, subject)}
+
+    def count_for(self, batch: Batch, subject: Subject | str) -> int:
+        return len(self.students_for(batch, subject))
+
+
+def selected_subjects(db: Session, student_id: str) -> list[str]:
+    return sorted({
+        canonical_subject(subject_name)
+        for subject_name, in db.query(StudentSubjectSelection.subject_name)
+        .filter(StudentSubjectSelection.student_id == student_id)
+        .all()
+    })
+
+
 def convert_lead(db: Session, lead: Lead, payload: ConversionRequest, actor: User):
     if lead.converted_student_id:
         student = db.get(Student, lead.converted_student_id)
@@ -140,7 +229,7 @@ def convert_lead(db: Session, lead: Lead, payload: ConversionRequest, actor: Use
             import_batch_id=None,
         )
     )
-    for subject in sorted({value.strip() for value in payload.subjects if value.strip()}):
+    for subject in sorted({canonical_subject(value) for value in payload.subjects if value.strip()}):
         db.add(
             StudentSubjectSelection(
                 student_id=student.id,

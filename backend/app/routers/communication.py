@@ -26,7 +26,7 @@ from ..operations_schemas import (
 )
 from ..permissions import has_permission
 from ..security import require_roles
-from ..services import audit
+from ..services import SubjectRosterResolver, audit
 
 router = APIRouter(prefix="/api/communication", tags=["communication"])
 ROLES = ("owner", "admissions_manager", "academic_coordinator", "front_desk")
@@ -86,7 +86,7 @@ def _student_subjects(db: Session, student_id: str):
     if not enrollment or not enrollment.batch:
         return []
     rows = (
-        db.query(Subject, User)
+        db.query(Subject, User, Batch)
         .join(
             FacultyTeachingAssignment,
             and_(
@@ -98,7 +98,10 @@ def _student_subjects(db: Session, student_id: str):
         .join(User, User.id == FacultyTeachingAssignment.faculty_id)
         .filter(
             Batch.name == enrollment.batch,
-            Batch.program == enrollment.program,
+            or_(
+                Batch.program == enrollment.program,
+                Batch.program == "All programs",
+            ),
             Batch.is_active.is_(True),
             Subject.is_active.is_(True),
             User.is_active.is_(True),
@@ -106,8 +109,11 @@ def _student_subjects(db: Session, student_id: str):
         .order_by(Subject.name, User.full_name)
         .all()
     )
+    resolver = SubjectRosterResolver(db)
     grouped = {}
-    for subject, faculty in rows:
+    for subject, faculty, batch in rows:
+        if student_id not in resolver.student_ids_for(batch, subject):
+            continue
         item = grouped.setdefault(subject.id, {
             "id": subject.id,
             "name": subject.name,
@@ -137,26 +143,13 @@ def _faculty_assignments(db: Session, faculty_id: str):
 def _faculty_can_access(db: Session, faculty_id: str, thread: CommunicationThread) -> bool:
     if not thread.subject_id:
         return False
-    return (
-        db.query(FacultyTeachingAssignment.id)
-        .join(Batch, Batch.id == FacultyTeachingAssignment.batch_id)
-        .join(
-            Enrollment,
-            and_(
-                Enrollment.batch == Batch.name,
-                Enrollment.program == Batch.program,
-                Enrollment.is_active.is_(True),
-            ),
-        )
-        .filter(
-            FacultyTeachingAssignment.faculty_id == faculty_id,
-            FacultyTeachingAssignment.subject_id == thread.subject_id,
-            FacultyTeachingAssignment.is_active.is_(True),
-            Enrollment.student_id == thread.student_id,
-        )
-        .first()
-        is not None
-    )
+    resolver = SubjectRosterResolver(db)
+    for _, batch, subject in _faculty_assignments(db, faculty_id):
+        if subject.id != thread.subject_id:
+            continue
+        if thread.student_id in resolver.student_ids_for(batch, subject):
+            return True
+    return False
 
 
 def _can_access_thread(db: Session, user: User, thread: CommunicationThread) -> bool:
@@ -192,7 +185,10 @@ def _thread_rows(db: Session, user: User):
             and_(
                 CommunicationThread.subject_id == assignment.subject_id,
                 Enrollment.batch == batch.name,
-                Enrollment.program == batch.program,
+                or_(
+                    Enrollment.program == batch.program,
+                    batch.program == "All programs",
+                ),
             )
             for assignment, batch, _ in assignments
         ]

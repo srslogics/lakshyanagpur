@@ -597,7 +597,7 @@ function renderSchedule() {
   const rows = [...state.data.schedule].sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
   const upcoming = rows.filter((item) => validDate(item.startsAt) && asInstant(item.startsAt) >= new Date());
   const dateKeys = [...new Set(upcoming.map((item) => dateKey(item.startsAt)).filter(Boolean))];
-  const subjects = new Set(upcoming.map((item) => item.subject).filter(Boolean));
+  const subjects = new Set((state.data.profile.subjects || []).filter(Boolean));
   $("#schedule-metrics").innerHTML = [
     moduleMetric("Upcoming classes", String(upcoming.length)),
     moduleMetric("Scheduled days", String(dateKeys.length)),
@@ -814,6 +814,7 @@ function renderProfile() {
     ["Admission number", profile.admissionNumber],
     ["Program", profile.program],
     ["Batch", profile.batch],
+    ["Subjects", (profile.subjects || []).join(", ")],
     ["Primary contact", profile.mobile],
     ["Secondary contact", profile.secondaryMobile],
     ["Student email", profile.email],

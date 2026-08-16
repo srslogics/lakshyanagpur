@@ -23,7 +23,13 @@ from ..models import (
 )
 from ..security import require_roles
 from ..operations_schemas import StudentCreate, StudentLifecycleUpdate, StudentUpdate
-from ..services import admission_number, audit, canonical_program, payment_effect
+from ..services import (
+    admission_number,
+    audit,
+    canonical_program,
+    canonical_subject,
+    payment_effect,
+)
 
 READ_ROLES = ("owner", "admissions_manager", "front_desk", "accounts", "academic_coordinator")
 router = APIRouter(prefix="/api/students", tags=["students"])
@@ -336,7 +342,7 @@ def create_student(
     )
     db.add(academic)
     selected_subjects = sorted(
-        {value.strip() for value in payload.subjects if value.strip()}
+        {canonical_subject(value) for value in payload.subjects if value.strip()}
     )
     for subject in selected_subjects:
         db.add(
@@ -423,7 +429,10 @@ def student_detail(student_id: str, db: Session = Depends(get_db), user: User = 
             "sourceSchoolName": academic.source_school_name,
             "sourcePrimaryMobile": academic.source_primary_mobile,
             "sourceSecondaryMobile": academic.source_secondary_mobile,
-            "subjects": [subject.subject_name for subject in subjects],
+            "subjects": sorted({
+                canonical_subject(subject.subject_name)
+                for subject in subjects
+            }),
         },
         "migration": None if not legacy else {"legacyId": legacy.id, "sourceRow": legacy.source_row, "readiness": legacy.import_readiness, "issues": legacy.issues},
     }
@@ -503,7 +512,7 @@ def update_student(
         )
     if payload.subjects is not None:
         selected_subjects = sorted(
-            {value.strip() for value in payload.subjects if value.strip()}
+            {canonical_subject(value) for value in payload.subjects if value.strip()}
         )
         if not selected_subjects:
             raise HTTPException(422, "Select at least one subject")

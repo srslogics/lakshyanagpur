@@ -47,7 +47,7 @@ def test_owner_creates_student_and_enrollment_atomically(
     assert {
         row.subject_name
         for row in database.query(StudentSubjectSelection).filter_by(student_id=student.id)
-    } == {"Physics", "Chemistry", "Mathematics"}
+    } == {"Physics", "Chemistry", "Maths"}
     assert database.query(AuditLog).filter_by(
         action="students.create",
         entity_id=student.id,

@@ -26,13 +26,18 @@ from ..models import (
     Room,
     Student,
     StudentAccount,
-    StudentSubjectSelection,
     Subject,
     User,
 )
 from ..security import require_roles
-from ..services import payment_effect, received_effect
-from ..services import audit
+from ..services import (
+    SubjectRosterResolver,
+    audit,
+    canonical_subject,
+    payment_effect,
+    received_effect,
+    selected_subjects,
+)
 
 router = APIRouter(prefix="/api/portal", tags=["student portal"])
 parent_router = APIRouter(prefix="/api/parent", tags=["parent portal"])
@@ -74,11 +79,7 @@ def _student_for_account(db: Session, model, user: User):
 def schedule_rows(db: Session, student: Student, enrollment: Enrollment | None):
     if not enrollment or not enrollment.batch:
         return []
-    selected_subjects = {
-        name for name, in db.query(StudentSubjectSelection.subject_name)
-        .filter(StudentSubjectSelection.student_id == student.id)
-        .all()
-    }
+    student_subjects = set(selected_subjects(db, student.id))
     query = (
         db.query(ClassSession, Batch, Subject, User, Room)
         .join(Batch, Batch.id == ClassSession.batch_id)
@@ -94,9 +95,12 @@ def schedule_rows(db: Session, student: Student, enrollment: Enrollment | None):
             ClassSession.status == "scheduled",
         )
     )
-    if selected_subjects:
-        query = query.filter(Subject.name.in_(selected_subjects))
     rows = query.order_by(ClassSession.starts_at).all()
+    if student_subjects:
+        rows = [
+            row for row in rows
+            if canonical_subject(row[2].name) in student_subjects
+        ]
     return [{
         "id": session.id,
         "subject": subject.name,
@@ -137,6 +141,12 @@ def assignment_rows(
         .order_by(Assignment.due_at)
         .all()
     )
+    student_subjects = set(selected_subjects(db, student.id))
+    if student_subjects:
+        rows = [
+            row for row in rows
+            if canonical_subject(row[2].name) in student_subjects
+        ]
     return [{
         "id": assignment.id,
         "title": assignment.title,
@@ -417,7 +427,7 @@ def fee_summary(db: Session, student: Student):
     }
 
 
-def _student_profile(student: Student, enrollment: Enrollment | None):
+def _student_profile(db: Session, student: Student, enrollment: Enrollment | None):
     return {
         "id": student.id,
         "fullName": student.full_name,
@@ -427,6 +437,7 @@ def _student_profile(student: Student, enrollment: Enrollment | None):
         "email": student.email,
         "program": enrollment.program if enrollment else None,
         "batch": enrollment.batch if enrollment else None,
+        "subjects": selected_subjects(db, student.id),
     }
 
 
@@ -471,7 +482,7 @@ def _portal_payload(
         ),
     }
     payload = {
-        "profile": _student_profile(student, enrollment),
+        "profile": _student_profile(db, student, enrollment),
         "summary": summary,
         "schedule": schedule,
         "assignments": assignments,
@@ -513,18 +524,25 @@ def update_student_assignment_status(
     _, student, enrollment = _student_for_account(db, StudentAccount, user)
     if not enrollment or not enrollment.batch:
         raise HTTPException(404, "Assignment not found for this student")
-    assignment = (
-        db.query(Assignment)
+    assignment_row = (
+        db.query(Assignment, Batch, Subject)
         .join(Batch, Batch.id == Assignment.batch_id)
+        .join(Subject, Subject.id == Assignment.subject_id)
         .filter(
             Assignment.id == assignment_id,
             Assignment.status == "published",
             Batch.name == enrollment.batch,
-            Batch.program == enrollment.program,
+            or_(
+                Batch.program == enrollment.program,
+                Batch.program == "All programs",
+            ),
         )
         .first()
     )
-    if not assignment:
+    if not assignment_row:
+        raise HTTPException(404, "Assignment not found for this student")
+    assignment, batch, subject = assignment_row
+    if student.id not in SubjectRosterResolver(db).student_ids_for(batch, subject):
         raise HTTPException(404, "Assignment not found for this student")
     recipient = db.query(AssignmentRecipient).filter_by(
         assignment_id=assignment_id,
