@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -16,8 +17,10 @@ from ..importers.biometric_attendance import (
     MAX_IMPORT_BYTES,
     INDIA_TZ,
     SheetData,
+    is_essl_form_j_sheet,
     normalize_device_id,
     parse_essl_form_j_pdf,
+    parse_essl_form_j_sheet,
     parse_punches,
     read_workbook,
     sheet_preview,
@@ -39,6 +42,14 @@ from ..services import audit
 
 router = APIRouter(prefix="/api/attendance/biometric-imports", tags=["biometric attendance"])
 DEVICE_KEY = "x2008-abfr220607313"
+DEVICE_SOURCE_CODE_ALIASES = {
+    "51": "E-02",  # Vidhisha patil -> Vidisha Patil
+    "52": "E-03",  # Vihan Jamnik -> Vihan R. Jamnik
+    "53": "E-04",  # Siddhart Wankhede -> Siddharth Wankhede
+    "59": "E-11",  # Kajol Sawarkar -> Kajal Sawarkar
+    "80": "E-33",  # Ayush Sangode -> Aayush Sangode
+    "82": "E-35",  # Arick Sathe -> Arik Sathe
+}
 PREVIEW_TTL_SECONDS = 30 * 60
 PREVIEW_LIMIT = 4
 _PREVIEWS: dict[str, dict] = {}
@@ -105,6 +116,7 @@ def _active_students(db: Session):
             "mobile": student.mobile,
             "batch": (profile.batch_name if profile and profile.batch_name else enrollment.batch),
             "program": enrollment.program,
+            "sourceStudentCode": profile.source_student_code if profile else None,
         })
     return result
 
@@ -180,9 +192,36 @@ async def preview_biometric_import(
             source_report = report
         else:
             sheets = read_workbook(content, filename)
-            sheets_payload = [sheet_preview(sheet) for sheet in sheets]
-            source_format = "workbook"
-            source_report = None
+            form_j_sheet = next((sheet for sheet in sheets if is_essl_form_j_sheet(sheet)), None)
+            if form_j_sheet:
+                punches, row_errors, report = parse_essl_form_j_sheet(form_j_sheet)
+                if row_errors:
+                    raise ValueError(row_errors[0]["message"])
+                report_rows = [{
+                    "Device Code": item["deviceUserId"],
+                    "Student Name": item["deviceName"],
+                    "Date": item["attendanceDate"].isoformat(),
+                    "InTime": item["firstPunchAt"].astimezone(INDIA_TZ).strftime("%H:%M"),
+                } for item in punches[:5]]
+                sheets_payload = [{
+                    "name": form_j_sheet.name,
+                    "headers": ["Device Code", "Student Name", "Date", "InTime"],
+                    "rows": report_rows,
+                    "rowCount": len(punches),
+                    "detected": {
+                        "device_id": "Device Code",
+                        "name": "Student Name",
+                        "date": "Date",
+                        "time": "InTime",
+                        "datetime": None,
+                    },
+                }]
+                source_format = "essl_form_j_workbook"
+                source_report = {**report, "sourceSheet": form_j_sheet.name}
+            else:
+                sheets_payload = [sheet_preview(sheet) for sheet in sheets]
+                source_format = "workbook"
+                source_report = None
     except ValueError as error:
         raise HTTPException(422, str(error)) from error
     token = token_urlsafe(32)
@@ -238,6 +277,14 @@ def _selected_punches(payload: BiometricImportSelection, actor: User):
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
         sheet = SheetData(f"Form J · {report['reportMonth']}", [])
+    elif preview.get("sourceFormat") == "essl_form_j_workbook":
+        sheet = next((item for item in sheets if item.name == payload.sheet_name), None)
+        if not sheet:
+            raise HTTPException(422, "Choose a valid worksheet")
+        try:
+            punches, row_errors, _ = parse_essl_form_j_sheet(sheet)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     else:
         sheet = next((item for item in sheets if item.name == payload.sheet_name), None)
         if not sheet:
@@ -288,11 +335,33 @@ def analyze_biometric_import(
         person["firstDate"] = min(person["firstDate"], item["attendanceDate"])
         person["lastDate"] = max(person["lastDate"], item["attendanceDate"])
         person["dayCount"] += 1
+    students = _active_students(db)
+    by_name = defaultdict(list)
+    by_source_code = defaultdict(list)
+    for student in students:
+        normalized_name = "".join(character for character in student["fullName"].casefold() if character.isalnum())
+        by_name[normalized_name].append(student["id"])
+        source_code = student.get("sourceStudentCode") or ""
+        match = re.fullmatch(r"([A-Za-z]+)[^0-9]*(\d+)", source_code)
+        if match:
+            by_source_code[f"{match.group(1).upper()}{int(match.group(2))}"].append(student["id"])
     for device_user_id, person in people.items():
         mapping = mappings.get(device_user_id)
         if mapping:
             person["studentId"] = mapping.student_id
             person["ignore"] = mapping.is_ignored
+            person["matchReason"] = "Saved mapping"
+            continue
+        source_identifier = DEVICE_SOURCE_CODE_ALIASES.get(device_user_id, device_user_id)
+        code_match = re.fullmatch(r"([A-Za-z]+)[^0-9]*(\d+)", source_identifier)
+        normalized_code = f"{code_match.group(1).upper()}{int(code_match.group(2))}" if code_match else ""
+        code_candidates = by_source_code.get(normalized_code, [])
+        normalized_name = "".join(character for character in person["deviceName"].casefold() if character.isalnum())
+        name_candidates = by_name.get(normalized_name, [])
+        candidates = code_candidates or name_candidates
+        if len(candidates) == 1:
+            person["studentId"] = candidates[0]
+            person["matchReason"] = "Confirmed name merge" if device_user_id in DEVICE_SOURCE_CODE_ALIASES else "Student code" if code_candidates else "Exact name"
     return {
         "rowsSeen": punches[0].get("rowsSeen", len(punches)),
         "uniqueAttendanceDays": len(punches),

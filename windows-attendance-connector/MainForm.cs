@@ -48,7 +48,7 @@ internal sealed class MainForm : Form
         outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var title = new Label { Text = "Lakshya Attendance Connector", AutoSize = true, Font = new Font("Segoe UI", 22, FontStyle.Bold), ForeColor = Color.FromArgb(20, 22, 56), Margin = new Padding(0, 0, 0, 7) };
-        var intro = new Label { Text = "Securely watches the eSSL report folder and transfers new Form J attendance PDFs to Lakshya ERP as draft registers.", AutoSize = true, MaximumSize = new Size(610, 0), ForeColor = Color.FromArgb(95, 96, 110), Margin = new Padding(0, 0, 0, 22) };
+        var intro = new Label { Text = "Securely watches the eSSL report folder and transfers new Form J attendance PDF or Excel files to Lakshya ERP as draft registers.", AutoSize = true, MaximumSize = new Size(610, 0), ForeColor = Color.FromArgb(95, 96, 110), Margin = new Padding(0, 0, 0, 22) };
         outer.Controls.Add(title);
         outer.Controls.Add(intro);
 
@@ -112,7 +112,7 @@ internal sealed class MainForm : Form
             AppStorage.Save(_config);
             AppStorage.SetStartup(_config.StartWithWindows);
             StartService();
-            SetStatus("Connected. New eSSL Form J PDFs will synchronize automatically.");
+            SetStatus("Connected. New eSSL Form J reports will synchronize automatically.");
         }
         catch (Exception error) { SetStatus($"Setup needs attention: {error.Message}"); }
         finally { _save.Enabled = true; }
@@ -144,7 +144,7 @@ internal sealed class MainForm : Form
 
     private void ChooseFolder()
     {
-        using var dialog = new FolderBrowserDialog { Description = "Choose the folder where eSSL saves Form J PDF reports", UseDescriptionForTitle = true, ShowNewFolderButton = true, SelectedPath = _folder.Text };
+        using var dialog = new FolderBrowserDialog { Description = "Choose the folder where eSSL saves Form J PDF or Excel reports", UseDescriptionForTitle = true, ShowNewFolderButton = true, SelectedPath = _folder.Text };
         if (dialog.ShowDialog(this) == DialogResult.OK) _folder.Text = dialog.SelectedPath;
     }
 

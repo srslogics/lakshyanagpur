@@ -25,7 +25,7 @@ internal sealed class ConnectorService : IDisposable
     {
         StopWatcher();
         Directory.CreateDirectory(_config.WatchFolder);
-        _watcher = new FileSystemWatcher(_config.WatchFolder, "*.pdf")
+        _watcher = new FileSystemWatcher(_config.WatchFolder, "*.*")
         {
             IncludeSubdirectories = false,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
@@ -47,12 +47,13 @@ internal sealed class ConnectorService : IDisposable
         try
         {
             var files = Directory.Exists(_config.WatchFolder)
-                ? Directory.EnumerateFiles(_config.WatchFolder, "*.pdf")
+                ? Directory.EnumerateFiles(_config.WatchFolder)
+                    .Where(path => new[] { ".pdf", ".xls", ".xlsx" }.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
                     .Select(path => new FileInfo(path))
                     .OrderBy(info => info.LastWriteTimeUtc)
                     .ToList()
                 : [];
-            if (files.Count == 0 && manual) Emit("No PDF reports found in the selected folder.");
+            if (files.Count == 0 && manual) Emit("No Form J PDF or Excel reports found in the selected folder.");
             foreach (var file in files)
             {
                 var fileState = GetFileState(file);

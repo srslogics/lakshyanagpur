@@ -50,13 +50,19 @@ internal sealed class ErpApiClient : IDisposable
         using var form = new MultipartFormDataContent();
         await using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var file = new StreamContent(stream);
-        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        file.Headers.ContentType = new MediaTypeHeaderValue(Path.GetExtension(filePath).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ => "application/octet-stream"
+        });
         form.Add(file, "file", Path.GetFileName(filePath));
         using var previewResponse = await SendAsync(HttpMethod.Post, "/api/attendance/biometric-imports/preview", form, cancellationToken);
         var preview = await ReadJsonAsync<PreviewResponse>(previewResponse, cancellationToken);
-        if (preview.SourceFormat != "essl_form_j")
-            throw new ConnectorException("Only the eSSL Form J PDF is synchronized automatically.");
-        var sheetName = preview.Sheets.FirstOrDefault()?.Name ?? throw new ConnectorException("The PDF has no attendance report.");
+        if (!preview.SourceFormat.StartsWith("essl_form_j", StringComparison.Ordinal))
+            throw new ConnectorException("Only eSSL Form J PDF or Excel reports are synchronized automatically.");
+        var sheetName = preview.Sheets.FirstOrDefault()?.Name ?? throw new ConnectorException("The file has no attendance report.");
         var selection = Selection(preview.PreviewToken, sheetName);
         using var analysisResponse = await SendJsonAsync(HttpMethod.Post, "/api/attendance/biometric-imports/analyze", selection, cancellationToken);
         var analysis = await ReadJsonAsync<AnalysisResponse>(analysisResponse, cancellationToken);

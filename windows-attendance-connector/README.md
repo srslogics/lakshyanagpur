@@ -1,20 +1,20 @@
 # Lakshya Attendance Connector for Windows
 
-The connector runs on the Windows computer where eSSL saves attendance reports. It watches one folder for new **eSSL Form J PDF** files and uploads them to Lakshya ERP over HTTPS. It is locked to `https://lakshyaedutech.onrender.com`; changing a local configuration file cannot redirect the operator's password or reports to another server.
+The connector runs on the Windows computer where eSSL saves attendance reports. It watches one folder for new **eSSL Form J PDF, XLS or XLSX** files and uploads them to Lakshya ERP over HTTPS. It is locked to `https://lakshyaedutech.onrender.com`; changing a local configuration file cannot redirect the operator's password or reports to another server.
 
 ## Operator workflow
 
 1. Install the signed `Lakshya-Attendance-Connector-Setup.exe`.
 2. Sign in with an active Attendance Desk account whose temporary password has already been changed.
-3. Select the folder where eSSL saves Form J PDF reports.
+3. Select the folder where eSSL saves Form J PDF or Excel reports.
 4. Choose **Save and test connection**.
-5. Keep exporting Form J PDFs into that folder. The connector starts with Windows and scans automatically.
+5. Keep exporting Form J PDF or Excel files into that folder. The connector starts with Windows and scans automatically.
 6. The first report opens a one-time mapping screen for device codes. Map each code to the correct student or mark it **Ignore**.
 7. Imported attendance appears as a **draft** Tatva/Essential register in Attendance Desk. Review it before submission.
 
-The PDF is used only during the short-lived secure preview and is never persisted to ERP database or object storage. Windows encrypts the connector password with DPAPI for the signed-in Windows user. Completed file hashes and file states are stored locally to avoid repeat uploads without repeatedly rereading old reports.
+The report file is used only during the short-lived secure preview and is never persisted to ERP database or object storage. Windows encrypts the connector password with DPAPI for the signed-in Windows user. Completed file hashes and file states are stored locally to avoid repeat uploads without repeatedly rereading old reports.
 
-This release watches the eSSL export folder; it does not read fingerprint templates or connect directly to the X2008 device. Configure the existing eSSL software to save or export Form J PDFs into the selected folder.
+This release watches the eSSL export folder; it does not read fingerprint templates or connect directly to the X2008 device. Configure the existing eSSL software to save or export Form J PDF or Excel reports into the selected folder.
 
 ## Build
 

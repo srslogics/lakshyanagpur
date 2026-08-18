@@ -13,7 +13,7 @@ from app.models import (
     User,
 )
 from app.security import create_token, hash_password
-from app.importers.biometric_attendance import parse_essl_form_j_pdf
+from app.importers.biometric_attendance import SheetData, parse_essl_form_j_pdf, parse_essl_form_j_sheet
 
 
 def setup_students(database):
@@ -219,6 +219,78 @@ def test_xlsx_biometric_preview(client, database):
     assert staged["sheets"][0]["name"] == "Punches"
     assert staged["sheets"][0]["detected"]["device_id"] == "Enroll ID"
     assert staged["sheets"][0]["detected"]["datetime"] == "Punch Time"
+
+
+def test_essl_form_j_excel_preview_and_student_code_suggestion(client, database):
+    from openpyxl import Workbook
+
+    operator, tatva, essential = setup_students(database)
+    essential_profile = database.query(StudentAcademicProfile).filter_by(student_id=essential.id).one()
+    essential_profile.source_student_code = "E-02"
+    database.commit()
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "DetailedFormJ"
+    sheet.append(['FORM "J"'])
+    sheet.append(["REGISTER OF EMPLOYMENT"])
+    sheet.append(["For The Month Ending August To 2026"])
+    sheet.append(["Sr No.", "Employee", "Type", "1 St", "2 S", "3 M", "4 T", "5 W"])
+    sheet.append([1, "Name:Device spelling", "M"])
+    sheet.append([None, "Code:T-1", "InTime", "08:15", None, "09:05"])
+    sheet.append([2, "Name:Vidhisha patil", "F"])
+    sheet.append([None, "Code:51", "InTime", "09:10"])
+    stream = BytesIO()
+    workbook.save(stream)
+
+    staged = preview(client, headers, stream.getvalue(), "form-j.xlsx")
+    assert staged["sourceFormat"] == "essl_form_j_workbook"
+    assert staged["report"]["reportMonth"] == "2026-08"
+    assert staged["report"]["identityCount"] == 2
+    assert staged["sheets"][0]["rowCount"] == 3
+
+    selection = {
+        "previewToken": staged["previewToken"],
+        "sheetName": "DetailedFormJ",
+        "deviceIdColumn": "Device Code",
+        "nameColumn": "Student Name",
+        "datetimeColumn": None,
+        "dateColumn": "Date",
+        "timeColumn": "InTime",
+    }
+    analysis = client.post(
+        "/api/attendance/biometric-imports/analyze",
+        headers=headers,
+        json=selection,
+    )
+    assert analysis.status_code == 200, analysis.text
+    people = {item["deviceUserId"]: item for item in analysis.json()["deviceUsers"]}
+    assert people["T-1"]["studentId"] == tatva.id
+    assert people["T-1"]["matchReason"] == "Student code"
+    assert people["T-1"]["dayCount"] == 2
+    assert people["51"]["studentId"] == essential.id
+    assert people["51"]["matchReason"] == "Confirmed name merge"
+
+
+def test_essl_form_j_sheet_parser_keeps_first_punches():
+    sheet = SheetData("DetailedFormJ", [
+        ['FORM "J"'],
+        ["REGISTER OF EMPLOYMENT"],
+        ["For The Month Ending August To 2026"],
+        ["Sr No.", "Employee", "Type", "1 St", "2 S", "3 M", "4 T", "5 W"],
+        [1, "Name:Kamal Parsatwar", "M"],
+        [None, "Code:T-1", "InTime", "09:59", None, "11:32"],
+        [None, "Designation:", "OutTime", "14:59", None, "13:43"],
+        [None, "DOJ:01-Aug-2026", "Status", "P", "A", "P"],
+    ])
+    punches, errors, report = parse_essl_form_j_sheet(sheet)
+    assert errors == []
+    assert report["identityCount"] == 1
+    assert report["reportMonth"] == "2026-08"
+    assert [(item["attendanceDate"].day, item["firstPunchAt"].hour, item["firstPunchAt"].minute) for item in punches] == [
+        (1, 4, 29),
+        (3, 6, 2),
+    ]
 
 
 def test_essl_form_j_pdf_parser(monkeypatch):

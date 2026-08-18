@@ -148,6 +148,10 @@ function biometricSheet() {
   return state.biometric?.sheets?.find(item => item.name === $("#biometric-sheet").value) || state.biometric?.sheets?.[0];
 }
 
+function isEsslFormJ() {
+  return String(state.biometric?.sourceFormat || "").startsWith("essl_form_j");
+}
+
 function optionMarkup(headers, selected, optional = false) {
   return `${optional ? '<option value="">Not used</option>' : ""}${headers.map(header => `<option value="${esc(header)}" ${header === selected ? "selected" : ""}>${esc(header)}</option>`).join("")}`;
 }
@@ -166,7 +170,7 @@ function renderBiometricSheet() {
 }
 
 function biometricSelection() {
-  if (state.biometric?.sourceFormat === "essl_form_j") {
+  if (isEsslFormJ()) {
     return {
       previewToken:state.biometric.previewToken,
       sheetName:state.biometric.sheets[0].name,
@@ -207,8 +211,8 @@ async function chooseBiometricFile() {
     $("#import-biometric").classList.add("hidden");
     $("#back-biometric").classList.add("hidden");
     renderBiometricSheet();
-    $(".mapping-grid", $("#biometric-stage-file")).classList.toggle("hidden", state.biometric.sourceFormat === "essl_form_j");
-    $(".mapping-help", $("#biometric-stage-file")).textContent = state.biometric.sourceFormat === "essl_form_j"
+    $(".mapping-grid", $("#biometric-stage-file")).classList.toggle("hidden", isEsslFormJ());
+    $(".mapping-help", $("#biometric-stage-file")).textContent = isEsslFormJ()
       ? `eSSL Form J detected · ${state.biometric.report.identityCount} device identities · ${state.biometric.report.reportMonth}`
       : "Use either one date-and-time column, or separate date and time columns.";
     $("#biometric-dialog").classList.remove("hidden");
@@ -252,7 +256,7 @@ function renderBiometricMappings() {
   const studentOptions = state.biometric.students.map(student => `<option value="${esc(student.id)}">${esc(student.fullName)} · ${esc(student.admissionNumber)} · ${esc(student.batch || "")}</option>`).join("");
   $("#biometric-mappings").innerHTML = analysis.deviceUsers.map(person => `
     <article class="mapping-row" data-device-user-id="${esc(person.deviceUserId)}">
-      <div><strong>Device ID ${esc(person.deviceUserId)}</strong><span>${esc(person.deviceName || "Name not supplied")} · ${person.dayCount} ${person.dayCount === 1 ? "day" : "days"}</span></div>
+      <div><strong>Device ID ${esc(person.deviceUserId)}</strong><span>${esc(person.deviceName || "Name not supplied")} · ${person.dayCount} ${person.dayCount === 1 ? "day" : "days"}${person.matchReason ? ` · ${esc(person.matchReason)}` : ""}</span></div>
       <select data-device-student aria-label="Student for device ID ${esc(person.deviceUserId)}"><option value="">Choose student</option>${studentOptions}</select>
       <label class="ignore-device"><input type="checkbox" data-device-ignore> Ignore this ID</label>
     </article>`).join("");
