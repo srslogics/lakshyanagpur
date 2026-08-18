@@ -126,6 +126,101 @@ def _create_posted_payment(
     return row
 
 
+def _balance_snapshot_covering_payment(
+    db: Session,
+    agreement: FeeAgreement,
+    transaction_date,
+) -> PaymentTransaction | None:
+    """Return the latest client balance snapshot that already covers a date."""
+    return (
+        db.query(PaymentTransaction)
+        .filter(
+            PaymentTransaction.fee_agreement_id == agreement.id,
+            PaymentTransaction.method == "client_statement",
+            PaymentTransaction.transaction_type.in_(("balance_credit", "balance_debit")),
+            PaymentTransaction.status == "posted",
+            PaymentTransaction.reconciliation_status == "ready",
+            PaymentTransaction.transaction_date.is_not(None),
+            PaymentTransaction.transaction_date >= transaction_date,
+        )
+        .order_by(
+            PaymentTransaction.transaction_date.desc(),
+            PaymentTransaction.created_at.desc(),
+            PaymentTransaction.id.desc(),
+        )
+        .first()
+    )
+
+
+def _preserve_client_balance_for_backdated_payment(
+    db: Session,
+    *,
+    payment: PaymentTransaction,
+    agreement: FeeAgreement,
+    actor: User,
+) -> PaymentTransaction | None:
+    """Neutralize a receipt already included in a confirmed balance snapshot.
+
+    The receipt remains real cash received. The offset changes only the ledger
+    balance so a historical payment cannot be counted twice after migration.
+    """
+    if payment.transaction_date is None:
+        return None
+    snapshot = _balance_snapshot_covering_payment(
+        db,
+        agreement,
+        payment.transaction_date,
+    )
+    if not snapshot:
+        return None
+    existing = (
+        db.query(PaymentTransaction)
+        .filter(
+            PaymentTransaction.related_transaction_id == payment.id,
+            PaymentTransaction.transaction_type == "balance_debit",
+            PaymentTransaction.method == "client_statement",
+            PaymentTransaction.status == "posted",
+        )
+        .first()
+    )
+    if existing:
+        return existing
+    correction = PaymentTransaction(
+        student_id=payment.student_id,
+        fee_agreement_id=agreement.id,
+        transaction_date=snapshot.transaction_date,
+        amount=payment.amount,
+        method="client_statement",
+        transaction_type="balance_debit",
+        source_note="Backdated receipt already included in confirmed balance",
+        reference=snapshot.reference,
+        notes=(
+            f"Offsets {payment.receipt_number or payment.id} for ledger balance only; "
+            f"the receipt remains included in money received."
+        ),
+        related_transaction_id=payment.id,
+        created_by=actor.id,
+        status="posted",
+        reconciliation_status="ready",
+    )
+    db.add(correction)
+    db.flush()
+    audit(
+        db,
+        actor,
+        "finance.payment.balance_reconciliation",
+        "payment_transaction",
+        correction.id,
+        after={
+            "paymentId": payment.id,
+            "snapshotId": snapshot.id,
+            "snapshotDate": snapshot.transaction_date,
+            "amount": correction.amount,
+        },
+    )
+    return correction
+
+
 @router.get("/agreements")
 def fee_agreements(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), db: Session = Depends(get_db), user: User = Depends(require_roles(*FINANCE_ROLES))):
     query = db.query(FeeAgreement, Student).join(Student, Student.id == FeeAgreement.student_id).filter(Student.is_test_account.is_(False))
@@ -243,7 +338,16 @@ def post_payment(
         reference=payload.reference,
         notes=payload.notes,
     )
+    balance_correction = _preserve_client_balance_for_backdated_payment(
+        db,
+        payment=row,
+        agreement=agreement,
+        actor=actor,
+    )
     after = _payment_payload(row, student)
+    if balance_correction:
+        after["balanceReconciledThrough"] = balance_correction.transaction_date
+        after["balanceCorrectionId"] = balance_correction.id
     audit(db, actor, "finance.payment.post", "payment_transaction", row.id, after=after)
     db.commit()
     return after
@@ -456,6 +560,19 @@ def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Ses
     if payload.reconciliation_status == "needs_mode" and row.method in {"cash", "upi", "bank_transfer", "cheque", "card", "other"}:
         raise HTTPException(422, "This row already has a confirmed payment mode; choose another review state")
     row.reconciliation_status = payload.reconciliation_status
+    balance_correction = None
+    if (
+        payload.reconciliation_status == "ready"
+        and before["reconciliationStatus"] != "ready"
+    ):
+        agreement = db.get(FeeAgreement, row.fee_agreement_id)
+        db.flush()
+        balance_correction = _preserve_client_balance_for_backdated_payment(
+            db,
+            payment=row,
+            agreement=agreement,
+            actor=actor,
+        )
     after = {
         "reconciliationStatus": row.reconciliation_status,
         "transactionDate": row.transaction_date,
@@ -463,6 +580,9 @@ def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Ses
         "reference": row.reference,
         "notes": row.notes,
     }
+    if balance_correction:
+        after["balanceReconciledThrough"] = balance_correction.transaction_date
+        after["balanceCorrectionId"] = balance_correction.id
     audit(db, actor, "finance.payment.review", "payment_transaction", row.id, before=before, after=after)
     db.commit()
     return {"id": row.id, **after}

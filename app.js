@@ -742,7 +742,7 @@ function renderFinance() {
   const outstanding = openAccounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
   const dueAccounts = openAccounts.filter(item => item.balance > 0).length;
   const review = state.payments.filter(needsPaymentReview).length;
-  const registerCount = state.payments.length + state.installments.length;
+  const registerCount = state.payments.filter(item => item.type === "payment").length + state.installments.length;
   $("#new-future-payment").classList.toggle("hidden", !canAccess("finance", "create"));
   $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
   $("#new-payment").classList.toggle("hidden", !canManageFinance());
@@ -752,7 +752,7 @@ function renderFinance() {
   $("#payment-review-count").textContent = review ? `${review} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !review);
   $("#finance-agreements-tab").setAttribute("aria-label", `Student balances, ${openAccounts.length} active accounts`);
-  $("#finance-payments-tab").setAttribute("aria-label", `Payments, ${registerCount} entries${review ? `, ${review} need attention` : ""}`);
+  $("#finance-payments-tab").setAttribute("aria-label", `Payment register, ${registerCount} payments${review ? `, ${review} need attention` : ""}`);
   renderAgreementRows(); renderPaymentRows();
   if (ledgerCurrentStudentId) renderStudentLedger(ledgerCurrentStudentId);
 }
@@ -802,8 +802,10 @@ function renderPaymentRows() {
   $("#payment-student-filter-name").textContent = student?.studentName || "";
   const paymentRows = rows.filter(item => item.type !== "scheduled_payment");
   const installmentRows = rows.filter(item => item.type === "scheduled_payment");
-  const total = paymentRows.reduce((sum, item) => sum + Number(item.receivedAmount ?? item.signedAmount ?? item.amount ?? 0), 0);
-  $("#payment-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "entry" : "entries"} · ${money(total)} received${installmentRows.length ? ` · ${installmentRows.length} planned` : ""}`;
+  const receiptRows = paymentRows.filter(item => item.type === "payment");
+  const adjustmentRows = paymentRows.filter(item => item.type !== "payment");
+  const total = receiptRows.reduce((sum, item) => sum + Number(item.receivedAmount ?? item.signedAmount ?? item.amount ?? 0), 0);
+  $("#payment-result-summary").textContent = `${receiptRows.length} ${receiptRows.length === 1 ? "payment" : "payments"} · ${money(total)} received${adjustmentRows.length ? ` · ${adjustmentRows.length} ledger ${adjustmentRows.length === 1 ? "adjustment" : "adjustments"}` : ""}${installmentRows.length ? ` · ${installmentRows.length} planned` : ""}`;
   const typeLabel = item => ({
     payment: "Payment received",
     reversal: "Reversal",
@@ -2239,7 +2241,9 @@ async function submitPayment(event) {
     closeDetail();
     renderAll();
     activateFinanceTab("payments");
-    toast(`Payment posted · ${payment.receiptNumber}`);
+    toast(payment.balanceReconciledThrough
+      ? `Payment posted · ${payment.receiptNumber} · confirmed balance preserved`
+      : `Payment posted · ${payment.receiptNumber}`);
   } catch (error) {
     showFormError("#payment-create-error", error);
     button.disabled = false;

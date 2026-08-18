@@ -2,7 +2,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from app.models import AuditLog, Enrollment, FeeAgreement, PaymentTransaction, Student
-from app.services import payment_effect
+from app.services import payment_effect, received_effect
 
 
 def _account(database):
@@ -84,6 +84,64 @@ def test_accounts_post_payment_and_owner_reverses_with_append_only_receipts(
     assert database.query(AuditLog).filter(
         AuditLog.action.in_(("finance.payment.post", "finance.payment.reversal"))
     ).count() == 2
+
+
+def test_backdated_receipt_preserves_client_confirmed_balance(
+    client,
+    database,
+    owner_headers,
+):
+    student = _account(database)
+    agreement = database.query(FeeAgreement).filter_by(student_id=student.id).one()
+    snapshot = PaymentTransaction(
+        student_id=student.id,
+        fee_agreement_id=agreement.id,
+        legacy_import_id="CLIENT-SNAPSHOT-TEST",
+        legacy_line_number=1,
+        transaction_date=date(2026, 8, 3),
+        amount=5_000,
+        method="client_statement",
+        transaction_type="balance_credit",
+        source_note="Client-confirmed balance as on 3 August 2026: ₹95,000",
+        reference="Balances as on 3 August.xlsx",
+        notes="Balance reconciliation only; this is not a payment receipt.",
+        status="posted",
+        reconciliation_status="ready",
+    )
+    database.add(snapshot)
+    database.commit()
+
+    posted = client.post(
+        "/api/finance/payments",
+        json={
+            "studentId": student.id,
+            "transactionDate": "2026-08-02",
+            "amount": 5_000,
+            "method": "upi",
+            "reference": "UTR-BACKDATED",
+            "notes": "Receipt entered after balance confirmation",
+        },
+        headers=owner_headers,
+    )
+
+    assert posted.status_code == 201
+    assert posted.json()["balanceReconciledThrough"] == "2026-08-03"
+    rows = database.query(PaymentTransaction).filter_by(
+        fee_agreement_id=agreement.id,
+    ).all()
+    assert len(rows) == 3
+    assert sum(payment_effect(row) for row in rows) == 5_000
+    assert sum(received_effect(row) for row in rows) == 5_000
+    correction = next(
+        row for row in rows
+        if row.transaction_type == "balance_debit"
+    )
+    assert correction.amount == 5_000
+    assert correction.related_transaction_id == posted.json()["id"]
+    assert database.query(AuditLog).filter_by(
+        action="finance.payment.balance_reconciliation",
+        entity_id=correction.id,
+    ).count() == 1
 
 
 def test_create_fee_agreement_for_existing_manual_student(
@@ -175,3 +233,57 @@ def test_imported_payment_does_not_affect_ledger_until_owner_confirms_it(
     database.refresh(payment)
     assert payment.transaction_date == date(2026, 6, 6)
     assert payment_effect(payment) == 5000
+
+
+def test_approving_backdated_import_does_not_duplicate_snapshot_balance(
+    client,
+    database,
+    owner_headers,
+):
+    student = _account(database)
+    agreement = database.query(FeeAgreement).filter_by(student_id=student.id).one()
+    database.add(PaymentTransaction(
+        student_id=student.id,
+        fee_agreement_id=agreement.id,
+        legacy_import_id="CLIENT-SNAPSHOT-REVIEW-TEST",
+        legacy_line_number=1,
+        transaction_date=date(2026, 8, 3),
+        amount=5_000,
+        method="client_statement",
+        transaction_type="balance_credit",
+        source_note="Client-confirmed balance",
+        status="posted",
+        reconciliation_status="ready",
+    ))
+    database.commit()
+    payment = PaymentTransaction(
+        student_id=student.id,
+        fee_agreement_id=agreement.id,
+        transaction_date=None,
+        amount=5_000,
+        method="unknown",
+        transaction_type="payment",
+        source_note="Imported historical payment",
+        status="staged",
+        reconciliation_status="review",
+    )
+    database.add(payment)
+    database.commit()
+
+    confirmed = client.patch(
+        f"/api/finance/staged-payments/{payment.id}/review",
+        json={
+            "reconciliationStatus": "ready",
+            "transactionDate": "2026-08-02",
+            "method": "upi",
+        },
+        headers=owner_headers,
+    )
+
+    assert confirmed.status_code == 200
+    assert confirmed.json()["balanceReconciledThrough"] == "2026-08-03"
+    rows = database.query(PaymentTransaction).filter_by(
+        fee_agreement_id=agreement.id,
+    ).all()
+    assert sum(payment_effect(row) for row in rows) == 5_000
+    assert sum(received_effect(row) for row in rows) == 5_000
