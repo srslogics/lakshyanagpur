@@ -786,8 +786,9 @@ function renderPaymentRows() {
     return "received";
   };
   const register = [...state.payments, ...state.installments].sort((a, b) =>
-    String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31"))
-    || String(a.studentName || "").localeCompare(String(b.studentName || ""))
+    String(b.date || "").localeCompare(String(a.date || ""))
+    || String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
+    || String(b.id || "").localeCompare(String(a.id || ""))
   );
   const rows = register.filter(item => {
     const matchesStudent = !financeStudentFilter || item.studentId === financeStudentFilter;
