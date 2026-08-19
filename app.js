@@ -1059,12 +1059,29 @@ function renderExaminations() {
 function renderAttendance() {
   const submitted = state.attendanceSessions.filter(item => item.registerStatus === "submitted").length;
   const staffRecords = state.staffAttendance?.records || [];
-  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.attendanceSessions.length) }, { label: "Submitted", value: String(submitted) }, { label: "Draft", value: String(state.attendanceSessions.filter(item => item.registerStatus === "draft").length) }, { label: "Pending", value: String(state.attendanceSessions.length - submitted) }, { label: "Staff punches", value: String(staffRecords.length) }]);
+  const unassignedStaff = new Set(staffRecords.filter(item => !item.staffUserId).map(item => item.deviceUserId)).size;
+  $("#staff-attendance-metrics").innerHTML = compactMetrics([{ label: "Staff members", value: String(state.staffAttendance?.staffCount || 0) }, { label: "Attendance records", value: String(state.staffAttendance?.recordCount || staffRecords.length) }, { label: "Unassigned devices", value: String(unassignedStaff) }, { label: "Latest record", value: staffRecords[0]?.date ? formatDate(staffRecords[0].date) : "—" }]);
+  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.attendanceSessions.length) }, { label: "Submitted", value: String(submitted) }, { label: "Draft", value: String(state.attendanceSessions.filter(item => item.registerStatus === "draft").length) }, { label: "Pending", value: String(state.attendanceSessions.length - submitted) }]);
   $("#attendance-table-body").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<tr><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</small></td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${item.markedCount}/${item.studentCount}</td><td>${status(item.registerStatus)}</td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">Open</button></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("calendar-check", "No attendance registers")}</td></tr>`;
   $("#attendance-mobile-list").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</p></div>${status(item.registerStatus)}</div><div class="mobile-record-meta"><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Marked</span><strong>${item.markedCount}/${item.studentCount}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">Open register</button></article>`).join("") : emptyState("calendar-check", "No attendance registers");
   $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffRecords.map(item => `<tr><td><strong>${esc(item.fullName)}</strong><br><small>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)}</small></td><td>${formatDate(item.date)}</td><td>${classTime(item.arrivalAt)}</td><td>${item.departureAt ? classTime(item.departureAt) : "—"}</td><td><span class="status status-active">Recorded</span></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.")}</td></tr>`;
   $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffRecords.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.fullName)}</h3><p>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)} · ${formatDate(item.date)}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "—"}</strong></div></div></article>`).join("") : emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.");
   $("#staff-attendance-count").textContent = `${staffRecords.length} ${staffRecords.length === 1 ? "record" : "records"}`;
+}
+
+function activateAttendanceTab(name, focus = false) {
+  $$('[data-attendance-tab]').forEach(button => {
+    const active = button.dataset.attendanceTab === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
+  });
+  $$('[data-attendance-panel]').forEach(panel => {
+    const active = panel.dataset.attendancePanel === name;
+    panel.classList.toggle("active", active);
+    panel.hidden = !active;
+  });
 }
 
 function renderCommunication() {
@@ -3123,6 +3140,16 @@ function bindEvents() {
     tabs[next].focus();
   });
   $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/sessions"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $$('[data-attendance-tab]').forEach(button => button.addEventListener("click", () => activateAttendanceTab(button.dataset.attendanceTab)));
+  $("#attendance-view-tabs").addEventListener("keydown", event => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = $$('[data-attendance-tab]');
+    const current = buttons.indexOf(document.activeElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    activateAttendanceTab(buttons[next].dataset.attendanceTab, true);
+  });
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
   $$("[data-report-export]").forEach(button => button.addEventListener("click", () => downloadReport(button.dataset.reportExport, button)));
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));
