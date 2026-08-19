@@ -299,7 +299,7 @@ function updateBiometricImportReadiness({focusFirst = false} = {}) {
     }
   } else {
     error.classList.add("hidden");
-    button.textContent = "Import draft registers";
+    button.textContent = "Import and publish";
   }
   return {mappings, incomplete};
 }

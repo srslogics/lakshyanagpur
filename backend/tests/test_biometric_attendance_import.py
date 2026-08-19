@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.security import create_token, hash_password
 from app.importers.biometric_attendance import SheetData, parse_essl_form_j_pdf, parse_essl_form_j_sheet
+from app.routers.portal import attendance_rows
 
 
 def setup_students(database):
@@ -134,6 +135,8 @@ def test_biometric_file_import_maps_students_and_keeps_first_daily_punch(client,
     body = committed.json()
     assert body["punchesCreated"] == 2
     assert {item["batch"] for item in body["registers"]} == {"Tatva", "Essential"}
+    assert all(item["status"] == "submitted" for item in body["registers"])
+    assert "published" in body["message"]
     assert database.query(BiometricAttendanceDay).count() == 2
     tatva_day = database.query(BiometricAttendanceDay).filter_by(student_id=tatva.id).one()
     assert tatva_day.first_punch_at.hour == 2
@@ -142,14 +145,18 @@ def test_biometric_file_import_maps_students_and_keeps_first_daily_punch(client,
     assert database.query(DeviceAttendanceIdentity).filter_by(device_user_id="999").one().is_ignored is True
     registers = database.query(AttendanceRegister).filter_by(register_kind="biometric").all()
     assert len(registers) == 2
-    assert all(register.status == "draft" for register in registers)
-    assert database.query(AttendanceEntry).count() == 2
+    assert all(register.status == "submitted" for register in registers)
+    assert database.query(AttendanceEntry).count() == 3
+    assert attendance_rows(database, tatva)[0]["status"] == "present"
+    assert attendance_rows(database, no_punch)[0]["status"] == "absent"
 
     bootstrap = client.get("/api/attendance/bootstrap?day=2026-08-12", headers=headers)
     assert bootstrap.status_code == 200
     imported_sessions = [item for item in bootstrap.json()["sessions"] if item["registerKind"] == "biometric"]
     assert {item["batch"] for item in imported_sessions} == {"Tatva", "Essential"}
     tatva_register = next(item for item in imported_sessions if item["batch"] == "Tatva")
+    assert tatva_register["registerStatus"] == "submitted"
+    assert tatva_register["markedCount"] == tatva_register["studentCount"]
     roster = client.get(f"/api/attendance/manual-registers/{tatva_register['id']}", headers=headers)
     assert roster.status_code == 200
     statuses = {item["studentId"]: item["status"] for item in roster.json()["entries"]}

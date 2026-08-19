@@ -565,37 +565,66 @@ def commit_biometric_import(
         if batch_name in {"Tatva", "Essential"}:
             register_student_rows[(item["attendanceDate"], batch_name)][student_id] = first_punch
 
+    batch_rosters: dict[str, set[str]] = defaultdict(set)
+    for student in active_students:
+        if student["batch"] in {"Tatva", "Essential"}:
+            batch_rosters[student["batch"]].add(student["id"])
+
     registers = []
     for (attendance_date, batch_name), arrivals in register_student_rows.items():
         register = _open_biometric_register(db, attendance_date, batch_name)
-        if register.status == "submitted":
-            continue
+        eligible_student_ids = batch_rosters.get(batch_name, set())
         existing_entries = {
             row.student_id: row
             for row in db.query(AttendanceEntry).filter_by(register_id=register.id).all()
         }
-        for student_id, first_punch in arrivals.items():
+        for student_id in eligible_student_ids:
+            first_punch = arrivals.get(student_id)
             entry = existing_entries.get(student_id)
-            if entry:
-                entry.status = "present"
-                entry.reason = "Biometric first punch"
-                entry.marked_by = actor.id
-                if not entry.arrival_at or first_punch < entry.arrival_at:
-                    entry.arrival_at = first_punch
-            else:
-                db.add(AttendanceEntry(
-                    register_id=register.id,
-                    student_id=student_id,
-                    status="present",
-                    reason="Biometric first punch",
-                    marked_by=actor.id,
-                    arrival_at=first_punch,
-                ))
+            if first_punch:
+                if entry:
+                    entry.status = "present"
+                    entry.reason = "Biometric first punch"
+                    entry.marked_by = actor.id
+                    if not entry.arrival_at or first_punch < entry.arrival_at:
+                        entry.arrival_at = first_punch
+                else:
+                    db.add(AttendanceEntry(
+                        register_id=register.id,
+                        student_id=student_id,
+                        status="present",
+                        reason="Biometric first punch",
+                        marked_by=actor.id,
+                        arrival_at=first_punch,
+                    ))
+            elif register.status != "submitted":
+                if entry:
+                    entry.status = "absent"
+                    entry.reason = "No biometric punch"
+                    entry.marked_by = actor.id
+                    entry.arrival_at = None
+                else:
+                    db.add(AttendanceEntry(
+                        register_id=register.id,
+                        student_id=student_id,
+                        status="absent",
+                        reason="No biometric punch",
+                        marked_by=actor.id,
+                        arrival_at=None,
+                    ))
+
+        if register.status != "submitted":
+            register.status = "submitted"
+            register.submitted_at = datetime.now(timezone.utc)
+            register.submitted_by = actor.id
+        present_count = len(set(arrivals) & eligible_student_ids)
         registers.append({
             "id": register.id,
             "date": attendance_date.isoformat(),
             "batch": batch_name,
-            "present": len(arrivals),
+            "present": present_count,
+            "absent": max(0, len(eligible_student_ids) - present_count),
+            "students": len(eligible_student_ids),
             "status": register.status,
         })
 
@@ -627,5 +656,5 @@ def commit_biometric_import(
         "punchesCreated": created_punches,
         "punchesUpdated": updated_punches,
         "registers": registers,
-        "message": "Biometric attendance imported as draft registers for review",
+        "message": "Attendance imported and published to student and parent accounts",
     }
