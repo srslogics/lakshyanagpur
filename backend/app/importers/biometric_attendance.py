@@ -274,7 +274,7 @@ def parse_punches(
     if missing:
         raise ValueError("Choose the device ID and punch date/time columns")
 
-    earliest: dict[tuple[str, date], dict] = {}
+    daily_punches: dict[tuple[str, date], dict] = {}
     errors = []
     raw_rows = 0
     for source_row, row in enumerate(sheet.rows[1:], start=2):
@@ -301,12 +301,22 @@ def parse_punches(
             "deviceName": _text(values.get(name_column)) if name_column else "",
             "attendanceDate": local_day,
             "firstPunchAt": punch_at,
+            "lastPunchAt": None,
             "sourceRow": source_row,
         }
         key = (device_user_id, local_day)
-        if key not in earliest or punch_at < earliest[key]["firstPunchAt"]:
-            earliest[key] = item
-    rows = sorted(earliest.values(), key=lambda item: (item["attendanceDate"], item["deviceUserId"]))
+        existing = daily_punches.get(key)
+        if not existing:
+            daily_punches[key] = item
+        else:
+            all_punches = [existing["firstPunchAt"], punch_at]
+            if existing.get("lastPunchAt"):
+                all_punches.append(existing["lastPunchAt"])
+            existing["firstPunchAt"] = min(all_punches)
+            existing["lastPunchAt"] = max(all_punches)
+            if not existing["deviceName"] and item["deviceName"]:
+                existing["deviceName"] = item["deviceName"]
+    rows = sorted(daily_punches.values(), key=lambda item: (item["attendanceDate"], item["deviceUserId"]))
     for item in rows:
         item["rowsSeen"] = raw_rows
     return rows, errors
@@ -344,11 +354,12 @@ def parse_essl_form_j_sheet(sheet: SheetData) -> tuple[list[dict], list[dict], d
     day_columns: dict[int, int] = {}
     current_name = ""
     identities: dict[str, str] = {}
-    earliest: dict[tuple[str, date], dict] = {}
+    daily_punches: dict[tuple[str, date], dict] = {}
     errors = []
     rows_seen = 0
 
-    for source_row, row in enumerate(sheet.rows, start=1):
+    for row_index, row in enumerate(sheet.rows):
+        source_row = row_index + 1
         detected_days = {}
         for column, value in enumerate(row):
             match = re.match(r"^\s*(\d{1,2})(?:\s|$)", _text(value))
@@ -373,6 +384,8 @@ def parse_essl_form_j_sheet(sheet: SheetData) -> tuple[list[dict], list[dict], d
         if not day_columns:
             errors.append({"row": source_row, "message": "The Form J day columns could not be read"})
             continue
+        out_row = sheet.rows[row_index + 1] if row_index + 1 < len(sheet.rows) else []
+        is_out_row = any(_text(value) == "OutTime" for value in out_row)
         for column, day in day_columns.items():
             value = row[column] if column < len(row) else None
             text = _text(value)
@@ -389,15 +402,30 @@ def parse_essl_form_j_sheet(sheet: SheetData) -> tuple[list[dict], list[dict], d
                 "deviceName": current_name,
                 "attendanceDate": date(year, month, day),
                 "firstPunchAt": punch_at,
+                "lastPunchAt": None,
                 "sourceRow": source_row,
             }
+            if is_out_row:
+                out_value = out_row[column] if column < len(out_row) else None
+                if _text(out_value) and _text(out_value) not in {"0", "00:00", "00:00:00"}:
+                    try:
+                        out_at = parse_datetime(date_value=date(year, month, day), time_value=out_value)
+                        if out_at >= punch_at:
+                            item["lastPunchAt"] = out_at
+                    except ValueError as error:
+                        errors.append({"row": source_row + 1, "message": str(error)})
             key = (device_user_id, item["attendanceDate"])
-            if key not in earliest or punch_at < earliest[key]["firstPunchAt"]:
-                earliest[key] = item
+            existing = daily_punches.get(key)
+            if not existing:
+                daily_punches[key] = item
+            else:
+                existing["firstPunchAt"] = min(existing["firstPunchAt"], item["firstPunchAt"])
+                last_values = [value for value in (existing.get("lastPunchAt"), item.get("lastPunchAt")) if value]
+                existing["lastPunchAt"] = max(last_values) if last_values else None
 
     if not identities:
         raise ValueError("No biometric identities were found in this worksheet")
-    punches = sorted(earliest.values(), key=lambda item: (item["attendanceDate"], item["deviceUserId"]))
+    punches = sorted(daily_punches.values(), key=lambda item: (item["attendanceDate"], item["deviceUserId"]))
     for item in punches:
         item["rowsSeen"] = rows_seen
     return punches, errors, {
@@ -489,6 +517,7 @@ def parse_essl_form_j_pdf(content: bytes) -> tuple[list[dict], list[dict], dict]
                     "deviceName": device_name,
                     "attendanceDate": date(year, month, day),
                     "firstPunchAt": punch_at,
+                    "lastPunchAt": None,
                     "sourcePage": page_number,
                 })
     if not identities:

@@ -28,7 +28,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=56">
+  <link rel="stylesheet" href="/styles.css?v=57">
   <link rel="stylesheet" href="/auth-shared.css?v=9">
 </head>
 <body>
@@ -289,6 +289,7 @@
           <div class="page-heading"><h2 id="attendance-heading">Attendance</h2><button class="button button-secondary" id="refresh-attendance" type="button"><span data-icon="refresh"></span>Refresh</button></div>
           <div class="compact-metrics" id="attendance-metrics"></div>
           <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Class</th><th>Faculty</th><th>Room</th><th>Students</th><th>Register</th><th></th></tr></thead><tbody id="attendance-table-body"></tbody></table></div><div class="mobile-records" id="attendance-mobile-list"></div></article>
+          <article class="surface table-surface staff-attendance-surface"><div class="surface-head"><div><h3>Staff attendance</h3><p>Biometric arrival and departure records for institute staff.</p></div><span class="status status-active" id="staff-attendance-count">0 records</span></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Staff member</th><th>Date</th><th>Arrival</th><th>Departure</th><th>Status</th></tr></thead><tbody id="staff-attendance-table-body"></tbody></table></div><div class="mobile-records" id="staff-attendance-mobile-list"></div></article>
         </section>
 
         <section class="app-view" id="academics" aria-labelledby="academics-heading">
@@ -396,6 +397,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="/app.js?v=71" defer></script>
+  <script src="/app.js?v=72" defer></script>
 </body>
 </html>

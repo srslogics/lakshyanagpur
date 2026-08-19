@@ -524,17 +524,20 @@ class AttendanceEntry(Base):
 
 
 class DeviceAttendanceIdentity(TimestampMixin, Base):
-    """Persisted mapping between a biometric enrolment ID and one student."""
+    """Persisted mapping between a biometric enrolment ID and one person."""
 
     __tablename__ = "device_attendance_identities"
     __table_args__ = (
         UniqueConstraint("device_key", "device_user_id", name="uq_device_attendance_user"),
         UniqueConstraint("device_key", "student_id", name="uq_device_attendance_student"),
+        UniqueConstraint("device_key", "staff_user_id", name="uq_device_attendance_staff"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("dai"))
     device_key: Mapped[str] = mapped_column(String(120), index=True)
     device_user_id: Mapped[str] = mapped_column(String(120), index=True)
     student_id: Mapped[str | None] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    staff_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    is_staff_device: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_ignored: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
 
@@ -559,7 +562,7 @@ class BiometricImportBatch(Base):
 
 
 class BiometricAttendanceDay(Base):
-    """Storage-efficient first punch retained for each device user and day."""
+    """Storage-efficient first and last punches retained for each person and day."""
 
     __tablename__ = "biometric_attendance_days"
     __table_args__ = (
@@ -575,8 +578,10 @@ class BiometricAttendanceDay(Base):
     device_key: Mapped[str] = mapped_column(String(120), index=True)
     device_user_id: Mapped[str] = mapped_column(String(120), index=True)
     student_id: Mapped[str | None] = mapped_column(ForeignKey("students.id", ondelete="SET NULL"), index=True)
+    staff_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
     attendance_date: Mapped[date] = mapped_column(Date, index=True)
     first_punch_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    last_punch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
 

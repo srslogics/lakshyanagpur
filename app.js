@@ -36,7 +36,7 @@ const cachedUser = (() => {
   try { return JSON.parse(sessionStorage.getItem("lakshya_user") || "null"); }
   catch { return null; }
 })();
-const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], conversations: { threads: [], subjects: [], canCreate: false, canAnnounce: true }, inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
+const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], staffAttendance: { records: [], staffCount: 0, recordCount: 0 }, notices: [], conversations: { threads: [], subjects: [], canCreate: false, canAnnounce: true }, inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 const loadedResources = new Set();
 const resourceLoads = new Map();
 const ROLE_VIEWS = {
@@ -297,7 +297,7 @@ function clearSession() {
   state.view = "dashboard";
   loadedResources.clear();
   resourceLoads.clear();
-  Object.assign(state, { students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], notices: [], conversations: { threads: [], subjects: [], canCreate: false, canAnnounce: true }, inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
+  Object.assign(state, { students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], staffAttendance: { records: [], staffCount: 0, recordCount: 0 }, notices: [], conversations: { threads: [], subjects: [], canCreate: false, canAnnounce: true }, inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] });
   sessionStorage.removeItem("lakshya_token");
   sessionStorage.removeItem("lakshya_user");
 }
@@ -476,7 +476,12 @@ async function loadResource(resource) {
     } else if (resource === "references") state.timetable = { ...state.timetable, ...await api("/api/workspace/reference-data") };
     else if (resource === "assignments") state.assignments = await api("/api/academics/assignments");
     else if (resource === "examinations") state.examinations = await api("/api/examinations");
-    else if (resource === "attendance") state.attendanceSessions = await api("/api/attendance/sessions");
+    else if (resource === "attendance") {
+      [state.attendanceSessions, state.staffAttendance] = await Promise.all([
+        api("/api/attendance/sessions"),
+        api("/api/attendance/staff-biometric"),
+      ]);
+    }
     else if (resource === "notices") state.notices = await api("/api/communication/notices");
     else if (resource === "conversations") state.conversations = await api("/api/communication/inbox");
     else if (resource === "inventory") state.inventory = await api("/api/inventory/bootstrap");
@@ -1053,9 +1058,13 @@ function renderExaminations() {
 
 function renderAttendance() {
   const submitted = state.attendanceSessions.filter(item => item.registerStatus === "submitted").length;
-  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.attendanceSessions.length) }, { label: "Submitted", value: String(submitted) }, { label: "Draft", value: String(state.attendanceSessions.filter(item => item.registerStatus === "draft").length) }, { label: "Pending", value: String(state.attendanceSessions.length - submitted) }]);
+  const staffRecords = state.staffAttendance?.records || [];
+  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.attendanceSessions.length) }, { label: "Submitted", value: String(submitted) }, { label: "Draft", value: String(state.attendanceSessions.filter(item => item.registerStatus === "draft").length) }, { label: "Pending", value: String(state.attendanceSessions.length - submitted) }, { label: "Staff punches", value: String(staffRecords.length) }]);
   $("#attendance-table-body").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<tr><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</small></td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${item.markedCount}/${item.studentCount}</td><td>${status(item.registerStatus)}</td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">Open</button></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("calendar-check", "No attendance registers")}</td></tr>`;
   $("#attendance-mobile-list").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</p></div>${status(item.registerStatus)}</div><div class="mobile-record-meta"><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Marked</span><strong>${item.markedCount}/${item.studentCount}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">Open register</button></article>`).join("") : emptyState("calendar-check", "No attendance registers");
+  $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffRecords.map(item => `<tr><td><strong>${esc(item.fullName)}</strong><br><small>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)}</small></td><td>${formatDate(item.date)}</td><td>${classTime(item.arrivalAt)}</td><td>${item.departureAt ? classTime(item.departureAt) : "—"}</td><td><span class="status status-active">Recorded</span></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.")}</td></tr>`;
+  $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffRecords.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.fullName)}</h3><p>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)} · ${formatDate(item.date)}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "—"}</strong></div></div></article>`).join("") : emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.");
+  $("#staff-attendance-count").textContent = `${staffRecords.length} ${staffRecords.length === 1 ? "record" : "records"}`;
 }
 
 function renderCommunication() {
@@ -3113,7 +3122,7 @@ function bindEvents() {
     showSettingsSection(tabs[next].dataset.settingsSection);
     tabs[next].focus();
   });
-  $("#refresh-attendance").addEventListener("click", async () => { try { state.attendanceSessions = await api("/api/attendance/sessions"); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/sessions"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
   $$("[data-report-export]").forEach(button => button.addEventListener("click", () => downloadReport(button.dataset.reportExport, button)));
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));

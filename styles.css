@@ -276,6 +276,9 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 
 /* Data workspaces */
 .table-surface { min-height: auto; padding: 0; overflow: hidden; }
+.staff-attendance-surface { margin-top: 18px; }
+.staff-attendance-surface > .surface-head { align-items: center; margin: 0; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.staff-attendance-surface > .surface-head p { margin: 5px 0 0; color: var(--ink-500); font-size: .7rem; line-height: 1.45; }
 .toolbar { min-height: 72px; display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--line); background: var(--surface-muted); }
 .toolbar select { width: auto; min-width: 160px; height: 44px; padding-right: 34px; font-size: .78rem; }
 .search-field { width: 250px; position: relative; display: block; }

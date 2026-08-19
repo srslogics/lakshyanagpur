@@ -10,6 +10,7 @@ from ..models import (
     AttendanceEntry,
     AttendancePeriodSummary,
     AttendanceRegister,
+    BiometricAttendanceDay,
     Batch,
     ClassSession,
     Enrollment,
@@ -318,6 +319,45 @@ def list_sessions(db: Session = Depends(get_db), user: User = Depends(require_ro
         db,
         _session_query(db).order_by(ClassSession.starts_at.desc()).all(),
     )
+
+
+@router.get("/staff-biometric")
+def list_staff_biometric_attendance(
+    day: date | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*ROLES)),
+):
+    query = (
+        db.query(BiometricAttendanceDay, User)
+        .outerjoin(User, User.id == BiometricAttendanceDay.staff_user_id)
+        .filter(BiometricAttendanceDay.student_id.is_(None))
+    )
+    if day:
+        query = query.filter(BiometricAttendanceDay.attendance_date == day)
+    rows = (
+        query.order_by(
+            BiometricAttendanceDay.attendance_date.desc(),
+            BiometricAttendanceDay.first_punch_at.desc(),
+            User.full_name,
+        )
+        .limit(500)
+        .all()
+    )
+    records = [{
+        "id": attendance.id,
+        "staffUserId": staff.id if staff else None,
+        "fullName": staff.full_name if staff else "Unassigned staff",
+        "role": staff.role if staff else "staff",
+        "deviceUserId": attendance.device_user_id,
+        "date": attendance.attendance_date.isoformat(),
+        "arrivalAt": _aware(attendance.first_punch_at).isoformat(),
+        "departureAt": _aware(attendance.last_punch_at).isoformat() if attendance.last_punch_at else None,
+    } for attendance, staff in rows]
+    return {
+        "records": records,
+        "staffCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records}),
+        "recordCount": len(records),
+    }
 
 
 @router.get("/bootstrap")

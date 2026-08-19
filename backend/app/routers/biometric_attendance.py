@@ -42,6 +42,11 @@ from ..services import audit
 
 router = APIRouter(prefix="/api/attendance/biometric-imports", tags=["biometric attendance"])
 DEVICE_KEY = "x2008-abfr220607313"
+UNASSIGNED_STAFF_DEVICE_IDS = {"50"}
+STAFF_ROLES = {
+    "owner", "director", "admissions_manager", "counsellor", "front_desk",
+    "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper",
+}
 DEVICE_SOURCE_CODE_ALIASES = {
     "51": "E-02",  # Vidhisha patil -> Vidisha Patil
     "52": "E-03",  # Vihan Jamnik -> Vihan R. Jamnik
@@ -121,16 +126,30 @@ def _active_students(db: Session):
     return result
 
 
+def _active_staff(db: Session):
+    return [
+        {"id": item.id, "fullName": item.full_name, "role": item.role}
+        for item in (
+            db.query(User)
+            .filter(User.is_active.is_(True), User.role.in_(STAFF_ROLES))
+            .order_by(User.full_name)
+            .all()
+        )
+    ]
+
+
 class BiometricMappingChoice(BaseModel):
     device_user_id: str = Field(alias="deviceUserId", min_length=1, max_length=120)
     student_id: str | None = Field(default=None, alias="studentId")
+    staff_user_id: str | None = Field(default=None, alias="staffUserId")
+    unassigned_staff: bool = Field(default=False, alias="unassignedStaff")
     ignore: bool = False
     model_config = ConfigDict(populate_by_name=True)
 
     @model_validator(mode="after")
     def one_target(self):
-        if bool(self.student_id) == bool(self.ignore):
-            raise ValueError("Choose one student or mark the device ID as ignored")
+        if sum((bool(self.student_id), bool(self.staff_user_id), bool(self.unassigned_staff), bool(self.ignore))) != 1:
+            raise ValueError("Choose one student, one staff account, unassigned staff, or mark the device ID as ignored")
         return self
 
 
@@ -235,6 +254,7 @@ async def preview_biometric_import(
     })
     mappings = _device_mappings(db)
     students = _active_students(db)
+    staff = _active_staff(db)
     return {
         "previewToken": token,
         "sourceName": filename,
@@ -248,9 +268,12 @@ async def preview_biometric_import(
         "report": source_report,
         "sheets": sheets_payload,
         "students": students,
+        "staff": staff,
         "savedMappings": [{
             "deviceUserId": device_user_id,
             "studentId": mapping.student_id,
+            "staffUserId": mapping.staff_user_id,
+            "unassignedStaff": mapping.is_staff_device,
             "ignore": mapping.is_ignored,
         } for device_user_id, mapping in sorted(mappings.items())],
     }
@@ -328,6 +351,8 @@ def analyze_biometric_import(
             "lastDate": item["attendanceDate"],
             "dayCount": 0,
             "studentId": None,
+            "staffUserId": None,
+            "unassignedStaff": False,
             "ignore": False,
         })
         if not person["deviceName"] and item["deviceName"]:
@@ -336,6 +361,7 @@ def analyze_biometric_import(
         person["lastDate"] = max(person["lastDate"], item["attendanceDate"])
         person["dayCount"] += 1
     students = _active_students(db)
+    staff = _active_staff(db)
     by_name = defaultdict(list)
     by_source_code = defaultdict(list)
     for student in students:
@@ -345,12 +371,22 @@ def analyze_biometric_import(
         match = re.fullmatch(r"([A-Za-z]+)[^0-9]*(\d+)", source_code)
         if match:
             by_source_code[f"{match.group(1).upper()}{int(match.group(2))}"].append(student["id"])
+    staff_by_name = defaultdict(list)
+    for person in staff:
+        normalized_name = "".join(character for character in person["fullName"].casefold() if character.isalnum())
+        staff_by_name[normalized_name].append(person["id"])
     for device_user_id, person in people.items():
         mapping = mappings.get(device_user_id)
         if mapping:
             person["studentId"] = mapping.student_id
-            person["ignore"] = mapping.is_ignored
+            person["staffUserId"] = mapping.staff_user_id
+            person["unassignedStaff"] = mapping.is_staff_device
+            person["ignore"] = mapping.is_ignored and not mapping.is_staff_device
             person["matchReason"] = "Saved mapping"
+            continue
+        if device_user_id in UNASSIGNED_STAFF_DEVICE_IDS:
+            person["unassignedStaff"] = True
+            person["matchReason"] = "Staff device"
             continue
         source_identifier = DEVICE_SOURCE_CODE_ALIASES.get(device_user_id, device_user_id)
         code_match = re.fullmatch(r"([A-Za-z]+)[^0-9]*(\d+)", source_identifier)
@@ -362,6 +398,9 @@ def analyze_biometric_import(
         if len(candidates) == 1:
             person["studentId"] = candidates[0]
             person["matchReason"] = "Confirmed name merge" if device_user_id in DEVICE_SOURCE_CODE_ALIASES else "Student code" if code_candidates else "Exact name"
+        elif len(staff_by_name.get(normalized_name, [])) == 1:
+            person["staffUserId"] = staff_by_name[normalized_name][0]
+            person["matchReason"] = "Exact staff name"
     return {
         "rowsSeen": punches[0].get("rowsSeen", len(punches)),
         "uniqueAttendanceDays": len(punches),
@@ -377,6 +416,7 @@ def _apply_mapping_choices(
     actor: User,
     choices: dict[str, BiometricMappingChoice],
     active_ids: set[str],
+    active_staff_ids: set[str],
 ) -> dict[str, DeviceAttendanceIdentity]:
     """Apply a complete mapping review without one database query per device ID."""
     mappings = _device_mappings(db)
@@ -385,18 +425,33 @@ def _apply_mapping_choices(
         for device_user_id, mapping in mappings.items()
         if device_user_id not in choices and mapping.student_id
     }
+    staff_owners = {
+        mapping.staff_user_id: device_user_id
+        for device_user_id, mapping in mappings.items()
+        if device_user_id not in choices and mapping.staff_user_id
+    }
     for device_user_id, choice in choices.items():
         if choice.student_id and choice.student_id not in active_ids:
             raise HTTPException(409, f"The selected student for device ID {device_user_id} is not active")
+        if choice.staff_user_id and choice.staff_user_id not in active_staff_ids:
+            raise HTTPException(409, f"The selected staff account for device ID {device_user_id} is not active")
         conflicting_device_id = student_owners.get(choice.student_id) if choice.student_id else None
         if conflicting_device_id and conflicting_device_id != device_user_id:
             raise HTTPException(
                 409,
                 f"Device IDs {conflicting_device_id} and {device_user_id} cannot be assigned to the same student",
             )
+        conflicting_staff_device_id = staff_owners.get(choice.staff_user_id) if choice.staff_user_id else None
+        if conflicting_staff_device_id and conflicting_staff_device_id != device_user_id:
+            raise HTTPException(
+                409,
+                f"Device IDs {conflicting_staff_device_id} and {device_user_id} cannot be assigned to the same staff account",
+            )
         mapping = mappings.get(device_user_id)
         if mapping:
             mapping.student_id = choice.student_id
+            mapping.staff_user_id = choice.staff_user_id
+            mapping.is_staff_device = choice.unassigned_staff
             mapping.is_ignored = choice.ignore
             mapping.created_by = actor.id
         else:
@@ -404,6 +459,8 @@ def _apply_mapping_choices(
                 device_key=DEVICE_KEY,
                 device_user_id=device_user_id,
                 student_id=choice.student_id,
+                staff_user_id=choice.staff_user_id,
+                is_staff_device=choice.unassigned_staff,
                 is_ignored=choice.ignore,
                 created_by=actor.id,
             )
@@ -411,6 +468,8 @@ def _apply_mapping_choices(
             mappings[device_user_id] = mapping
         if choice.student_id:
             student_owners[choice.student_id] = device_user_id
+        if choice.staff_user_id:
+            staff_owners[choice.staff_user_id] = device_user_id
     return mappings
 
 
@@ -452,32 +511,24 @@ def commit_biometric_import(
     raw_content = _decode(preview["content"])
     source_hash = sha256(raw_content).hexdigest()
     duplicate_file = db.query(BiometricImportBatch).filter_by(source_hash=source_hash).one_or_none()
-    if duplicate_file:
-        with _PREVIEW_LOCK:
-            _PREVIEWS.pop(payload.preview_token, None)
-        return {
-            "id": duplicate_file.id,
-            "sourceName": duplicate_file.source_name,
-            "attendanceDays": duplicate_file.attendance_days,
-            "matchedStudents": duplicate_file.matched_students,
-            "ignoredDeviceIds": duplicate_file.ignored_device_ids,
-            "punchesCreated": 0,
-            "punchesUpdated": 0,
-            "registers": [],
-            "alreadyImported": True,
-            "message": "Attendance was already imported; no duplicate records were created",
-        }
 
     active_students = _active_students(db)
     active_ids = {item["id"] for item in active_students}
+    active_staff = _active_staff(db)
+    active_staff_ids = {item["id"] for item in active_staff}
     choices = {normalize_device_id(item.device_user_id): item for item in payload.mappings}
-    mappings = _apply_mapping_choices(db, actor, choices, active_ids)
+    mappings = _apply_mapping_choices(db, actor, choices, active_ids, active_staff_ids)
     db.flush()
     device_ids = {item["deviceUserId"] for item in punches}
     unresolved = sorted(
         device_id for device_id in device_ids
         if device_id not in mappings
-        or (not mappings[device_id].student_id and not mappings[device_id].is_ignored)
+        or (
+            not mappings[device_id].student_id
+            and not mappings[device_id].staff_user_id
+            and not mappings[device_id].is_staff_device
+            and not mappings[device_id].is_ignored
+        )
     )
     if unresolved:
         raise HTTPException(409, {
@@ -485,23 +536,39 @@ def commit_biometric_import(
             "deviceUserIds": unresolved,
         })
 
-    ignored_ids = {device_id for device_id in device_ids if mappings[device_id].is_ignored}
+    ignored_ids = {
+        device_id for device_id in device_ids
+        if mappings[device_id].is_ignored and not mappings[device_id].is_staff_device
+    }
     linked = [item for item in punches if item["deviceUserId"] not in ignored_ids]
-    import_batch = BiometricImportBatch(
-        device_key=DEVICE_KEY,
-        source_name=preview["filename"][:255],
-        source_hash=source_hash,
-        source_sheet=sheet.name[:255],
-        rows_seen=punches[0].get("rowsSeen", len(punches)),
-        attendance_days=len({item["attendanceDate"] for item in linked}),
-        matched_students=len({mappings[item["deviceUserId"]].student_id for item in linked}),
-        ignored_device_ids=len(ignored_ids),
-        duplicate_rows=max(0, punches[0].get("rowsSeen", len(punches)) - len(punches)),
-        status="completed",
-        actor_id=actor.id,
-    )
-    db.add(import_batch)
-    db.flush()
+    import_batch = duplicate_file
+    if not import_batch:
+        import_batch = BiometricImportBatch(
+            device_key=DEVICE_KEY,
+            source_name=preview["filename"][:255],
+            source_hash=source_hash,
+            source_sheet=sheet.name[:255],
+            rows_seen=punches[0].get("rowsSeen", len(punches)),
+            attendance_days=len({item["attendanceDate"] for item in linked}),
+            matched_students=len({
+                mappings[item["deviceUserId"]].student_id
+                for item in linked
+                if mappings[item["deviceUserId"]].student_id
+            }),
+            ignored_device_ids=len(ignored_ids),
+            duplicate_rows=max(0, punches[0].get("rowsSeen", len(punches)) - len(punches)),
+            status="completed",
+            actor_id=actor.id,
+        )
+        db.add(import_batch)
+        db.flush()
+    else:
+        import_batch.matched_students = len({
+            mappings[item["deviceUserId"]].student_id
+            for item in linked
+            if mappings[item["deviceUserId"]].student_id
+        })
+        import_batch.ignored_device_ids = len(ignored_ids)
 
     enrollments = {}
     enrollment_rows = (
@@ -514,6 +581,8 @@ def commit_biometric_import(
         enrollments.setdefault(item.student_id, item)
     created_punches = 0
     updated_punches = 0
+    staff_punches_created = 0
+    staff_punches_updated = 0
     register_student_rows: dict[tuple, dict[str, datetime]] = defaultdict(dict)
     existing_days = {}
     if linked:
@@ -534,18 +603,36 @@ def commit_biometric_import(
     for item in linked:
         mapping = mappings[item["deviceUserId"]]
         student_id = mapping.student_id
+        staff_user_id = mapping.staff_user_id
+        is_staff_device = mapping.is_staff_device
         attendance_key = (item["deviceUserId"], item["attendanceDate"])
         existing = existing_days.get(attendance_key)
         if existing:
             existing_punch = existing.first_punch_at
             if existing_punch.tzinfo is None:
                 existing_punch = existing_punch.replace(tzinfo=timezone.utc)
+            changed = False
             if item["firstPunchAt"] < existing_punch:
                 existing.first_punch_at = item["firstPunchAt"]
-                existing.student_id = student_id
-                existing.import_batch_id = import_batch.id
-                updated_punches += 1
                 existing_punch = item["firstPunchAt"]
+                changed = True
+            incoming_last = item.get("lastPunchAt")
+            existing_last = existing.last_punch_at
+            if existing_last and existing_last.tzinfo is None:
+                existing_last = existing_last.replace(tzinfo=timezone.utc)
+            if incoming_last and (not existing_last or incoming_last > existing_last):
+                existing.last_punch_at = incoming_last
+                changed = True
+            if existing.student_id != student_id or existing.staff_user_id != staff_user_id:
+                existing.student_id = student_id
+                existing.staff_user_id = staff_user_id
+                changed = True
+            if changed:
+                existing.import_batch_id = import_batch.id
+                if staff_user_id or is_staff_device:
+                    staff_punches_updated += 1
+                else:
+                    updated_punches += 1
             first_punch = min(existing_punch, item["firstPunchAt"])
         else:
             attendance_day = BiometricAttendanceDay(
@@ -553,13 +640,20 @@ def commit_biometric_import(
                 device_key=DEVICE_KEY,
                 device_user_id=item["deviceUserId"],
                 student_id=student_id,
+                staff_user_id=staff_user_id,
                 attendance_date=item["attendanceDate"],
                 first_punch_at=item["firstPunchAt"],
+                last_punch_at=item.get("lastPunchAt"),
             )
             db.add(attendance_day)
             existing_days[attendance_key] = attendance_day
             first_punch = item["firstPunchAt"]
-            created_punches += 1
+            if staff_user_id or is_staff_device:
+                staff_punches_created += 1
+            else:
+                created_punches += 1
+        if not student_id:
+            continue
         enrollment = enrollments.get(student_id)
         batch_name = enrollment.batch if enrollment else None
         if batch_name in {"Tatva", "Essential"}:
@@ -586,7 +680,10 @@ def commit_biometric_import(
                     entry.status = "present"
                     entry.reason = "Biometric first punch"
                     entry.marked_by = actor.id
-                    if not entry.arrival_at or first_punch < entry.arrival_at:
+                    existing_arrival = entry.arrival_at
+                    if existing_arrival and existing_arrival.tzinfo is None:
+                        existing_arrival = existing_arrival.replace(tzinfo=timezone.utc)
+                    if not existing_arrival or first_punch < existing_arrival:
                         entry.arrival_at = first_punch
                 else:
                     db.add(AttendanceEntry(
@@ -640,6 +737,8 @@ def commit_biometric_import(
             "device": DEVICE_KEY,
             "punchesCreated": created_punches,
             "punchesUpdated": updated_punches,
+            "staffPunchesCreated": staff_punches_created,
+            "staffPunchesUpdated": staff_punches_updated,
             "ignoredDeviceIds": sorted(ignored_ids),
             "registers": registers,
         },
@@ -647,6 +746,12 @@ def commit_biometric_import(
     db.commit()
     with _PREVIEW_LOCK:
         _PREVIEWS.pop(payload.preview_token, None)
+    if duplicate_file and not any((created_punches, updated_punches, staff_punches_created, staff_punches_updated)):
+        result_message = "Attendance was already imported; no duplicate records were created"
+    elif duplicate_file:
+        result_message = "Existing attendance import updated with the reviewed student and staff mappings"
+    else:
+        result_message = "Student attendance published and staff punches recorded separately"
     return {
         "id": import_batch.id,
         "sourceName": import_batch.source_name,
@@ -655,6 +760,18 @@ def commit_biometric_import(
         "ignoredDeviceIds": import_batch.ignored_device_ids,
         "punchesCreated": created_punches,
         "punchesUpdated": updated_punches,
+        "staffPunchesCreated": staff_punches_created,
+        "staffPunchesUpdated": staff_punches_updated,
+        "matchedStaff": len({
+            mappings[item["deviceUserId"]].staff_user_id
+            for item in linked
+            if mappings[item["deviceUserId"]].staff_user_id
+        }),
+        "unassignedStaffDeviceIds": sorted({
+            item["deviceUserId"] for item in linked
+            if mappings[item["deviceUserId"]].is_staff_device and not mappings[item["deviceUserId"]].staff_user_id
+        }),
         "registers": registers,
-        "message": "Attendance imported and published to student and parent accounts",
+        "alreadyImported": bool(duplicate_file),
+        "message": result_message,
     }

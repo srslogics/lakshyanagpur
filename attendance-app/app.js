@@ -256,46 +256,53 @@ function renderBiometricMappings() {
     metric("Rows read", analysis.rowsSeen), metric("Daily punches", analysis.uniqueAttendanceDays),
     metric("Duplicates removed", analysis.duplicateRows), metric("Date range", `${analysis.dateFrom} – ${analysis.dateTo}`)
   ].join("");
-  const studentOptions = state.biometric.students.map(student => `<option value="${esc(student.id)}">${esc(student.fullName)} · ${esc(student.admissionNumber)} · ${esc(student.batch || "")}</option>`).join("");
+  const studentOptions = state.biometric.students.map(student => `<option value="student:${esc(student.id)}">${esc(student.fullName)} · ${esc(student.admissionNumber)} · ${esc(student.batch || "")}</option>`).join("");
+  const staffOptions = (state.biometric.staff || []).map(person => `<option value="staff:${esc(person.id)}">${esc(person.fullName)} · ${esc(person.role.replaceAll("_", " "))}</option>`).join("");
   $("#biometric-mappings").innerHTML = analysis.deviceUsers.map(person => `
     <article class="mapping-row" data-device-user-id="${esc(person.deviceUserId)}">
       <div><strong>Device ID ${esc(person.deviceUserId)}</strong><span>${esc(person.deviceName || "Name not supplied")} · ${person.dayCount} ${person.dayCount === 1 ? "day" : "days"}${person.matchReason ? ` · ${esc(person.matchReason)}` : ""}</span></div>
-      <select data-device-student aria-label="Student for device ID ${esc(person.deviceUserId)}"><option value="">Choose student</option>${studentOptions}</select>
+      <select data-device-person aria-label="Person for device ID ${esc(person.deviceUserId)}"><option value="">Choose student or staff</option><optgroup label="Students">${studentOptions}</optgroup><optgroup label="Staff">${staffOptions}<option value="staff-unassigned">Unassigned staff · keep device ID</option></optgroup></select>
       <label class="ignore-device"><input type="checkbox" data-device-ignore> Ignore this ID</label>
     </article>`).join("");
   analysis.deviceUsers.forEach(person => {
     const row = $(`[data-device-user-id="${CSS.escape(person.deviceUserId)}"]`, $("#biometric-mappings"));
-    $("[data-device-student]", row).value = person.studentId || "";
+    $("[data-device-person]", row).value = person.studentId ? `student:${person.studentId}` : person.staffUserId ? `staff:${person.staffUserId}` : person.unassignedStaff ? "staff-unassigned" : "";
     $("[data-device-ignore]", row).checked = Boolean(person.ignore);
-    $("[data-device-student]", row).disabled = Boolean(person.ignore);
+    $("[data-device-person]", row).disabled = Boolean(person.ignore);
   });
   updateBiometricImportReadiness();
 }
 
 function biometricMappings() {
-  return $$('[data-device-user-id]', $("#biometric-mappings")).map(row => ({
-    row,
-    deviceUserId:row.dataset.deviceUserId,
-    studentId:$("[data-device-student]", row).value || null,
-    ignore:$("[data-device-ignore]", row).checked
-  }));
+  return $$('[data-device-user-id]', $("#biometric-mappings")).map(row => {
+    const target = $("[data-device-person]", row).value || "";
+    const [type, id] = target.split(":", 2);
+    return {
+      row,
+      deviceUserId:row.dataset.deviceUserId,
+      studentId:type === "student" ? id : null,
+      staffUserId:type === "staff" ? id : null,
+      unassignedStaff:target === "staff-unassigned",
+      ignore:$("[data-device-ignore]", row).checked
+    };
+  });
 }
 
 function updateBiometricImportReadiness({focusFirst = false} = {}) {
   const mappings = biometricMappings();
-  const incomplete = mappings.filter(item => !item.studentId && !item.ignore);
+  const incomplete = mappings.filter(item => !item.studentId && !item.staffUserId && !item.unassignedStaff && !item.ignore);
   mappings.forEach(item => item.row.classList.toggle("needs-attention", incomplete.includes(item)));
   const error = $("#biometric-import-error");
   const button = $("#import-biometric");
   if (incomplete.length) {
     const ids = incomplete.slice(0, 6).map(item => item.deviceUserId).join(", ");
     const remaining = incomplete.length > 6 ? ` and ${incomplete.length - 6} more` : "";
-    error.textContent = `${incomplete.length} device ${incomplete.length === 1 ? "ID needs" : "IDs need"} attention: choose a student or select Ignore for ${ids}${remaining}.`;
+    error.textContent = `${incomplete.length} device ${incomplete.length === 1 ? "ID needs" : "IDs need"} attention: choose a student or staff account, or select Ignore for ${ids}${remaining}.`;
     error.classList.remove("hidden");
     button.textContent = `Resolve ${incomplete.length} ${incomplete.length === 1 ? "ID" : "IDs"}`;
     if (focusFirst) {
       incomplete[0].row.scrollIntoView({behavior:"smooth", block:"center"});
-      $("[data-device-student]", incomplete[0].row).focus({preventScroll:true});
+      $("[data-device-person]", incomplete[0].row).focus({preventScroll:true});
     }
   } else {
     error.classList.add("hidden");
@@ -964,9 +971,9 @@ function bindEvents() {
     const row = event.target.closest("[data-device-user-id]");
     if (!row) return;
     const ignore = $("[data-device-ignore]", row);
-    const student = $("[data-device-student]", row);
-    if (event.target === ignore) { student.disabled = ignore.checked; if (ignore.checked) student.value = ""; }
-    if (event.target === student && student.value) { ignore.checked = false; student.disabled = false; }
+    const person = $("[data-device-person]", row);
+    if (event.target === ignore) { person.disabled = ignore.checked; if (ignore.checked) person.value = ""; }
+    if (event.target === person && person.value) { ignore.checked = false; person.disabled = false; }
     updateBiometricImportReadiness();
   });
   window.addEventListener("online", () => setConnectionState(true));

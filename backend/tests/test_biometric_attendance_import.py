@@ -164,6 +164,114 @@ def test_biometric_file_import_maps_students_and_keeps_first_daily_punch(client,
     assert statuses[no_punch.id] == "absent"
 
 
+def test_biometric_import_keeps_staff_punches_out_of_student_registers(client, database):
+    operator, tatva, _ = setup_students(database)
+    staff = User(
+        mobile="9000000199",
+        full_name="Office Staff",
+        role="front_desk",
+        password_hash=hash_password("Password123!"),
+    )
+    database.add(staff)
+    database.commit()
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    content = (
+        b"User ID,Name,Timestamp\n"
+        b"101,Tatva Student,2026-08-12 08:15:00\n"
+        b"900,Office Staff,2026-08-12 08:02:00\n"
+        b"900,Office Staff,2026-08-12 18:06:00\n"
+    )
+    staged = preview(client, headers, content)
+    assert any(item["id"] == staff.id for item in staged["staff"])
+    selection = {
+        "previewToken": staged["previewToken"],
+        "sheetName": "Attendance",
+        "deviceIdColumn": "User ID",
+        "nameColumn": "Name",
+        "datetimeColumn": "Timestamp",
+        "dateColumn": None,
+        "timeColumn": None,
+    }
+    analysis = client.post(
+        "/api/attendance/biometric-imports/analyze",
+        headers=headers,
+        json=selection,
+    )
+    people = {item["deviceUserId"]: item for item in analysis.json()["deviceUsers"]}
+    assert people["900"]["staffUserId"] == staff.id
+    committed = client.post(
+        "/api/attendance/biometric-imports",
+        headers=headers,
+        json={
+            **selection,
+            "mappings": [
+                {"deviceUserId": "101", "studentId": tatva.id, "ignore": False},
+                {"deviceUserId": "900", "staffUserId": staff.id, "ignore": False},
+            ],
+        },
+    )
+    assert committed.status_code == 200, committed.text
+    assert committed.json()["staffPunchesCreated"] == 1
+    assert committed.json()["matchedStaff"] == 1
+    staff_day = database.query(BiometricAttendanceDay).filter_by(staff_user_id=staff.id).one()
+    assert staff_day.student_id is None
+    assert staff_day.last_punch_at is not None
+    register = database.query(AttendanceRegister).filter_by(register_kind="biometric").one()
+    assert database.query(AttendanceEntry).filter_by(register_id=register.id).count() == 1
+    staff_rows = client.get("/api/attendance/staff-biometric", headers=headers)
+    assert staff_rows.status_code == 200
+    assert staff_rows.json()["records"][0]["fullName"] == "Office Staff"
+    assert staff_rows.json()["records"][0]["departureAt"] is not None
+
+
+def test_biometric_import_keeps_unassigned_staff_visible(client, database):
+    operator, tatva, _ = setup_students(database)
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    content = (
+        b"User ID,Name,Timestamp\n"
+        b"101,Tatva Student,2026-08-10 08:15:00\n"
+        b"50,50,2026-08-10 13:25:00\n"
+    )
+    staged = preview(client, headers, content)
+    selection = {
+        "previewToken": staged["previewToken"],
+        "sheetName": "Attendance",
+        "deviceIdColumn": "User ID",
+        "nameColumn": "Name",
+        "datetimeColumn": "Timestamp",
+        "dateColumn": None,
+        "timeColumn": None,
+    }
+    analysis = client.post(
+        "/api/attendance/biometric-imports/analyze",
+        headers=headers,
+        json=selection,
+    )
+    people = {item["deviceUserId"]: item for item in analysis.json()["deviceUsers"]}
+    assert people["50"]["unassignedStaff"] is True
+    committed = client.post(
+        "/api/attendance/biometric-imports",
+        headers=headers,
+        json={
+            **selection,
+            "mappings": [
+                {"deviceUserId": "101", "studentId": tatva.id},
+                {"deviceUserId": "50", "unassignedStaff": True},
+            ],
+        },
+    )
+    assert committed.status_code == 200, committed.text
+    assert committed.json()["unassignedStaffDeviceIds"] == ["50"]
+    staff_day = database.query(BiometricAttendanceDay).filter_by(device_user_id="50").one()
+    assert staff_day.student_id is None
+    assert staff_day.staff_user_id is None
+    staff_rows = client.get("/api/attendance/staff-biometric", headers=headers)
+    assert staff_rows.status_code == 200
+    record = staff_rows.json()["records"][0]
+    assert record["fullName"] == "Unassigned staff"
+    assert record["deviceUserId"] == "50"
+
+
 def test_biometric_import_rejects_unmapped_device_ids_and_duplicate_files(client, database):
     operator, tatva, _ = setup_students(database)
     headers = {"Authorization": f"Bearer {create_token(operator)}"}
