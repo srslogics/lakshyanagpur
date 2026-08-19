@@ -372,36 +372,46 @@ def analyze_biometric_import(
     }
 
 
-def _upsert_mapping(db: Session, actor: User, choice: BiometricMappingChoice, active_ids: set[str]):
-    device_user_id = normalize_device_id(choice.device_user_id)
-    if choice.student_id and choice.student_id not in active_ids:
-        raise HTTPException(409, f"The selected student for device ID {device_user_id} is not active")
-    existing = (
-        db.query(DeviceAttendanceIdentity)
-        .filter_by(device_key=DEVICE_KEY, device_user_id=device_user_id)
-        .one_or_none()
-    )
-    student_conflict = None
-    if choice.student_id:
-        student_conflict = (
-            db.query(DeviceAttendanceIdentity)
-            .filter_by(device_key=DEVICE_KEY, student_id=choice.student_id)
-            .one_or_none()
-        )
-    if student_conflict and (not existing or student_conflict.id != existing.id):
-        raise HTTPException(409, "One student cannot be assigned to two biometric device IDs")
-    if existing:
-        existing.student_id = choice.student_id
-        existing.is_ignored = choice.ignore
-        existing.created_by = actor.id
-    else:
-        db.add(DeviceAttendanceIdentity(
-            device_key=DEVICE_KEY,
-            device_user_id=device_user_id,
-            student_id=choice.student_id,
-            is_ignored=choice.ignore,
-            created_by=actor.id,
-        ))
+def _apply_mapping_choices(
+    db: Session,
+    actor: User,
+    choices: dict[str, BiometricMappingChoice],
+    active_ids: set[str],
+) -> dict[str, DeviceAttendanceIdentity]:
+    """Apply a complete mapping review without one database query per device ID."""
+    mappings = _device_mappings(db)
+    student_owners = {
+        mapping.student_id: device_user_id
+        for device_user_id, mapping in mappings.items()
+        if device_user_id not in choices and mapping.student_id
+    }
+    for device_user_id, choice in choices.items():
+        if choice.student_id and choice.student_id not in active_ids:
+            raise HTTPException(409, f"The selected student for device ID {device_user_id} is not active")
+        conflicting_device_id = student_owners.get(choice.student_id) if choice.student_id else None
+        if conflicting_device_id and conflicting_device_id != device_user_id:
+            raise HTTPException(
+                409,
+                f"Device IDs {conflicting_device_id} and {device_user_id} cannot be assigned to the same student",
+            )
+        mapping = mappings.get(device_user_id)
+        if mapping:
+            mapping.student_id = choice.student_id
+            mapping.is_ignored = choice.ignore
+            mapping.created_by = actor.id
+        else:
+            mapping = DeviceAttendanceIdentity(
+                device_key=DEVICE_KEY,
+                device_user_id=device_user_id,
+                student_id=choice.student_id,
+                is_ignored=choice.ignore,
+                created_by=actor.id,
+            )
+            db.add(mapping)
+            mappings[device_user_id] = mapping
+        if choice.student_id:
+            student_owners[choice.student_id] = device_user_id
+    return mappings
 
 
 def _open_biometric_register(db: Session, attendance_date, batch_name: str):
@@ -448,10 +458,8 @@ def commit_biometric_import(
     active_students = _active_students(db)
     active_ids = {item["id"] for item in active_students}
     choices = {normalize_device_id(item.device_user_id): item for item in payload.mappings}
-    for choice in choices.values():
-        _upsert_mapping(db, actor, choice, active_ids)
+    mappings = _apply_mapping_choices(db, actor, choices, active_ids)
     db.flush()
-    mappings = _device_mappings(db)
     device_ids = {item["deviceUserId"] for item in punches}
     unresolved = sorted(
         device_id for device_id in device_ids
@@ -494,18 +502,27 @@ def commit_biometric_import(
     created_punches = 0
     updated_punches = 0
     register_student_rows: dict[tuple, dict[str, datetime]] = defaultdict(dict)
+    existing_days = {}
+    if linked:
+        attendance_date_from = min(item["attendanceDate"] for item in linked)
+        attendance_date_to = max(item["attendanceDate"] for item in linked)
+        existing_days = {
+            (item.device_user_id, item.attendance_date): item
+            for item in (
+                db.query(BiometricAttendanceDay)
+                .filter(
+                    BiometricAttendanceDay.device_key == DEVICE_KEY,
+                    BiometricAttendanceDay.device_user_id.in_({item["deviceUserId"] for item in linked}),
+                    BiometricAttendanceDay.attendance_date.between(attendance_date_from, attendance_date_to),
+                )
+                .all()
+            )
+        }
     for item in linked:
         mapping = mappings[item["deviceUserId"]]
         student_id = mapping.student_id
-        existing = (
-            db.query(BiometricAttendanceDay)
-            .filter_by(
-                device_key=DEVICE_KEY,
-                device_user_id=item["deviceUserId"],
-                attendance_date=item["attendanceDate"],
-            )
-            .one_or_none()
-        )
+        attendance_key = (item["deviceUserId"], item["attendanceDate"])
+        existing = existing_days.get(attendance_key)
         if existing:
             existing_punch = existing.first_punch_at
             if existing_punch.tzinfo is None:
@@ -518,14 +535,16 @@ def commit_biometric_import(
                 existing_punch = item["firstPunchAt"]
             first_punch = min(existing_punch, item["firstPunchAt"])
         else:
-            db.add(BiometricAttendanceDay(
+            attendance_day = BiometricAttendanceDay(
                 import_batch_id=import_batch.id,
                 device_key=DEVICE_KEY,
                 device_user_id=item["deviceUserId"],
                 student_id=student_id,
                 attendance_date=item["attendanceDate"],
                 first_punch_at=item["firstPunchAt"],
-            ))
+            )
+            db.add(attendance_day)
+            existing_days[attendance_key] = attendance_day
             first_punch = item["firstPunchAt"]
             created_punches += 1
         enrollment = enrollments.get(student_id)

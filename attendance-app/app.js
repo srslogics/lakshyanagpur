@@ -101,12 +101,15 @@ function setConnectionState(online) {
 
 async function resilientFetch(path, options = {}) {
   const attempts = String(options.method || "GET").toUpperCase() === "GET" ? 2 : 1;
+  const timeoutMs = Number(options.timeoutMs) || 15000;
+  const fetchOptions = {...options};
+  delete fetchOptions.timeoutMs;
   let lastError;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(path, {cache:"no-store", ...options, signal:controller.signal});
+      const response = await fetch(path, {cache:"no-store", ...fetchOptions, signal:controller.signal});
       clearTimeout(timer);
       setConnectionState(true);
       if (response.status >= 500 && attempt + 1 < attempts) continue;
@@ -266,6 +269,39 @@ function renderBiometricMappings() {
     $("[data-device-ignore]", row).checked = Boolean(person.ignore);
     $("[data-device-student]", row).disabled = Boolean(person.ignore);
   });
+  updateBiometricImportReadiness();
+}
+
+function biometricMappings() {
+  return $$('[data-device-user-id]', $("#biometric-mappings")).map(row => ({
+    row,
+    deviceUserId:row.dataset.deviceUserId,
+    studentId:$("[data-device-student]", row).value || null,
+    ignore:$("[data-device-ignore]", row).checked
+  }));
+}
+
+function updateBiometricImportReadiness({focusFirst = false} = {}) {
+  const mappings = biometricMappings();
+  const incomplete = mappings.filter(item => !item.studentId && !item.ignore);
+  mappings.forEach(item => item.row.classList.toggle("needs-attention", incomplete.includes(item)));
+  const error = $("#biometric-import-error");
+  const button = $("#import-biometric");
+  if (incomplete.length) {
+    const ids = incomplete.slice(0, 6).map(item => item.deviceUserId).join(", ");
+    const remaining = incomplete.length > 6 ? ` and ${incomplete.length - 6} more` : "";
+    error.textContent = `${incomplete.length} device ${incomplete.length === 1 ? "ID needs" : "IDs need"} attention: choose a student or select Ignore for ${ids}${remaining}.`;
+    error.classList.remove("hidden");
+    button.textContent = `Resolve ${incomplete.length} ${incomplete.length === 1 ? "ID" : "IDs"}`;
+    if (focusFirst) {
+      incomplete[0].row.scrollIntoView({behavior:"smooth", block:"center"});
+      $("[data-device-student]", incomplete[0].row).focus({preventScroll:true});
+    }
+  } else {
+    error.classList.add("hidden");
+    button.textContent = "Import draft registers";
+  }
+  return {mappings, incomplete};
 }
 
 function closeBiometric() {
@@ -274,30 +310,31 @@ function closeBiometric() {
 }
 
 async function importBiometric() {
-  const mappings = $$('[data-device-user-id]', $("#biometric-mappings")).map(row => ({
-    deviceUserId:row.dataset.deviceUserId,
-    studentId:$("[data-device-student]", row).value || null,
-    ignore:$("[data-device-ignore]", row).checked
-  }));
-  const incomplete = mappings.find(item => !item.studentId && !item.ignore);
+  const readiness = updateBiometricImportReadiness({focusFirst:true});
+  const mappings = readiness.mappings.map(({row, ...item}) => item);
+  const incomplete = readiness.incomplete[0];
   const error = $("#biometric-import-error");
   if (incomplete) {
-    error.textContent = `Choose a student or ignore device ID ${incomplete.deviceUserId}.`;
-    error.classList.remove("hidden");
+    toast(`Resolve device ID ${incomplete.deviceUserId} before importing.`);
     return;
   }
   const button = $("#import-biometric");
   button.disabled = true;
-  button.textContent = "Importing…";
+  button.textContent = `Importing ${state.biometric.analysis.uniqueAttendanceDays} punches…`;
   error.classList.add("hidden");
   try {
-    const result = await api("/api/attendance/biometric-imports", {method:"POST", body:JSON.stringify({...biometricSelection(), mappings})});
+    const result = await api("/api/attendance/biometric-imports", {method:"POST", timeoutMs:120000, body:JSON.stringify({...biometricSelection(), mappings})});
     closeBiometric();
     await loadDesk(result.message);
   } catch (requestError) {
     error.textContent = requestError.message;
     error.classList.remove("hidden");
-  } finally { button.disabled = false; button.textContent = "Import draft registers"; }
+    error.scrollIntoView({behavior:"smooth", block:"center"});
+    toast(requestError.message);
+  } finally {
+    button.disabled = false;
+    updateBiometricImportReadiness();
+  }
 }
 
 function clearSession() {
@@ -924,6 +961,7 @@ function bindEvents() {
     const student = $("[data-device-student]", row);
     if (event.target === ignore) { student.disabled = ignore.checked; if (ignore.checked) student.value = ""; }
     if (event.target === student && student.value) { ignore.checked = false; student.disabled = false; }
+    updateBiometricImportReadiness();
   });
   window.addEventListener("online", () => setConnectionState(true));
   window.addEventListener("offline", () => setConnectionState(false));
