@@ -190,8 +190,11 @@ def test_biometric_import_rejects_unmapped_device_ids_and_duplicate_files(client
         headers=headers,
         json={**selection, "previewToken": staged_again["previewToken"], "mappings": []},
     )
-    assert duplicate.status_code == 409
-    assert "already been imported" in duplicate.json()["detail"]
+    assert duplicate.status_code == 200
+    assert duplicate.json()["alreadyImported"] is True
+    assert duplicate.json()["punchesCreated"] == 0
+    assert "already imported" in duplicate.json()["message"]
+    assert database.query(BiometricImportBatch).count() == 1
 
 
 def test_parent_cannot_preview_biometric_attendance(client, parent_headers):

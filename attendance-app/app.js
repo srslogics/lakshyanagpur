@@ -324,6 +324,12 @@ async function importBiometric() {
   error.classList.add("hidden");
   try {
     const result = await api("/api/attendance/biometric-imports", {method:"POST", timeoutMs:120000, body:JSON.stringify({...biometricSelection(), mappings})});
+    const importedDates = (result.registers || []).map(item => item.date).filter(Boolean).sort();
+    const latestImportedDate = importedDates[importedDates.length - 1] || state.biometric.analysis.dateTo;
+    if (latestImportedDate) {
+      state.selectedDate = latestImportedDate;
+      $("#working-date").value = latestImportedDate;
+    }
     closeBiometric();
     await loadDesk(result.message);
   } catch (requestError) {

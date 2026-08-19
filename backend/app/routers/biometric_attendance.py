@@ -453,7 +453,20 @@ def commit_biometric_import(
     source_hash = sha256(raw_content).hexdigest()
     duplicate_file = db.query(BiometricImportBatch).filter_by(source_hash=source_hash).one_or_none()
     if duplicate_file:
-        raise HTTPException(409, "This exact attendance file has already been imported")
+        with _PREVIEW_LOCK:
+            _PREVIEWS.pop(payload.preview_token, None)
+        return {
+            "id": duplicate_file.id,
+            "sourceName": duplicate_file.source_name,
+            "attendanceDays": duplicate_file.attendance_days,
+            "matchedStudents": duplicate_file.matched_students,
+            "ignoredDeviceIds": duplicate_file.ignored_device_ids,
+            "punchesCreated": 0,
+            "punchesUpdated": 0,
+            "registers": [],
+            "alreadyImported": True,
+            "message": "Attendance was already imported; no duplicate records were created",
+        }
 
     active_students = _active_students(db)
     active_ids = {item["id"] for item in active_students}
