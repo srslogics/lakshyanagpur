@@ -24,3 +24,5 @@ services:
         value: 0.0.0.0
       - key: APP_PORT
         value: 10000
+
+# Attendance schema changes are applied by Alembic during every deployment.
