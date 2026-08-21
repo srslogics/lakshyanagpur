@@ -529,7 +529,6 @@ class DeviceAttendanceIdentity(TimestampMixin, Base):
     __tablename__ = "device_attendance_identities"
     __table_args__ = (
         UniqueConstraint("device_key", "device_user_id", name="uq_device_attendance_user"),
-        UniqueConstraint("device_key", "student_id", name="uq_device_attendance_student"),
         UniqueConstraint("device_key", "staff_user_id", name="uq_device_attendance_staff"),
     )
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("dai"))

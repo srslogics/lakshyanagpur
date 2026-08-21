@@ -230,7 +230,7 @@ def test_biometric_import_keeps_unassigned_staff_visible(client, database):
     content = (
         b"User ID,Name,Timestamp\n"
         b"101,Tatva Student,2026-08-10 08:15:00\n"
-        b"50,50,2026-08-10 13:25:00\n"
+        b"900,Unknown,2026-08-10 13:25:00\n"
     )
     staged = preview(client, headers, content)
     selection = {
@@ -248,7 +248,7 @@ def test_biometric_import_keeps_unassigned_staff_visible(client, database):
         json=selection,
     )
     people = {item["deviceUserId"]: item for item in analysis.json()["deviceUsers"]}
-    assert people["50"]["unassignedStaff"] is True
+    assert people["900"]["unassignedStaff"] is False
     committed = client.post(
         "/api/attendance/biometric-imports",
         headers=headers,
@@ -256,20 +256,62 @@ def test_biometric_import_keeps_unassigned_staff_visible(client, database):
             **selection,
             "mappings": [
                 {"deviceUserId": "101", "studentId": tatva.id},
-                {"deviceUserId": "50", "unassignedStaff": True},
+                {"deviceUserId": "900", "unassignedStaff": True},
             ],
         },
     )
     assert committed.status_code == 200, committed.text
-    assert committed.json()["unassignedStaffDeviceIds"] == ["50"]
-    staff_day = database.query(BiometricAttendanceDay).filter_by(device_user_id="50").one()
+    assert committed.json()["unassignedStaffDeviceIds"] == ["900"]
+    staff_day = database.query(BiometricAttendanceDay).filter_by(device_user_id="900").one()
     assert staff_day.student_id is None
     assert staff_day.staff_user_id is None
     staff_rows = client.get("/api/attendance/staff-biometric", headers=headers)
     assert staff_rows.status_code == 200
     record = staff_rows.json()["records"][0]
     assert record["fullName"] == "Unassigned staff"
-    assert record["deviceUserId"] == "50"
+    assert record["deviceUserId"] == "900"
+
+
+def test_biometric_import_allows_two_device_ids_for_one_student(client, database):
+    operator, tatva, _ = setup_students(database)
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    content = (
+        b"User ID,Name,Timestamp\n"
+        b"50,Tatva Student,2026-08-10 13:25:00\n"
+        b"T-1,Tatva Student,2026-08-11 08:15:00\n"
+    )
+    staged = preview(client, headers, content)
+    selection = {
+        "previewToken": staged["previewToken"],
+        "sheetName": "Attendance",
+        "deviceIdColumn": "User ID",
+        "nameColumn": "Name",
+        "datetimeColumn": "Timestamp",
+        "dateColumn": None,
+        "timeColumn": None,
+    }
+    committed = client.post(
+        "/api/attendance/biometric-imports",
+        headers=headers,
+        json={
+            **selection,
+            "mappings": [
+                {"deviceUserId": "50", "studentId": tatva.id},
+                {"deviceUserId": "T-1", "studentId": tatva.id},
+            ],
+        },
+    )
+    assert committed.status_code == 200, committed.text
+    identities = database.query(DeviceAttendanceIdentity).filter_by(student_id=tatva.id).all()
+    assert {item.device_user_id for item in identities} == {"50", "T-1"}
+    days = database.query(BiometricAttendanceDay).filter_by(student_id=tatva.id).all()
+    assert {item.attendance_date.isoformat() for item in days} == {"2026-08-10", "2026-08-11"}
+    registers = database.query(AttendanceRegister).filter_by(register_kind="biometric").all()
+    assert len(registers) == 2
+    assert all(
+        database.query(AttendanceEntry).filter_by(register_id=register.id, student_id=tatva.id).one().status == "present"
+        for register in registers
+    )
 
 
 def test_biometric_import_rejects_unmapped_device_ids_and_duplicate_files(client, database):

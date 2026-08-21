@@ -42,7 +42,7 @@ from ..services import audit
 
 router = APIRouter(prefix="/api/attendance/biometric-imports", tags=["biometric attendance"])
 DEVICE_KEY = "x2008-abfr220607313"
-UNASSIGNED_STAFF_DEVICE_IDS = {"50"}
+UNASSIGNED_STAFF_DEVICE_IDS: set[str] = set()
 STAFF_ROLES = {
     "owner", "director", "admissions_manager", "counsellor", "front_desk",
     "accounts", "academic_coordinator", "faculty", "attendance_operator", "storekeeper",
@@ -420,11 +420,6 @@ def _apply_mapping_choices(
 ) -> dict[str, DeviceAttendanceIdentity]:
     """Apply a complete mapping review without one database query per device ID."""
     mappings = _device_mappings(db)
-    student_owners = {
-        mapping.student_id: device_user_id
-        for device_user_id, mapping in mappings.items()
-        if device_user_id not in choices and mapping.student_id
-    }
     staff_owners = {
         mapping.staff_user_id: device_user_id
         for device_user_id, mapping in mappings.items()
@@ -435,12 +430,6 @@ def _apply_mapping_choices(
             raise HTTPException(409, f"The selected student for device ID {device_user_id} is not active")
         if choice.staff_user_id and choice.staff_user_id not in active_staff_ids:
             raise HTTPException(409, f"The selected staff account for device ID {device_user_id} is not active")
-        conflicting_device_id = student_owners.get(choice.student_id) if choice.student_id else None
-        if conflicting_device_id and conflicting_device_id != device_user_id:
-            raise HTTPException(
-                409,
-                f"Device IDs {conflicting_device_id} and {device_user_id} cannot be assigned to the same student",
-            )
         conflicting_staff_device_id = staff_owners.get(choice.staff_user_id) if choice.staff_user_id else None
         if conflicting_staff_device_id and conflicting_staff_device_id != device_user_id:
             raise HTTPException(
@@ -466,8 +455,6 @@ def _apply_mapping_choices(
             )
             db.add(mapping)
             mappings[device_user_id] = mapping
-        if choice.student_id:
-            student_owners[choice.student_id] = device_user_id
         if choice.staff_user_id:
             staff_owners[choice.staff_user_id] = device_user_id
     return mappings
