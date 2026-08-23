@@ -397,7 +397,7 @@ class AssignmentCreate(BaseModel):
     title: str = Field(min_length=2, max_length=255)
     instructions: str = Field(default="", max_length=5000)
     due_at: datetime = Field(alias="dueAt")
-    external_url: HttpUrl = Field(alias="externalUrl")
+    external_url: HttpUrl | None = Field(default=None, alias="externalUrl")
     status: Literal["draft", "published"] = "published"
     model_config = ConfigDict(populate_by_name=True)
 

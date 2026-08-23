@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, event, inspect
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, event, inspect
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -606,6 +606,45 @@ class AssignmentRecipient(Base):
     student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
     status: Mapped[str] = mapped_column(String(24), default="completed", index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+
+
+class AssignmentMaterial(Base):
+    """Short-lived PDF attached to an assignment.
+
+    The binary is deliberately isolated from the assignment row so normal
+    portal bootstrap queries never load document bytes into memory.
+    """
+
+    __tablename__ = "assignment_materials"
+    assignment_id: Mapped[str] = mapped_column(
+        ForeignKey("assignments.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255))
+    mime_type: Mapped[str] = mapped_column(String(100), default="application/pdf")
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    # Portal bootstrap queries need only metadata. Defer the PDF bytes until a
+    # user explicitly downloads the document so normal app loading stays fast.
+    content: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
+class AssignmentDownload(Base):
+    """One compact row per student and assignment, regardless of retries."""
+
+    __tablename__ = "assignment_downloads"
+    assignment_id: Mapped[str] = mapped_column(
+        ForeignKey("assignments.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    student_id: Mapped[str] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    first_downloaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+    last_downloaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+    download_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
 
 class Examination(TimestampMixin, Base):

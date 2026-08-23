@@ -93,6 +93,7 @@ def test_assignment_progress_tracks_student_workflow(
         "viewed": 0,
         "submitted": 1,
         "completed": 0,
+        "downloaded": 0,
     }
 
 

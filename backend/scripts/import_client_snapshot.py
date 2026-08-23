@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import secrets
 from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -38,7 +37,6 @@ from app.models import (
     Subject,
     User,
 )
-from app.security import hash_password
 from app.services import payment_effect
 
 
@@ -378,20 +376,6 @@ def _timetable(db: Session, manifest: dict, apply: bool) -> dict:
         row.full_name: row
         for row in db.query(User).filter(User.role == "faculty").all()
     }
-    if "Kumar Sir" not in faculty:
-        kumar = User(
-            mobile=None,
-            email=None,
-            full_name="Kumar Sir",
-            password_hash=hash_password(secrets.token_urlsafe(32)),
-            role="faculty",
-            is_active=True,
-            must_change_password=False,
-            is_test_account=False,
-        )
-        db.add(kumar)
-        db.flush()
-        faculty[kumar.full_name] = kumar
     missing_faculty = {slot["faculty"] for slot in class_slots} - set(faculty)
     if missing_faculty:
         raise RuntimeError(f"Timetable faculty not found: {sorted(missing_faculty)}")

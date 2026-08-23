@@ -1,6 +1,8 @@
+import asyncio
 from pathlib import Path
 from uuid import uuid4
 from contextlib import asynccontextmanager
+from contextlib import suppress
 from functools import cache
 from alembic.config import Config
 from alembic.script import ScriptDirectory
@@ -14,14 +16,32 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
 from .database import SessionLocal, get_db
+from .assignment_materials import purge_expired_assignment_materials
 from .routers import academics, admissions, attendance, auth, biometric_attendance, communication, examinations, faculty, finance, inventory, portal, reports, settings as settings_router, students, timetable, workspace
 from .seed import seed_development_data
+
+async def _assignment_material_cleanup_loop():
+    while True:
+        with SessionLocal() as db:
+            try:
+                if purge_expired_assignment_materials(db):
+                    db.commit()
+            except SQLAlchemyError:
+                db.rollback()
+        await asyncio.sleep(3600)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.seed_demo_data:
         with SessionLocal() as db: seed_development_data(db)
-    yield
+    cleanup_task = asyncio.create_task(_assignment_material_cleanup_loop())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
 
 app = FastAPI(title="Lakshya Operations API", version="1.0.0", lifespan=lifespan)
 FRONTEND_DIR = Path(__file__).resolve().parents[2]

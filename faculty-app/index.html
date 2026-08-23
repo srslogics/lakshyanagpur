@@ -14,7 +14,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png?v=20260804-no-tm">
   <link rel="icon" href="../pwa-icon-192.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="./styles.css?v=11">
+  <link rel="stylesheet" href="./styles.css?v=12">
   <link rel="stylesheet" href="../auth-shared.css?v=9">
 </head>
 <body>
@@ -257,7 +257,8 @@
           <label><span>Due date and time</span><input id="assignment-due" name="dueAt" type="datetime-local" required></label>
           <label><span>Status</span><select name="status"><option value="published">Publish now</option><option value="draft">Save draft</option></select></label>
         </div>
-        <label><span>Material link</span><input name="externalUrl" type="url" inputmode="url" placeholder="https://…" required></label>
+        <label class="file-field"><span>Assignment PDF</span><input name="material" type="file" accept="application/pdf,.pdf"><small>PDF only · maximum 5 MB · automatically removed 48 hours after upload</small></label>
+        <label><span>Optional web link</span><input name="externalUrl" type="url" inputmode="url" placeholder="https://…"></label>
         <div class="modal-error hidden" id="assignment-error" role="alert"></div>
         <footer><button class="secondary-button" type="button" data-close-modal="assignment-modal">Cancel</button><button class="primary-button" id="assignment-submit" type="submit">Create assignment</button></footer>
       </form>
@@ -299,6 +300,6 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=17" defer></script>
+  <script src="./app.js?v=18" defer></script>
 </body>
 </html>

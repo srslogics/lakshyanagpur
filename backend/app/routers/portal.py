@@ -1,13 +1,21 @@
 from datetime import datetime, timezone
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..assignment_materials import (
+    material_maps,
+    purge_expired_assignment_materials,
+    serialize_material,
+)
 from ..operations_schemas import StudentAssignmentStatusUpdate
 from ..models import (
     Assignment,
+    AssignmentDownload,
+    AssignmentMaterial,
     AssignmentRecipient,
     AttendanceEntry,
     AttendancePeriodSummary,
@@ -147,6 +155,10 @@ def assignment_rows(
             row for row in rows
             if canonical_subject(row[2].name) in student_subjects
         ]
+    materials, downloads = material_maps(
+        db,
+        {assignment.id for assignment, _, _, _ in rows},
+    )
     return [{
         "id": assignment.id,
         "title": assignment.title,
@@ -154,7 +166,11 @@ def assignment_rows(
         "subject": subject.name,
         "batch": batch.name,
         "dueAt": _aware(assignment.due_at),
-        "externalUrl": assignment.external_url,
+        "externalUrl": assignment.external_url or None,
+        "material": serialize_material(
+            materials.get(assignment.id),
+            downloaded_count=downloads.get(assignment.id, 0),
+        ),
         "status": recipient.status if recipient else "published",
     } for assignment, batch, subject, recipient in rows]
 
@@ -512,6 +528,85 @@ def student_bootstrap(
         "email": user.email,
     }
     return payload
+
+
+@router.get("/assignments/{assignment_id}/material")
+def download_student_assignment_material(
+    assignment_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles("student", "parent_student")),
+):
+    _, student, enrollment = _student_for_account(db, StudentAccount, user)
+    if not enrollment or not enrollment.batch:
+        raise HTTPException(404, "Assignment not found for this student")
+    assignment_row = (
+        db.query(Assignment, Batch, Subject)
+        .join(Batch, Batch.id == Assignment.batch_id)
+        .join(Subject, Subject.id == Assignment.subject_id)
+        .filter(
+            Assignment.id == assignment_id,
+            Assignment.status == "published",
+            Batch.name == enrollment.batch,
+            or_(
+                Batch.program == enrollment.program,
+                Batch.program == "All programs",
+            ),
+        )
+        .first()
+    )
+    if not assignment_row:
+        raise HTTPException(404, "Assignment not found for this student")
+    assignment, batch, subject = assignment_row
+    if student.id not in SubjectRosterResolver(db).student_ids_for(batch, subject):
+        raise HTTPException(404, "Assignment not found for this student")
+    if purge_expired_assignment_materials(db):
+        db.commit()
+    material = db.get(AssignmentMaterial, assignment.id)
+    if not material:
+        raise HTTPException(404, "This PDF is no longer available")
+
+    downloaded_at = datetime.now(timezone.utc)
+    download = db.query(AssignmentDownload).filter_by(
+        assignment_id=assignment.id,
+        student_id=student.id,
+    ).first()
+    if download:
+        download.last_downloaded_at = downloaded_at
+        download.download_count += 1
+    else:
+        db.add(AssignmentDownload(
+            assignment_id=assignment.id,
+            student_id=student.id,
+            first_downloaded_at=downloaded_at,
+            last_downloaded_at=downloaded_at,
+            download_count=1,
+        ))
+    recipient = db.query(AssignmentRecipient).filter_by(
+        assignment_id=assignment.id,
+        student_id=student.id,
+    ).first()
+    if not recipient:
+        db.add(AssignmentRecipient(
+            assignment_id=assignment.id,
+            student_id=student.id,
+            status="viewed",
+        ))
+    elif recipient.status not in {"submitted", "completed"}:
+        recipient.status = "viewed"
+    db.commit()
+
+    safe_name = material.filename.replace("\r", "").replace("\n", "")
+    return Response(
+        content=material.content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(safe_name, safe='')}",
+            "Content-Length": str(material.size_bytes),
+            "Cache-Control": "private, no-store",
+            "Content-Security-Policy": "sandbox",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.patch("/assignments/{assignment_id}/status")

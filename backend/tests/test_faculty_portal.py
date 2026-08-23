@@ -133,6 +133,12 @@ def test_faculty_with_confirmed_mobile_uses_mobile_for_first_login(
     )
     assert replacement_login.status_code == 200
     assert replacement_login.json()["user"]["mustChangePassword"] is False
+    replacement_headers = {
+        "Authorization": f"Bearer {replacement_login.json()['access_token']}",
+    }
+    profile = client.get("/api/faculty/bootstrap", headers=replacement_headers)
+    assert profile.status_code == 200
+    assert profile.json()["profile"]["displayName"] == "Meet K."
 
 
 def test_faculty_mobile_activation_rejects_duplicates_and_other_roles(
@@ -282,14 +288,17 @@ def test_faculty_bootstrap_is_scoped_and_actionable(client, database, parent_hea
     assert response.status_code == 200
     body = response.json()
     assert body["profile"]["fullName"] == "Dr Meera Rao"
+    assert body["profile"]["displayName"] == "Meera R."
     assert [row["id"] for row in body["sessions"]] == [own_session.id]
     assert body["sessions"][0]["studentCount"] == 1
     assert "registerStatus" not in body["sessions"][0]
-    assert body["summary"] == {
-        "todayClasses": 1,
-        "openAssignments": 1,
-        "activeBatches": 1,
-    }
+    assert body["summary"]["todayClasses"] == 1
+    assert body["summary"]["openAssignments"] == 1
+    assert body["summary"]["activeBatches"] == 1
+    assert body["summary"]["workingDays"] == 6
+    assert 0 <= body["summary"]["weekTeachingDays"] <= 6
+    assert body["summary"]["workingWeekStartsAt"]
+    assert body["summary"]["workingWeekEndsAt"]
     assert [row["title"] for row in body["assignments"]] == ["Kinematics worksheet"]
     assert body["assignments"][0]["recipientCount"] == 1
     assert [row["title"] for row in body["notices"]] == ["Faculty meeting"]

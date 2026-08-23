@@ -209,6 +209,42 @@ async function api(path, options = {}) {
   return body;
 }
 
+async function downloadAssignmentPdf(assignmentId, fallbackName, button) {
+  button.disabled = true;
+  const idle = button.textContent;
+  button.textContent = "Downloading…";
+  try {
+    const response = await resilientFetch(
+      `/api/portal/assignments/${encodeURIComponent(assignmentId)}/material`,
+      {headers:{Authorization:`Bearer ${state.token}`}}
+    );
+    if (!response.ok) {
+      let body = {};
+      try { body = await response.json(); } catch {}
+      throw new Error(body?.detail || "This PDF is no longer available.");
+    }
+    const disposition = response.headers.get("content-disposition") || "";
+    const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const filename = encoded ? decodeURIComponent(encoded) : fallbackName;
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = filename || "assignment.pdf";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    const assignment = state.data.assignments.find(item => item.id === assignmentId);
+    if (assignment && assignment.status === "published") assignment.status = "viewed";
+    toast("PDF saved to your device.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = idle;
+  }
+}
+
 function clearSession() {
   state.token = null;
   state.identity = null;
@@ -658,9 +694,14 @@ function renderAssignments() {
         <div class="assignment-meta">
           <span>${esc(item.subject)}</span>
           <span>Due ${dateText(item.dueAt)}</span>
+          ${item.material?.available ? `<span>PDF available until ${dateText(item.material.expiresAt)}, ${timeText(item.material.expiresAt)}</span>` : ""}
         </div>
         <footer>
-          ${resourceUrl ? `<a href="${esc(resourceUrl)}" target="_blank" rel="noopener">Open resource ${icon("external")}</a>` : "<span>No external resource</span>"}
+          <div class="assignment-resources">
+            ${item.material?.available ? `<button class="assignment-download" type="button" data-download-assignment="${esc(item.id)}" data-material-name="${esc(item.material.filename)}">Save PDF</button>` : ""}
+            ${resourceUrl ? `<a href="${esc(resourceUrl)}" target="_blank" rel="noopener">Open link ${icon("external")}</a>` : ""}
+            ${!item.material?.available && !resourceUrl ? "<span>No attached material</span>" : ""}
+          </div>
           <button class="assignment-action ${itemState === "completed" ? "secondary" : ""}" type="button" data-assignment-id="${esc(item.id)}" data-assignment-status="${nextStatus}" ${saving ? "disabled" : ""}>${saving ? "Saving…" : itemState === "completed" ? "Reopen" : "Mark complete"}</button>
         </footer>
       </article>`;
@@ -982,6 +1023,14 @@ function bindEvents() {
     const assignmentButton = event.target.closest("[data-assignment-id][data-assignment-status]");
     if (assignmentButton) {
       updateAssignmentStatus(assignmentButton.dataset.assignmentId, assignmentButton.dataset.assignmentStatus);
+    }
+    const downloadButton = event.target.closest("[data-download-assignment]");
+    if (downloadButton) {
+      downloadAssignmentPdf(
+        downloadButton.dataset.downloadAssignment,
+        downloadButton.dataset.materialName || "assignment.pdf",
+        downloadButton
+      );
     }
   });
 }

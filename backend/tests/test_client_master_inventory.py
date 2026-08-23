@@ -52,10 +52,10 @@ def test_client_faculty_allocations_match_confirmed_scopes(database):
     }
     assert counts == {
         "Meet Sir": 2,
-        "Kajal Ma'am": 2,
-        "Jitendra Sir": 4,
-        "Anita Ma'am": 4,
-        "Kanchan Ma'am": 4,
+        "Kajal Ma'am": 1,
+        "Jitendra Sir": 3,
+        "Anita Ma'am": 2,
+        "Kanchan Ma'am": 2,
     }
 
     meet = next(row for row in faculties if row.full_name == "Meet Sir")
@@ -87,8 +87,39 @@ def test_client_faculty_allocations_match_confirmed_scopes(database):
     }
     assert kajal_scopes == {
         ("Essential", "MHT-CET", "Physics"),
-        ("Essential", "Boards 11th & 12th Tuition", "Physics"),
     }
+
+    expected_scopes = {
+        "Jitendra Sir": {
+            ("Tatva", "JEE", "Chemistry"),
+            ("Tatva", "NEET", "Chemistry"),
+            ("Essential", "MHT-CET", "Chemistry"),
+        },
+        "Anita Ma'am": {
+            ("Tatva", "JEE", "Maths"),
+            ("Essential", "MHT-CET", "Maths"),
+        },
+        "Kanchan Ma'am": {
+            ("Tatva", "NEET", "Biology"),
+            ("Essential", "MHT-CET", "Biology"),
+        },
+    }
+    for faculty_name, expected in expected_scopes.items():
+        faculty = next(row for row in faculties if row.full_name == faculty_name)
+        scopes = {
+            (batch.name, batch.program, subject.name)
+            for _, batch, subject in (
+                database.query(FacultyTeachingAssignment, Batch, Subject)
+                .join(Batch, Batch.id == FacultyTeachingAssignment.batch_id)
+                .join(Subject, Subject.id == FacultyTeachingAssignment.subject_id)
+                .filter(
+                    FacultyTeachingAssignment.faculty_id == faculty.id,
+                    FacultyTeachingAssignment.is_active.is_(True),
+                )
+                .all()
+            )
+        }
+        assert scopes == expected
 
 
 def test_client_inventory_is_idempotent_and_quantities_remain_unknown(database):

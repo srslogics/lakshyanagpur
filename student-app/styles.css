@@ -305,6 +305,30 @@
   height: 16px;
 }
 
+.assignment-resources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assignment-download {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 11px;
+  color: #fff;
+  background: var(--navy-800);
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.assignment-download:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
 .assignment-card footer > span {
   min-height: 44px;
   display: inline-flex;

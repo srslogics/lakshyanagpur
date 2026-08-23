@@ -13,7 +13,6 @@ from .models import (
 
 CLIENT_SOURCE = "Client confirmation · 28 Jul 2026"
 FACULTY_MOBILE_SOURCE = "Client confirmation · 29 Jul 2026"
-
 FACULTIES = (
     {
         "name": "Meet Sir",
@@ -29,7 +28,6 @@ FACULTIES = (
         "subject_code": "PHY",
         "scopes": (
             ("Essential", "MHT-CET"),
-            ("Essential", "Boards 11th & 12th Tuition"),
         ),
     },
     {
@@ -41,7 +39,6 @@ FACULTIES = (
             ("Tatva", "JEE"),
             ("Tatva", "NEET"),
             ("Essential", "MHT-CET"),
-            ("Essential", "Boards 11th & 12th Tuition"),
         ),
     },
     {
@@ -51,9 +48,7 @@ FACULTIES = (
         "subject_code": "MATH",
         "scopes": (
             ("Tatva", "JEE"),
-            ("Tatva", "NEET"),
             ("Essential", "MHT-CET"),
-            ("Essential", "Boards 11th & 12th Tuition"),
         ),
     },
     {
@@ -62,10 +57,8 @@ FACULTIES = (
         "subject": "Biology",
         "subject_code": "BIO",
         "scopes": (
-            ("Tatva", "JEE"),
             ("Tatva", "NEET"),
             ("Essential", "MHT-CET"),
-            ("Essential", "Boards 11th & 12th Tuition"),
         ),
     },
 )
@@ -108,6 +101,11 @@ def sync_client_master_data(db: Session) -> dict:
         row.full_name: row
         for row in db.query(User).filter(User.role == "faculty").all()
     }
+    faculties_by_mobile = {
+        row.mobile: row
+        for row in faculties_by_name.values()
+        if row.mobile
+    }
     subjects_by_code = {
         row.code: row for row in db.query(Subject).all()
     }
@@ -119,7 +117,10 @@ def sync_client_master_data(db: Session) -> dict:
         for row in db.query(FacultyTeachingAssignment).all()
     }
     for definition in FACULTIES:
-        faculty = faculties_by_name.get(definition["name"])
+        faculty = (
+            faculties_by_mobile.get(definition["mobile"])
+            or faculties_by_name.get(definition["name"])
+        )
         if not faculty:
             faculty = User(
                 full_name=definition["name"],
@@ -132,7 +133,10 @@ def sync_client_master_data(db: Session) -> dict:
             db.add(faculty)
             db.flush()
             faculties_by_name[faculty.full_name] = faculty
+            faculties_by_mobile[faculty.mobile] = faculty
             created["faculty"] += 1
+        elif not faculty.mobile:
+            faculty.mobile = definition["mobile"]
 
         subject = subjects_by_code.get(definition["subject_code"])
         if not subject:
@@ -147,12 +151,39 @@ def sync_client_master_data(db: Session) -> dict:
             subjects_by_code[subject.code] = subject
             created["subjects"] += 1
 
-        for batch_name, program in definition["scopes"]:
+        allowed_scopes = set(definition["scopes"])
+        # The published timetable uses an aggregate batch per student group.
+        # It is an internal representation of the confirmed program scopes.
+        allowed_scopes.update(
+            (batch_name, "All programs")
+            for batch_name, _ in definition["scopes"]
+        )
+        allowed_keys = {
+            (batch.id, subject.id)
+            for scope in allowed_scopes
+            if (batch := batches_by_scope.get(scope))
+        }
+        for existing in db.query(FacultyTeachingAssignment).filter_by(
+            faculty_id=faculty.id,
+        ).all():
+            existing.is_active = (
+                existing.batch_id,
+                existing.subject_id,
+            ) in allowed_keys
+
+        for batch_name, program in allowed_scopes:
             batch = batches_by_scope.get((batch_name, program))
             if not batch:
                 continue
             key = (faculty.id, batch.id, subject.id)
             if key in assignment_keys:
+                existing = db.query(FacultyTeachingAssignment).filter_by(
+                    faculty_id=faculty.id,
+                    batch_id=batch.id,
+                    subject_id=subject.id,
+                ).first()
+                if existing:
+                    existing.is_active = True
                 continue
             db.add(FacultyTeachingAssignment(
                 faculty_id=faculty.id,

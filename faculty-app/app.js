@@ -148,7 +148,8 @@ async function resilientFetch(path, options = {}) {
 }
 
 async function api(path, options = {}) {
-  const headers = {"Content-Type":"application/json", ...(options.headers || {})};
+  const isFormData = options.body instanceof FormData;
+  const headers = {...(isFormData ? {} : {"Content-Type":"application/json"}), ...(options.headers || {})};
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   const response = await resilientFetch(path, {...options, headers});
   let body = {};
@@ -169,6 +170,28 @@ async function api(path, options = {}) {
     throw error;
   }
   return body;
+}
+
+async function downloadProtectedFile(path, fallbackName) {
+  const response = await resilientFetch(path, {
+    headers:{Authorization:`Bearer ${state.token}`}
+  });
+  if (!response.ok) {
+    let body = {};
+    try { body = await response.json(); } catch {}
+    throw new Error(body?.detail || "This PDF is no longer available.");
+  }
+  const disposition = response.headers.get("content-disposition") || "";
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const filename = encoded ? decodeURIComponent(encoded) : fallbackName;
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename || "assignment.pdf";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 function clearSession() {
@@ -502,7 +525,8 @@ function showView(view, updateHash = true) {
 
 function renderAll() {
   const {profile, summary, teachingPairs} = state.data;
-  const firstName = profile.fullName.split(/\s+/).filter(Boolean).find(part => !/^(dr|prof|mr|mrs|ms)\.?$/i.test(part)) || "Faculty";
+  const facultyName = profile.displayName || profile.fullName;
+  const firstName = facultyName.split(/\s+/).filter(Boolean)[0] || "Faculty";
   const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 17 ? "Good afternoon" : "Good evening";
   $("#today-label").textContent = new Intl.DateTimeFormat("en-IN", {
     timeZone:"Asia/Kolkata", weekday:"long", day:"numeric", month:"long"
@@ -512,9 +536,9 @@ function renderAll() {
   $("#teaching-summary").textContent = teachingPairs.length
     ? `${teachingPairs.length} teaching ${teachingPairs.length === 1 ? "assignment" : "assignments"} across ${summary.activeBatches} ${summary.activeBatches === 1 ? "batch" : "batches"}.`
     : "Your assigned batches and subjects will appear here.";
-  $("#header-avatar").textContent = initials(profile.fullName);
-  $("#sidebar-avatar").textContent = initials(profile.fullName);
-  $("#sidebar-name").textContent = profile.fullName;
+  $("#header-avatar").textContent = initials(facultyName);
+  $("#sidebar-avatar").textContent = initials(facultyName);
+  $("#sidebar-name").textContent = facultyName;
   renderDashboard();
   renderAssignments();
   renderExaminations();
@@ -534,8 +558,9 @@ function renderDashboard() {
   const {summary, sessions, assignments, notices} = state.data;
   $("#dashboard-metrics").innerHTML = [
     metric("Classes today", String(summary.todayClasses)),
+    metric("Teaching days", `${summary.weekTeachingDays || 0} / ${summary.workingDays || 6}`),
     metric("Open assignments", String(summary.openAssignments)),
-    metric("Active batches", String(summary.activeBatches))
+    metric("Active batches", String(summary.activeBatches || 0))
   ].join("");
 
   const next = sessions.find(item => item.status === "scheduled" && asDate(item.endsAt).getTime() >= Date.now());
@@ -548,6 +573,17 @@ function renderDashboard() {
     </div>
   `).join("") || empty("book", "No assignments yet", "Create work for an assigned batch and subject.");
   $("#latest-notice").innerHTML = notices[0] ? noticeCard(notices[0]) : empty("notice", "No institute notices");
+}
+
+function workingWeekSessions() {
+  const rows = state.data.sessions.filter(item => item.status === "scheduled");
+  const start = asDate(state.data.summary.workingWeekStartsAt).getTime();
+  const end = asDate(state.data.summary.workingWeekEndsAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return rows;
+  return rows.filter(item => {
+    const value = asDate(item.startsAt).getTime();
+    return value >= start && value < end;
+  });
 }
 
 function classCard(item) {
@@ -596,13 +632,15 @@ function renderAssignments() {
       <p>${esc(item.instructions || "No additional instructions.")}</p>
       <div class="assignment-progress" aria-label="Assignment progress">
         <span>${item.progress?.notStarted ?? item.recipientCount} not started</span>
-        <span>${item.progress?.viewed || 0} viewed</span>
+        <span>${item.material?.downloadedCount || item.progress?.downloaded || 0}/${item.recipientCount} downloaded</span>
         <span>${item.progress?.submitted || 0} submitted</span>
         <span>${item.progress?.completed || 0} reviewed</span>
       </div>
+      ${item.material?.available ? `<div class="assignment-material"><strong>PDF</strong><span>${esc(item.material.filename)} · expires ${dateLong(item.material.expiresAt)}, ${timeText(item.material.expiresAt)}</span></div>` : ""}
       <footer>
         <span><strong>${esc(item.batch)} · ${esc(item.subject)}</strong>Due ${dateLong(item.dueAt)} · ${item.recipientCount} students</span>
         <div class="assignment-actions">
+          ${item.material?.available ? `<button type="button" data-download-assignment-material="${esc(item.id)}" data-material-name="${esc(item.material.filename)}">Download PDF</button>` : ""}
           ${resourceUrl ? `<a href="${esc(resourceUrl)}" target="_blank" rel="noopener">Material ${icon("external")}</a>` : ""}
           <button type="button" data-edit-assignment="${esc(item.id)}">Edit</button>
           ${item.status === "draft" ? `<button type="button" data-publish-assignment="${esc(item.id)}" ${publishing ? "disabled" : ""}>${publishing ? "Publishing…" : "Publish"}</button>` : ""}
@@ -672,16 +710,15 @@ function renderExaminations() {
 }
 
 function renderSchedule() {
-  const rows = state.data.sessions.filter(item => item.status === "scheduled");
+  const rows = workingWeekSessions();
   const dates = [...new Set(rows.map(item => dateKey(item.startsAt)))];
-  const upcoming = rows.filter(item => asDate(item.startsAt).getTime() >= Date.now());
   $("#schedule-metrics").innerHTML = [
-    metric("Upcoming classes", String(upcoming.length)),
-    metric("Scheduled days", String(new Set(upcoming.map(item => dateKey(item.startsAt))).size)),
+    metric("Teaching days", `${state.data.summary.weekTeachingDays || 0} / ${state.data.summary.workingDays || 6}`),
+    metric("Working days", String(state.data.summary.workingDays || 6)),
     metric("Assigned batches", String(new Set(rows.map(item => item.batchId)).size))
   ].join("");
   if (state.scheduleDate !== "all" && !dates.includes(state.scheduleDate)) state.scheduleDate = "all";
-  $("#schedule-dates").innerHTML = [`<button type="button" class="${state.scheduleDate === "all" ? "active" : ""}" data-schedule-date="all" aria-pressed="${state.scheduleDate === "all"}">All classes</button>`].concat(dates.map(key => `
+  $("#schedule-dates").innerHTML = [`<button type="button" class="${state.scheduleDate === "all" ? "active" : ""}" data-schedule-date="all" aria-pressed="${state.scheduleDate === "all"}">Working week</button>`].concat(dates.map(key => `
     <button type="button" class="${key === state.scheduleDate ? "active" : ""}" data-schedule-date="${key}" aria-pressed="${key === state.scheduleDate}">
       ${dateLong(`${key}T06:30:00.000Z`)}
     </button>
@@ -697,7 +734,7 @@ function renderSchedule() {
       </div>
       <span class="timeline-state state-${esc(item.status)}">${esc(titleCase(item.status))}</span>
     </article>
-  `).join("") : empty("calendar", rows.length ? "No classes on this day" : "Schedule not published");
+  `).join("") : empty("calendar", rows.length ? "No classes on this day" : "No classes assigned this working week");
 }
 
 function noticeCard(item) {
@@ -721,14 +758,14 @@ function renderBatches() {
     metric("Assigned students", String(totalStudents))
   ].join("");
   $("#batch-list").innerHTML = pairs.length ? pairs.map(item => {
-    const matchingSessions = state.data.sessions.filter(session => session.status === "scheduled" && session.batchId === item.batchId && session.subjectId === item.subjectId);
+    const matchingSessions = workingWeekSessions().filter(session => session.batchId === item.batchId && session.subjectId === item.subjectId);
     const next = matchingSessions.find(session => asDate(session.startsAt).getTime() >= Date.now());
     return `
       <article class="faculty-batch-card">
         <header><span class="subject-mark">${esc(item.subjectCode)}</span><span>${item.studentCount} students</span></header>
         <h2>${esc(item.batch)}</h2>
         <p>${esc(item.subject)} · ${esc(item.program)}</p>
-        <dl><div><dt>Classes</dt><dd>${matchingSessions.length}</dd></div><div><dt>Next class</dt><dd>${next ? `${dateLong(next.startsAt)} · ${timeText(next.startsAt)}` : "Not scheduled"}</dd></div></dl>
+        <dl><div><dt>This week</dt><dd>${matchingSessions.length}</dd></div><div><dt>Next class</dt><dd>${next ? `${dateLong(next.startsAt)} · ${timeText(next.startsAt)}` : "Not scheduled"}</dd></div></dl>
         <button type="button" data-go="schedule">View timetable</button>
       </article>`;
   }).join("") : empty("users", "No assigned batches", "Ask the owner to assign a batch and subject.");
@@ -794,12 +831,13 @@ async function replyToMessageThread(event) {
 
 function renderProfile() {
   const {profile, teachingPairs, summary} = state.data;
+  const facultyName = profile.displayName || profile.fullName;
   $("#profile-card").innerHTML = `
-    <span class="profile-avatar">${initials(profile.fullName)}</span>
-    <span><strong>${esc(profile.fullName)}</strong><span>${esc(profile.mobile ? `+91 ${profile.mobile}` : "Mobile not assigned")}</span><span>Faculty account</span></span>
+    <span class="profile-avatar">${initials(facultyName)}</span>
+    <span><strong>${esc(facultyName)}</strong><span>${esc(profile.mobile ? `+91 ${profile.mobile}` : "Mobile not assigned")}</span><span>Faculty account</span></span>
   `;
   const details = [
-    ["Full name", profile.fullName],
+    ["Name", facultyName],
     ["Portal login", profile.mobile ? `+91 ${profile.mobile}` : "Mobile not assigned"],
     ["Role", "Faculty"],
     ["Teaching assignments", teachingPairs.length],
@@ -874,11 +912,13 @@ async function saveAssignment(event) {
   const data = new FormData(form);
   const [batchId, subjectId] = String(data.get("pair")).split("|");
   const assignmentId = state.editingAssignment;
+  const material = data.get("material");
   button.disabled = true;
   button.textContent = assignmentId ? "Saving…" : "Creating…";
   $("#assignment-error").classList.add("hidden");
+  let saved = null;
   try {
-    await api(assignmentId ? `/api/academics/assignments/${encodeURIComponent(assignmentId)}` : "/api/academics/assignments", {
+    saved = await api(assignmentId ? `/api/academics/assignments/${encodeURIComponent(assignmentId)}` : "/api/academics/assignments", {
       method:assignmentId ? "PATCH" : "POST",
       body:JSON.stringify({
         batchId,
@@ -886,15 +926,29 @@ async function saveAssignment(event) {
         title:String(data.get("title")).trim(),
         instructions:String(data.get("instructions")).trim(),
         dueAt:indiaInputToISOString(data.get("dueAt")),
-        externalUrl:String(data.get("externalUrl")).trim(),
+        externalUrl:String(data.get("externalUrl")).trim() || null,
         status:String(data.get("status"))
       })
     });
+    if (material instanceof File && material.size) {
+      const upload = new FormData();
+      upload.append("file", material, material.name);
+      button.textContent = "Uploading PDF…";
+      await api(`/api/academics/assignments/${encodeURIComponent(saved.id)}/material`, {
+        method:"POST",
+        body:upload
+      });
+    }
     form.reset();
     closeModal("assignment-modal");
-    await refreshPortal(assignmentId ? "Assignment updated." : "Assignment created.");
+    await refreshPortal(material instanceof File && material.size
+      ? "Assignment and PDF published. The PDF will be removed after 48 hours."
+      : assignmentId ? "Assignment updated." : "Assignment created.");
   } catch (error) {
-    $("#assignment-error").textContent = error.message;
+    if (saved && !assignmentId) state.editingAssignment = saved.id;
+    $("#assignment-error").textContent = saved
+      ? `The assignment was saved, but the PDF was not uploaded. ${error.message}`
+      : error.message;
     $("#assignment-error").classList.remove("hidden");
   } finally {
     button.disabled = false;
@@ -1149,6 +1203,14 @@ function bindEvents() {
     if (assignmentEdit) {
       const item = state.data.assignments.find(row => row.id === assignmentEdit.dataset.editAssignment);
       if (item) openAssignmentModal(assignmentEdit, item);
+    }
+    const materialDownload = event.target.closest("[data-download-assignment-material]");
+    if (materialDownload) {
+      materialDownload.disabled = true;
+      downloadProtectedFile(
+        `/api/academics/assignments/${encodeURIComponent(materialDownload.dataset.downloadAssignmentMaterial)}/material`,
+        materialDownload.dataset.materialName || "assignment.pdf"
+      ).catch(error => toast(error.message)).finally(() => { materialDownload.disabled = false; });
     }
 
     const examinationTrigger = event.target.closest("[data-open-examination]");

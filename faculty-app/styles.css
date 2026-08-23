@@ -113,7 +113,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .hero-action>span:last-child{display:grid;font-size:.72rem;color:rgba(255,255,255,.6)}
 .hero-action strong{margin-top:2px;color:#fff;font-size:.92rem}
 
-.metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px}
 .metric-card{min-height:118px;display:flex;flex-direction:column;justify-content:space-between;padding:20px;border:1px solid var(--line);border-radius:20px;background:var(--surface);box-shadow:var(--shadow-sm)}
 .metric-card span{color:var(--muted);font-size:.78rem;font-weight:700}
 .metric-card strong{font-family:"Avenir Next",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1.75rem;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.04em}
@@ -180,6 +180,9 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .assignment-card p{display:-webkit-box;overflow:hidden;margin:8px 0 0;color:var(--muted);font-size:.8rem;-webkit-box-orient:vertical;-webkit-line-clamp:3}
 .assignment-progress{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
 .assignment-progress span{padding:6px 9px;border-radius:999px;color:var(--navy-800);background:var(--navy-50);font-size:.67rem;font-weight:800}
+.assignment-material{display:grid;gap:3px;margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft)}
+.assignment-material strong{color:var(--navy-800);font-size:.7rem}
+.assignment-material span{overflow:hidden;color:var(--muted);font-size:.67rem;text-overflow:ellipsis;white-space:nowrap}
 .assignment-card footer{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:auto;padding-top:18px}
 .assignment-card footer span{display:grid;color:var(--muted);font-size:.69rem}
 .assignment-card footer strong{color:var(--ink);font-size:.76rem}
@@ -187,6 +190,9 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
 .assignment-card a,.assignment-actions button{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:0 13px;border:0;border-radius:11px;color:var(--navy-800);background:var(--navy-50);font-size:.72rem;font-weight:800;text-decoration:none}
 .assignment-card a svg{width:16px;height:16px}
 .assignment-actions button{color:#fff;background:var(--navy-900)}
+.file-field small{color:var(--muted);font-size:.68rem;font-weight:600;line-height:1.45}
+.file-field input[type="file"]{height:auto;min-height:52px;padding:11px 12px;color:var(--muted);background:var(--surface-soft)}
+.file-field input[type="file"]::file-selector-button{min-height:32px;margin-right:10px;padding:0 12px;border:0;border-radius:9px;color:#fff;background:var(--navy-800);font:inherit;font-size:.72rem;font-weight:800;cursor:pointer}
 .faculty-exam-list{display:grid;gap:12px}
 .faculty-exam-card{display:grid;grid-template-columns:76px minmax(0,1fr) auto;align-items:center;gap:18px;padding:18px 20px;border:1px solid var(--line);border-radius:19px;background:var(--surface);box-shadow:var(--shadow-sm)}
 .faculty-exam-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
