@@ -1,0 +1,42 @@
+name: Build attendance connector MSIX
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Four-part Microsoft Store version
+        required: true
+        default: 1.0.0.0
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-msix:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build Microsoft Store package
+        shell: powershell
+        run: >-
+          .\windows-attendance-connector\build-store-msix.ps1
+          -Version '${{ inputs.version }}'
+
+      - name: Upload MSIX and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lakshya-Attendance-Connector-${{ inputs.version }}-Store
+          path: |
+            windows-attendance-connector/artifacts/*.msix
+            windows-attendance-connector/artifacts/STORE-MSIX-SHA256.txt
+          if-no-files-found: error
+          retention-days: 30

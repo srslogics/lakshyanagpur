@@ -79,7 +79,12 @@ internal sealed class MainForm : Form
         _folder.Text = _config.WatchFolder;
         _mobile.Text = _config.Mobile;
         _password.Text = AppStorage.LoadPassword();
-        _startup.Checked = _config.StartWithWindows;
+        _startup.Checked = AppStorage.IsPackaged || _config.StartWithWindows;
+        if (AppStorage.IsPackaged)
+        {
+            _startup.Enabled = false;
+            _startup.Text = "Starts automatically with Windows (managed in Windows Settings)";
+        }
         _status.Text = "Complete the setup, then choose Save and test connection.";
         _save.Click += async (_, _) => await SaveAsync();
         _scan.Click += async (_, _) => { if (_service is not null) await _service.ScanNowAsync(); };
@@ -107,7 +112,7 @@ internal sealed class MainForm : Form
             _config.WatchFolder = _folder.Text;
             _config.Mobile = new string(_mobile.Text.Where(char.IsDigit).ToArray());
             if (_config.Mobile.Length > 10) _config.Mobile = _config.Mobile[^10..];
-            _config.StartWithWindows = _startup.Checked;
+            _config.StartWithWindows = AppStorage.IsPackaged || _startup.Checked;
             AppStorage.SavePassword(_password.Text);
             AppStorage.Save(_config);
             AppStorage.SetStartup(_config.StartWithWindows);

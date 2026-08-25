@@ -10,3 +10,4 @@ backend/data/
 .DS_Store
 output/
 tmp/
+windows-attendance-connector/artifacts/

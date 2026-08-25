@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 uap10 rescap">
+
+  <Identity
+    Name="SrSLogics.LakshyaAttendanceConnector"
+    Publisher="CN=9E014D47-CBFD-45BF-BE0E-DEA2D95C1B2E"
+    Version="__VERSION__"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Lakshya Attendance Connector</DisplayName>
+    <PublisherDisplayName>SrS Logics</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily
+      Name="Windows.Desktop"
+      MinVersion="10.0.19041.0"
+      MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Applications>
+    <Application
+      Id="App"
+      Executable="LakshyaAttendanceConnector.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        AppListEntry="default"
+        DisplayName="Lakshya Attendance Connector"
+        Description="Securely synchronizes eSSL attendance exports with Lakshya ERP."
+        BackgroundColor="#FFFFFF"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          ShortName="Lakshya Attendance"
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <uap5:Extension
+          Category="windows.startupTask"
+          Executable="LakshyaAttendanceConnector.exe"
+          EntryPoint="Windows.FullTrustApplication"
+          uap10:Parameters="--background">
+          <uap5:StartupTask
+            TaskId="LakshyaAttendanceConnectorStartup"
+            Enabled="true"
+            DisplayName="Lakshya Attendance Connector" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

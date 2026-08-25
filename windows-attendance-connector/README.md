@@ -35,6 +35,27 @@ Never commit the PFX or its password. Use a timestamp server so signatures remai
 
 The production command is intentionally strict: it requires a certificate, signs the application, builds the installer, signs the installer, verifies both signatures, and writes `artifacts\SHA256SUMS.txt`. Distribute only `artifacts\Lakshya-Attendance-Connector-Setup.exe` after the verification step succeeds.
 
+## Microsoft Store MSIX
+
+The Microsoft Partner Center product is reserved with these production values:
+
+- Package identity: `SrSLogics.LakshyaAttendanceConnector`
+- Publisher: `CN=9E014D47-CBFD-45BF-BE0E-DEA2D95C1B2E`
+- Publisher display name: `SrS Logics`
+- Store ID: `9PHMJZRHP876`
+
+On a Windows build computer with the .NET 8 SDK and Windows 10/11 SDK installed, create the Store package with:
+
+```powershell
+.\build-store-msix.ps1 -Version 1.0.0.0
+```
+
+From GitHub, the same package can be produced without a local Windows build setup: open **Actions → Build attendance connector MSIX → Run workflow**, enter the four-part version, and download the resulting Store artifact.
+
+Upload `artifacts\Lakshya-Attendance-Connector_1.0.0.0_x64.msix` to the reserved **Lakshya Attendance Connector** product in Partner Center. Microsoft signs an accepted MSIX during Store certification, so a commercial certificate is not required for the Store submission. A certificate whose subject exactly matches the Partner Center publisher identity is still required if the MSIX must be installed locally before Store certification.
+
+The Store manifest enables startup after the first launch and passes `--background`, so the connector continues in the notification area without opening its setup window at every Windows sign-in. The operator remains able to disable it from Windows **Settings → Apps → Startup**.
+
 ## Windows trust and SmartScreen
 
 The application requests `asInvoker` and installs per user, so it does not need administrator access for normal installation or operation. That alone does not establish publisher trust.

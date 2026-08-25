@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
@@ -17,12 +18,24 @@ internal sealed class ConnectorConfig
 
 internal static class AppStorage
 {
+    private const int ErrorSuccess = 0;
+    private const int ErrorInsufficientBuffer = 122;
     private static readonly string Root = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "SRS Logics", "Lakshya Attendance Connector");
     private static readonly string ConfigPath = Path.Combine(Root, "connector.json");
     private static readonly string SecretPath = Path.Combine(Root, "credentials.bin");
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("SRSLogics.LakshyaAttendanceConnector.v1");
+
+    public static bool IsPackaged
+    {
+        get
+        {
+            var length = 0;
+            var result = GetCurrentPackageFullName(ref length, null);
+            return result is ErrorSuccess or ErrorInsufficientBuffer;
+        }
+    }
 
     public static ConnectorConfig Load()
     {
@@ -65,6 +78,10 @@ internal static class AppStorage
 
     public static void SetStartup(bool enabled)
     {
+        // Store-installed builds use the startup task declared in AppxManifest.xml.
+        // A Run-key entry would contain a versioned WindowsApps path and break after an update.
+        if (IsPackaged) return;
+
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
         const string name = "Lakshya Attendance Connector";
         if (enabled)
@@ -72,4 +89,9 @@ internal static class AppStorage
         else
             key?.DeleteValue(name, false);
     }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetCurrentPackageFullName(
+        ref int packageFullNameLength,
+        StringBuilder? packageFullName);
 }
