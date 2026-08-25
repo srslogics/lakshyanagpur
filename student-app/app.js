@@ -25,6 +25,8 @@ const views = new Set(["home", "schedule", "assignments", "examinations", "atten
 const overflowViews = new Set(["examinations", "messages", "notices", "profile", "more"]);
 const CONSENT_VERSION = "student-parent-v1-2026-08-15";
 const CONSENT_STORAGE_PREFIX = "lakshya_student_consent_";
+const UPCOMING_CLASS_LIMIT = 12;
+const RECENT_ATTENDANCE_LIMIT = 12;
 const titles = {
   home: "Home",
   schedule: "Schedule",
@@ -631,7 +633,9 @@ function renderHome() {
 
 function renderSchedule() {
   const rows = [...state.data.schedule].sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
-  const upcoming = rows.filter((item) => validDate(item.startsAt) && asInstant(item.startsAt) >= new Date());
+  const upcoming = rows
+    .filter((item) => validDate(item.startsAt) && asInstant(item.startsAt) >= new Date())
+    .slice(0, UPCOMING_CLASS_LIMIT);
   const dateKeys = [...new Set(upcoming.map((item) => dateKey(item.startsAt)).filter(Boolean))];
   const subjects = new Set((state.data.profile.subjects || []).filter(Boolean));
   $("#schedule-metrics").innerHTML = [
@@ -778,6 +782,9 @@ function renderExaminations() {
 
 function renderAttendance() {
   const rows = state.data.attendance;
+  const recentRows = [...rows]
+    .sort((a, b) => asInstant(b.startsAt).getTime() - asInstant(a.startsAt).getTime())
+    .slice(0, RECENT_ATTENDANCE_LIMIT);
   const confirmed = state.data.attendanceSummary;
   const presentStatuses = new Set(["present", "late", "excused"]);
   const present = confirmed?.presentDays ?? rows.filter((item) => presentStatuses.has(item.status)).length;
@@ -819,8 +826,8 @@ function renderAttendance() {
       </article>`;
     }).join("")
     : empty("check", "No subject records", "Subject attendance will appear after faculty submissions.");
-  $("#attendance-list").innerHTML = rows.length
-    ? rows.map((item) => `<article class="attendance-row">
+  $("#attendance-list").innerHTML = recentRows.length
+    ? recentRows.map((item) => `<article class="attendance-row">
       <time>${esc(item.dateLabel || dateText(item.startsAt))}</time>
       <span><strong>${esc(item.subject)}</strong><small>${item.startsAt ? timeText(item.startsAt) : `Source mark ${esc(item.rawStatus || "—")}`}${item.reason ? ` · ${esc(item.reason)}` : ""}</small></span>
       <em class="status status-${esc(item.status)}">${esc(item.status === "unclassified" && item.rawStatus ? item.rawStatus : titleCase(item.status))}</em>
