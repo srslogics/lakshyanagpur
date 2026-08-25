@@ -44,6 +44,7 @@ const state = {
 };
 const PORTAL_VIEWS = new Set(["dashboard", "assignments", "examinations", "schedule", "batches", "messages", "notices", "profile", "more"]);
 const OVERFLOW_VIEWS = new Set(["batches", "messages", "notices", "profile", "more"]);
+const MAX_ASSIGNMENT_PDF_BYTES = 15 * 1024 * 1024;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -913,6 +914,11 @@ async function saveAssignment(event) {
   const [batchId, subjectId] = String(data.get("pair")).split("|");
   const assignmentId = state.editingAssignment;
   const material = data.get("material");
+  if (material instanceof File && material.size > MAX_ASSIGNMENT_PDF_BYTES) {
+    $("#assignment-error").textContent = "PDF must be 15 MB or smaller.";
+    $("#assignment-error").classList.remove("hidden");
+    return;
+  }
   button.disabled = true;
   button.textContent = assignmentId ? "Saving…" : "Creating…";
   $("#assignment-error").classList.add("hidden");

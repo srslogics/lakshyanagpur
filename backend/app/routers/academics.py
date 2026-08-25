@@ -278,7 +278,7 @@ async def upload_assignment_material(
     if not content.startswith(b"%PDF-"):
         raise HTTPException(415, "The selected file is not a valid PDF")
     if len(content) > MAX_ASSIGNMENT_PDF_BYTES:
-        raise HTTPException(413, "PDF must be 5 MB or smaller")
+        raise HTTPException(413, "PDF must be 15 MB or smaller")
     if not content:
         raise HTTPException(400, "The selected PDF is empty")
     expires_at = datetime.now(timezone.utc) + timedelta(hours=MATERIAL_LIFETIME_HOURS)

@@ -9,7 +9,7 @@ from .models import AssignmentDownload, AssignmentMaterial
 
 
 MATERIAL_LIFETIME_HOURS = 48
-MAX_ASSIGNMENT_PDF_BYTES = 5 * 1024 * 1024
+MAX_ASSIGNMENT_PDF_BYTES = 15 * 1024 * 1024
 
 
 def aware(value: datetime) -> datetime:

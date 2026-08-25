@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from app.assignment_materials import MAX_ASSIGNMENT_PDF_BYTES
 from app.models import (
     AssignmentDownload,
     AssignmentMaterial,
@@ -58,6 +59,7 @@ def test_assignment_pdf_download_is_counted_once_per_student_and_expires(
     database,
     parent_headers,
 ):
+    assert MAX_ASSIGNMENT_PDF_BYTES == 15 * 1024 * 1024
     faculty, batch, subject, student = _assignment_setup(database)
     faculty_headers = {"Authorization": f"Bearer {create_token(faculty)}"}
     created = client.post(
@@ -192,3 +194,34 @@ def test_faculty_cannot_upload_to_another_facultys_assignment(
         files={"file": ("worksheet.pdf", b"%PDF-1.4\n", "application/pdf")},
     )
     assert denied.status_code == 403
+
+
+def test_assignment_pdf_rejects_files_over_15_mb(client, database):
+    faculty, batch, subject, _ = _assignment_setup(database)
+    faculty_headers = {"Authorization": f"Bearer {create_token(faculty)}"}
+    created = client.post(
+        "/api/academics/assignments",
+        headers=faculty_headers,
+        json={
+            "batchId": batch.id,
+            "subjectId": subject.id,
+            "title": "Large worksheet",
+            "instructions": "Confirm the production upload boundary.",
+            "dueAt": (datetime.now(timezone.utc) + timedelta(days=3)).isoformat(),
+            "externalUrl": None,
+            "status": "published",
+        },
+    )
+    assert created.status_code == 201
+
+    pdf_header = b"%PDF-"
+    oversized_pdf = pdf_header + b"x" * (
+        MAX_ASSIGNMENT_PDF_BYTES - len(pdf_header) + 1
+    )
+    uploaded = client.post(
+        f"/api/academics/assignments/{created.json()['id']}/material",
+        headers=faculty_headers,
+        files={"file": ("too-large.pdf", oversized_pdf, "application/pdf")},
+    )
+    assert uploaded.status_code == 413
+    assert uploaded.json()["detail"] == "PDF must be 15 MB or smaller"
