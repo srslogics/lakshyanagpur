@@ -264,6 +264,10 @@ def bootstrap(
     } for assignment, batch, subject in assignment_rows]
 
     assigned_batch_ids = {pair["batchId"] for pair in teaching_pairs.values()}
+    assigned_subject_pairs = {
+        (pair["batchId"], pair["subjectId"])
+        for pair in teaching_pairs.values()
+    }
     notice_filter = Notice.audience.in_(("all", "faculty"))
     if assigned_batch_ids:
         notice_filter = or_(
@@ -272,10 +276,19 @@ def bootstrap(
                 Notice.audience == "batch",
                 Notice.batch_id.in_(assigned_batch_ids),
             ),
+            *[
+                and_(
+                    Notice.audience == "subject",
+                    Notice.batch_id == batch_id,
+                    Notice.subject_id == subject_id,
+                )
+                for batch_id, subject_id in assigned_subject_pairs
+            ],
         )
     notice_rows = (
-        db.query(Notice, Batch)
+        db.query(Notice, Batch, Subject)
         .outerjoin(Batch, Batch.id == Notice.batch_id)
+        .outerjoin(Subject, Subject.id == Notice.subject_id)
         .filter(Notice.status == "published", notice_filter)
         .order_by(Notice.published_at.desc(), Notice.created_at.desc())
         .all()
@@ -286,8 +299,9 @@ def bootstrap(
         "body": notice.body,
         "audience": notice.audience,
         "batch": batch.name if batch else None,
+        "subject": subject.name if subject else None,
         "publishedAt": _aware(notice.published_at or notice.created_at),
-    } for notice, batch in notice_rows]
+    } for notice, batch, subject in notice_rows]
 
     today_sessions = [
         row for row in sessions

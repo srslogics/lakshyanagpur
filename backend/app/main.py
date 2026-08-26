@@ -17,7 +17,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
 from .database import SessionLocal, get_db
 from .assignment_materials import purge_expired_assignment_materials
-from .routers import academics, admissions, attendance, auth, biometric_attendance, communication, examinations, faculty, finance, inventory, portal, reports, settings as settings_router, students, timetable, workspace
+from .routers import academics, admissions, attendance, auth, biometric_attendance, communication, examinations, faculty, finance, inventory, portal, push, reports, settings as settings_router, students, timetable, workspace
+from .push_notifications import dispatch_pending
 from .seed import seed_development_data
 
 async def _assignment_material_cleanup_loop():
@@ -31,17 +32,32 @@ async def _assignment_material_cleanup_loop():
         await asyncio.sleep(3600)
 
 
+async def _push_delivery_loop():
+    while True:
+        try:
+            await asyncio.to_thread(dispatch_pending)
+        except Exception:
+            # One provider or configuration failure must not permanently stop
+            # later delivery attempts for the lifetime of the web process.
+            pass
+        await asyncio.sleep(20)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.seed_demo_data:
         with SessionLocal() as db: seed_development_data(db)
     cleanup_task = asyncio.create_task(_assignment_material_cleanup_loop())
+    push_task = asyncio.create_task(_push_delivery_loop())
     try:
         yield
     finally:
         cleanup_task.cancel()
+        push_task.cancel()
         with suppress(asyncio.CancelledError):
             await cleanup_task
+        with suppress(asyncio.CancelledError):
+            await push_task
 
 app = FastAPI(title="Lakshya Operations API", version="1.0.0", lifespan=lifespan)
 FRONTEND_DIR = Path(__file__).resolve().parents[2]
@@ -70,6 +86,9 @@ PUBLIC_ROOT_FILES = frozenset({
     "lakshya-logo.png",
     "manifest.webmanifest",
     "portal-shared.css",
+    "push-client.js",
+    "push-shared.css",
+    "push-service-worker.js",
     "pwa-icon-192.png",
     "pwa-icon-512.png",
     "share-card.png",
@@ -120,6 +139,7 @@ app.include_router(reports.router)
 app.include_router(settings_router.router)
 app.include_router(portal.router)
 app.include_router(portal.parent_router)
+app.include_router(push.router)
 app.include_router(workspace.router)
 
 @app.middleware("http")

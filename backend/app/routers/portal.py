@@ -360,8 +360,9 @@ def examination_rows(
 def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
     direct_audiences = ("all", audience)
     query = (
-        db.query(Notice, Batch)
+        db.query(Notice, Batch, Subject)
         .outerjoin(Batch, Batch.id == Notice.batch_id)
+        .outerjoin(Subject, Subject.id == Notice.subject_id)
         .filter(Notice.status == "published")
     )
     if enrollment and enrollment.batch:
@@ -375,6 +376,11 @@ def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
                     Batch.program == "All programs",
                 ),
             ),
+            and_(
+                Notice.audience == "subject",
+                Batch.name == enrollment.batch,
+                or_(Batch.program == enrollment.program, Batch.program == "All programs"),
+            ),
         ))
     else:
         query = query.filter(Notice.audience.in_(direct_audiences))
@@ -382,14 +388,22 @@ def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
         Notice.published_at.desc(),
         Notice.created_at.desc(),
     ).all()
-    return [{
+    resolver = SubjectRosterResolver(db) if enrollment else None
+    visible = []
+    for notice, batch, subject in rows:
+        if notice.audience == "subject":
+            if not enrollment or not batch or not subject or enrollment.student_id not in resolver.student_ids_for(batch, subject):
+                continue
+        visible.append({
         "id": notice.id,
         "title": notice.title,
         "body": notice.body,
         "channel": notice.channel,
         "batch": batch.name if batch else None,
+        "subject": subject.name if subject else None,
         "publishedAt": _aware(notice.published_at or notice.created_at),
-    } for notice, batch in rows]
+        })
+    return visible
 
 
 def fee_summary(db: Session, student: Student):

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
@@ -25,6 +25,7 @@ from ..operations_schemas import (
     NoticeUpdate,
 )
 from ..permissions import has_permission
+from ..push_notifications import dispatch_pending, materialize_deliveries
 from ..security import require_roles
 from ..services import SubjectRosterResolver, audit
 
@@ -34,7 +35,7 @@ CONVERSATION_ROLES = (*ROLES, "student", "parent_student", "parent", "faculty")
 PORTAL_CREATOR_ROLES = ("student", "parent_student", "parent")
 
 
-def _serialize(row: Notice, batch: Batch | None):
+def _serialize(row: Notice, batch: Batch | None, subject: Subject | None = None):
     delivery_status = (
         "delivered"
         if row.status == "published" and row.channel == "in_app"
@@ -42,7 +43,7 @@ def _serialize(row: Notice, batch: Batch | None):
         if row.status == "draft"
         else "provider_required"
     )
-    return {"id": row.id, "title": row.title, "body": row.body, "audience": row.audience, "channel": row.channel, "batchId": row.batch_id, "batch": batch.name if batch else None, "program": batch.program if batch else None, "status": row.status, "deliveryStatus": delivery_status, "publishedAt": row.published_at, "createdAt": row.created_at}
+    return {"id": row.id, "title": row.title, "body": row.body, "audience": row.audience, "channel": row.channel, "batchId": row.batch_id, "batch": batch.name if batch else None, "program": batch.program if batch else None, "subjectId": row.subject_id, "subject": subject.name if subject else None, "status": row.status, "deliveryStatus": delivery_status, "publishedAt": row.published_at, "createdAt": row.created_at}
 
 
 def _validate_delivery(channel: str, status: str):
@@ -283,7 +284,7 @@ def communication_inbox(
         ],
         "subjects": subjects,
         "canCreate": user.role in PORTAL_CREATOR_ROLES,
-        "canAnnounce": has_permission(db, user, "communication", "create"),
+        "canAnnounce": user.role == "faculty" or has_permission(db, user, "communication", "create"),
     }
 
 
@@ -458,26 +459,54 @@ def delivery_capabilities(
 
 
 @router.get("/notices")
-def list_notices(db: Session = Depends(get_db), user: User = Depends(require_roles(*ROLES))):
-    rows = db.query(Notice, Batch).outerjoin(Batch, Batch.id == Notice.batch_id).order_by(Notice.created_at.desc()).all()
+def list_notices(db: Session = Depends(get_db), user: User = Depends(require_roles(*ROLES, "faculty"))):
+    query = db.query(Notice, Batch, Subject).outerjoin(Batch, Batch.id == Notice.batch_id).outerjoin(Subject, Subject.id == Notice.subject_id)
+    if user.role == "faculty":
+        assignments = _faculty_assignments(db, user.id)
+        assignment_conditions = [
+            and_(Notice.batch_id == batch.id, Notice.subject_id == subject.id)
+            for _, batch, subject in assignments
+        ]
+        query = query.filter(or_(
+            Notice.audience.in_(("all", "faculty")),
+            Notice.created_by == user.id,
+            *(assignment_conditions or [Notice.id == ""]),
+        ))
+    rows = query.order_by(Notice.created_at.desc()).all()
     return [_serialize(*row) for row in rows]
 
 
 @router.post("/notices", status_code=201)
-def create_notice(payload: NoticeCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles(*ROLES))):
+def create_notice(payload: NoticeCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), actor: User = Depends(require_roles(*ROLES, "faculty"))):
     _validate_delivery(payload.channel, payload.status)
     batch = db.get(Batch, payload.batch_id) if payload.batch_id else None
     if payload.batch_id and not batch:
         raise HTTPException(404, "Batch not found")
-    row = Notice(title=payload.title.strip(), body=payload.body.strip(), audience=payload.audience, channel=payload.channel, batch_id=payload.batch_id, status=payload.status, published_at=datetime.now(timezone.utc) if payload.status == "published" else None, created_by=actor.id)
+    subject = db.get(Subject, payload.subject_id) if payload.subject_id else None
+    if payload.subject_id and not subject:
+        raise HTTPException(404, "Subject not found")
+    if actor.role == "faculty":
+        if payload.audience != "subject" or payload.channel != "in_app":
+            raise HTTPException(403, "Faculty announcements must target one assigned batch and subject")
+        assigned = db.query(FacultyTeachingAssignment.id).filter(
+            FacultyTeachingAssignment.faculty_id == actor.id,
+            FacultyTeachingAssignment.batch_id == payload.batch_id,
+            FacultyTeachingAssignment.subject_id == payload.subject_id,
+            FacultyTeachingAssignment.is_active.is_(True),
+        ).first()
+        if not assigned:
+            raise HTTPException(403, "You can announce only to an assigned batch and subject")
+    row = Notice(title=payload.title.strip(), body=payload.body.strip(), audience=payload.audience, channel=payload.channel, batch_id=payload.batch_id if payload.audience in {"batch", "subject"} else None, subject_id=payload.subject_id if payload.audience == "subject" else None, status=payload.status, published_at=datetime.now(timezone.utc) if payload.status == "published" else None, created_by=actor.id)
     db.add(row); db.flush()
-    audit(db, actor, "communication.notice.create", "notice", row.id, after={"audience": row.audience, "channel": row.channel, "status": row.status, "batch_id": row.batch_id})
+    materialize_deliveries(db, row)
+    audit(db, actor, "communication.notice.create", "notice", row.id, after={"audience": row.audience, "channel": row.channel, "status": row.status, "batch_id": row.batch_id, "subject_id": row.subject_id})
     db.commit()
-    return _serialize(row, batch)
+    background_tasks.add_task(dispatch_pending)
+    return _serialize(row, batch, subject)
 
 
 @router.patch("/notices/{notice_id}")
-def update_notice(notice_id: str, payload: NoticeUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
+def update_notice(notice_id: str, payload: NoticeUpdate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
     row = db.get(Notice, notice_id)
     if not row:
         raise HTTPException(404, "Notice not found")
@@ -485,14 +514,20 @@ def update_notice(notice_id: str, payload: NoticeUpdate, db: Session = Depends(g
     batch = db.get(Batch, payload.batch_id) if payload.batch_id else None
     if payload.batch_id and not batch:
         raise HTTPException(404, "Batch not found")
-    before = _serialize(row, db.get(Batch, row.batch_id) if row.batch_id else None)
+    subject = db.get(Subject, payload.subject_id) if payload.subject_id else None
+    if payload.subject_id and not subject:
+        raise HTTPException(404, "Subject not found")
+    before = _serialize(row, db.get(Batch, row.batch_id) if row.batch_id else None, db.get(Subject, row.subject_id) if row.subject_id else None)
     row.title = payload.title.strip()
     row.body = payload.body.strip()
     row.audience = payload.audience
     row.channel = payload.channel
-    row.batch_id = payload.batch_id
+    row.batch_id = payload.batch_id if payload.audience in {"batch", "subject"} else None
+    row.subject_id = payload.subject_id if payload.audience == "subject" else None
     row.status = payload.status
     row.published_at = datetime.now(timezone.utc) if payload.status == "published" and not row.published_at else (None if payload.status == "draft" else row.published_at)
+    materialize_deliveries(db, row)
     audit(db, actor, "communication.notice.update", "notice", row.id, before=before, after=payload.model_dump(by_alias=True))
     db.commit()
-    return _serialize(row, batch)
+    background_tasks.add_task(dispatch_pending)
+    return _serialize(row, batch, subject)

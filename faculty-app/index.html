@@ -16,6 +16,7 @@
   <link rel="icon" href="../pwa-icon-192.png?v=20260804-no-tm">
   <link rel="stylesheet" href="./styles.css?v=13">
   <link rel="stylesheet" href="../auth-shared.css?v=9">
+  <link rel="stylesheet" href="../push-shared.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#faculty-main">Skip to content</a>
@@ -208,7 +209,7 @@
       </section>
 
       <section class="app-view" id="notices" aria-labelledby="notices-heading">
-        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">INSTITUTE</p><h1 id="notices-heading">Notices</h1><p>Published announcements for faculty and your assigned batches.</p></div></div>
+        <div class="view-heading with-back"><button class="back-button" type="button" data-go="more" aria-label="Back to More"><span data-icon="arrow-left"></span></button><div><p class="eyebrow">INSTITUTE</p><h1 id="notices-heading">Notices</h1><p>Announcements are limited to your assigned batch and subject.</p></div><button class="primary-compact" type="button" data-open-notice><span data-icon="plus"></span>New announcement</button></div>
         <div class="module-metrics" id="notice-metrics"></div>
         <section class="panel notice-module"><div class="notice-list" id="notice-list"></div></section>
       </section>
@@ -265,6 +266,19 @@
     </section>
   </div>
 
+  <div class="modal-backdrop hidden" id="notice-modal" role="dialog" aria-modal="true" aria-labelledby="notice-modal-title" aria-hidden="true">
+    <section class="modal-card">
+      <header><div><p class="eyebrow">SUBJECT ANNOUNCEMENT</p><h2 id="notice-modal-title">New announcement</h2><p>Only students and parents in the selected subject will receive it.</p></div><button class="icon-button" type="button" data-close-modal="notice-modal" aria-label="Close announcement form"><span data-icon="close"></span></button></header>
+      <form id="notice-form">
+        <label><span>Batch and subject</span><select id="notice-pair" name="pair" required></select></label>
+        <label><span>Title</span><input name="title" type="text" minlength="2" maxlength="255" placeholder="e.g. Chemistry class update" required></label>
+        <label><span>Message</span><textarea name="body" rows="5" minlength="2" maxlength="5000" placeholder="Write a concise update for this class." required></textarea></label>
+        <div class="modal-error hidden" id="notice-error" role="alert"></div>
+        <footer><button class="secondary-button" type="button" data-close-modal="notice-modal">Cancel</button><button class="primary-button" id="notice-submit" type="submit">Publish announcement</button></footer>
+      </form>
+    </section>
+  </div>
+
   <div class="modal-backdrop hidden" id="examination-modal" role="dialog" aria-modal="true" aria-labelledby="examination-modal-title">
     <section class="modal-card">
       <header><div><p class="eyebrow">ASSESSMENT</p><h2 id="examination-modal-title">New examination</h2></div><button class="icon-button" type="button" data-close-modal="examination-modal" aria-label="Close examination form"><span data-icon="close"></span></button></header>
@@ -300,6 +314,7 @@
   </div>
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
-  <script src="./app.js?v=19" defer></script>
+  <script src="../push-client.js?v=1" defer></script>
+  <script src="./app.js?v=20" defer></script>
 </body>
 </html>

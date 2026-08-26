@@ -32,6 +32,9 @@ class Settings:
     seed_demo_data: bool = os.getenv("SEED_DEMO_DATA", "false").lower() == "true"
     allow_legacy_email_login: bool = os.getenv("ALLOW_LEGACY_EMAIL_LOGIN", "false").lower() == "true"
     database_pool_pre_ping: bool = os.getenv("DATABASE_POOL_PRE_PING", "false").lower() == "true"
+    web_push_private_key: str = os.getenv("WEB_PUSH_PRIVATE_KEY", "").strip().replace("\\n", "\n")
+    web_push_public_key: str = os.getenv("WEB_PUSH_PUBLIC_KEY", "").strip()
+    web_push_subject: str = os.getenv("WEB_PUSH_SUBJECT", "mailto:notifications@srslogics.com").strip()
     release: str = (
         os.getenv("APP_RELEASE")
         or os.getenv("RENDER_GIT_COMMIT")

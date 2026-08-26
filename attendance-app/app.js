@@ -545,12 +545,14 @@ async function loadDesk(message = "") {
   $("#boot-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
   $("#attendance-shell").classList.remove("hidden");
+  window.LakshyaPush?.sync({token:state.token, portal:"attendance"});
   if (message) toast(message);
 }
 
 async function logout() {
   const token = state.token;
   if (token) {
+    await window.LakshyaPush?.unsubscribe({token});
     try {
       await fetch("/api/auth/logout", {method:"POST", headers:{Authorization:`Bearer ${token}`}});
     } catch {}

@@ -488,16 +488,19 @@ class AttendanceCorrection(BaseModel):
 class NoticeCreate(BaseModel):
     title: str = Field(min_length=2, max_length=255)
     body: str = Field(min_length=2, max_length=5000)
-    audience: Literal["all", "parents", "students", "faculty", "batch"]
+    audience: Literal["all", "parents", "students", "faculty", "batch", "subject"]
     channel: Literal["in_app", "email", "sms", "whatsapp"] = "in_app"
     batch_id: str | None = Field(default=None, alias="batchId")
+    subject_id: str | None = Field(default=None, alias="subjectId")
     status: Literal["draft", "published"] = "published"
     model_config = ConfigDict(populate_by_name=True)
 
     @model_validator(mode="after")
     def batch_audience_requires_batch(self):
-        if self.audience == "batch" and not self.batch_id:
-            raise ValueError("batchId is required for a batch audience")
+        if self.audience in {"batch", "subject"} and not self.batch_id:
+            raise ValueError("batchId is required for this audience")
+        if self.audience == "subject" and not self.subject_id:
+            raise ValueError("subjectId is required for a subject audience")
         return self
 
 

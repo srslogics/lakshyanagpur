@@ -718,9 +718,38 @@ class Notice(TimestampMixin, Base):
     audience: Mapped[str] = mapped_column(String(32), index=True)
     channel: Mapped[str] = mapped_column(String(24), default="in_app", index=True)
     batch_id: Mapped[str | None] = mapped_column(ForeignKey("batches.id"), index=True)
+    subject_id: Mapped[str | None] = mapped_column(ForeignKey("subjects.id"), index=True)
     status: Mapped[str] = mapped_column(String(24), default="published", index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class PushSubscription(TimestampMixin, Base):
+    __tablename__ = "push_subscriptions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("push"))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(Text, unique=True)
+    p256dh: Mapped[str] = mapped_column(Text)
+    auth: Mapped[str] = mapped_column(Text)
+    portal: Mapped[str] = mapped_column(String(24), index=True)
+    user_agent: Mapped[str] = mapped_column(String(500), default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    last_error: Mapped[str] = mapped_column(String(1000), default="")
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class NotificationDelivery(TimestampMixin, Base):
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (UniqueConstraint("notice_id", "subscription_id", name="uq_notice_push_subscription"),)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("delivery"))
+    notice_id: Mapped[str] = mapped_column(ForeignKey("notices.id", ondelete="CASCADE"), index=True)
+    subscription_id: Mapped[str] = mapped_column(ForeignKey("push_subscriptions.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(24), default="pending", nullable=False, index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_error: Mapped[str] = mapped_column(String(1000), default="")
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CommunicationThread(TimestampMixin, Base):

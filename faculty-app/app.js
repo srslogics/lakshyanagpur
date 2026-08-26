@@ -478,6 +478,7 @@ async function loadPortal() {
   renderAll();
   const hashView = location.hash.slice(1);
   showView(PORTAL_VIEWS.has(hashView) ? hashView : "dashboard", false);
+  window.LakshyaPush?.sync({token:state.token, portal:"faculty"});
 }
 
 async function refreshPortal(message = "") {
@@ -490,6 +491,7 @@ async function refreshPortal(message = "") {
 async function logout() {
   const token = state.token;
   if (token) {
+    await window.LakshyaPush?.unsubscribe({token});
     try {
       await fetch("/api/auth/logout", {method:"POST", headers:{Authorization:`Bearer ${token}`}});
     } catch {}
@@ -743,7 +745,7 @@ function noticeCard(item) {
     <article class="notice-card">
       <h3>${esc(item.title)}</h3>
       <p>${esc(item.body)}</p>
-      <time>${dateLong(item.publishedAt)}${item.batch ? ` · ${esc(item.batch)}` : ""}</time>
+      <time>${dateLong(item.publishedAt)}${item.batch ? ` · ${esc(item.batch)}` : ""}${item.subject ? ` · ${esc(item.subject)}` : ""}</time>
     </article>
   `;
 }
@@ -873,6 +875,55 @@ function closeModal(id) {
   if (id === "examination-modal") state.editingExamination = null;
   state.lastFocus?.focus?.();
   state.lastFocus = null;
+}
+
+function openNoticeModal(trigger) {
+  const pairs = state.data.teachingPairs || [];
+  if (!pairs.length) {
+    toast("Ask the owner to assign you a batch and subject.");
+    return;
+  }
+  const unique = new Map(pairs.map(pair => [`${pair.batchId}:${pair.subjectId}`, pair]));
+  $("#notice-pair").innerHTML = [...unique.values()].map(pair =>
+    `<option value="${esc(pair.batchId)}:${esc(pair.subjectId)}">${esc(pair.batch)} · ${esc(pair.subject)} · ${esc(pair.program)}</option>`
+  ).join("");
+  $("#notice-form").reset();
+  $("#notice-error").classList.add("hidden");
+  openModal("notice-modal", trigger);
+}
+
+async function publishNotice(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const button = $("#notice-submit");
+  const data = new FormData(form);
+  const [batchId, subjectId] = String(data.get("pair") || "").split(":");
+  button.disabled = true;
+  button.textContent = "Publishing…";
+  $("#notice-error").classList.add("hidden");
+  try {
+    await api("/api/communication/notices", {
+      method:"POST",
+      body:JSON.stringify({
+        title:String(data.get("title") || "").trim(),
+        body:String(data.get("body") || "").trim(),
+        audience:"subject",
+        channel:"in_app",
+        batchId,
+        subjectId,
+        status:"published"
+      })
+    });
+    closeModal("notice-modal");
+    await refreshPortal("Announcement published to this subject.");
+  } catch (error) {
+    $("#notice-error").textContent = typeof error.message === "string" ? error.message : "Unable to publish the announcement.";
+    $("#notice-error").classList.remove("hidden");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Publish announcement";
+  }
 }
 
 function openAssignmentModal(trigger, item = null) {
@@ -1176,6 +1227,7 @@ function bindEvents() {
   $("#sidebar-signout").addEventListener("click", logout);
   $("#profile-button").addEventListener("click", () => showView("profile"));
   $("#assignment-form").addEventListener("submit", saveAssignment);
+  $("#notice-form").addEventListener("submit", publishNotice);
   $("#examination-form").addEventListener("submit", saveExamination);
   $("#examination-results-form").addEventListener("submit", event => {
     event.preventDefault();
@@ -1205,6 +1257,8 @@ function bindEvents() {
 
     const assignmentTrigger = event.target.closest("[data-open-assignment]");
     if (assignmentTrigger) openAssignmentModal(assignmentTrigger);
+    const noticeTrigger = event.target.closest("[data-open-notice]");
+    if (noticeTrigger) openNoticeModal(noticeTrigger);
     const assignmentEdit = event.target.closest("[data-edit-assignment]");
     if (assignmentEdit) {
       const item = state.data.assignments.find(row => row.id === assignmentEdit.dataset.editAssignment);

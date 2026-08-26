@@ -1,9 +1,12 @@
-const CACHE = "lakshya-attendance-v26";
+importScripts("/push-service-worker.js?v=1");
+const CACHE = "lakshya-attendance-v27";
 const ASSETS = [
   "./",
   "./styles.css?v=9",
   "../auth-shared.css?v=9",
-  "./app.js?v=21",
+  "../push-shared.css?v=1",
+  "../push-client.js?v=1",
+  "./app.js?v=24",
   "./manifest.webmanifest",
   "../lakshya-logo-576.png?v=20260804-no-tm",
   "../pwa-icon-192.png?v=20260804-no-tm"

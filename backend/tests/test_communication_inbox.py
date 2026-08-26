@@ -2,7 +2,9 @@ from app.models import (
     Batch,
     Enrollment,
     FacultyTeachingAssignment,
+    NotificationDelivery,
     ParentAccount,
+    PushSubscription,
     Student,
     StudentAccount,
     Subject,
@@ -87,7 +89,7 @@ def test_student_subject_message_reaches_operations_and_assigned_faculty(client,
     faculty_inbox = client.get("/api/communication/inbox", headers=_headers(faculty))
     assert faculty_inbox.status_code == 200
     assert [row["id"] for row in faculty_inbox.json()["threads"]] == [thread_id]
-    assert faculty_inbox.json()["canAnnounce"] is False
+    assert faculty_inbox.json()["canAnnounce"] is True
 
     hidden = client.get(
         f"/api/communication/threads/{thread_id}",
@@ -140,6 +142,59 @@ def test_faculty_cannot_publish_global_announcement(client, database):
         headers=_headers(faculty),
     )
     assert response.status_code == 403
+
+
+def test_faculty_can_publish_only_to_an_assigned_subject(client, database, monkeypatch):
+    student, parent, faculty, unrelated_faculty, subject = _communication_accounts(database)
+    batch = database.query(Batch).filter_by(name="Tatva", program="JEE").one()
+    monkeypatch.setattr("app.routers.communication.dispatch_pending", lambda: 0)
+    subscriptions = [
+        PushSubscription(
+            user_id=user.id,
+            endpoint=f"https://push.example.test/{user.id}",
+            p256dh="a" * 65,
+            auth="b" * 24,
+            portal=portal,
+        )
+        for user, portal in (
+            (student, "student"),
+            (parent, "parent"),
+            (unrelated_faculty, "faculty"),
+        )
+    ]
+    database.add_all(subscriptions)
+    database.commit()
+    payload = {
+        "title": "Physics class update",
+        "body": "Bring the mechanics workbook tomorrow.",
+        "audience": "subject",
+        "channel": "in_app",
+        "batchId": batch.id,
+        "subjectId": subject.id,
+        "status": "published",
+    }
+    published = client.post(
+        "/api/communication/notices",
+        json=payload,
+        headers=_headers(faculty),
+    )
+    assert published.status_code == 201
+    assert published.json()["subject"] == "Physics"
+    notice_id = published.json()["id"]
+    recipient_ids = {
+        row.user_id
+        for row in database.query(NotificationDelivery).filter_by(notice_id=notice_id).all()
+    }
+    assert recipient_ids == {student.id, parent.id}
+    assert client.get("/api/portal/bootstrap", headers=_headers(student)).json()["notices"][0]["title"] == "Physics class update"
+    assert client.get("/api/parent/bootstrap", headers=_headers(parent)).json()["notices"][0]["title"] == "Physics class update"
+
+    forbidden = client.post(
+        "/api/communication/notices",
+        json=payload,
+        headers=_headers(unrelated_faculty),
+    )
+    assert forbidden.status_code == 403
 
 
 def test_operations_global_announcement_is_visible_in_every_portal(client, database, owner_headers):

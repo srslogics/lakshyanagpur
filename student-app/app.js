@@ -454,11 +454,13 @@ async function loadPortal() {
   $("#password-change-screen").classList.add("hidden");
   $("#student-shell").classList.remove("hidden");
   showView(hashView(), false);
+  window.LakshyaPush?.sync({token:state.token, portal:"student"});
 }
 
 async function logout() {
   const token = state.token;
   if (token) {
+    await window.LakshyaPush?.unsubscribe({token});
     try {
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -845,7 +847,7 @@ function renderNotices() {
   ].join("");
   $("#notice-list").innerHTML = notices.length
     ? notices.map((item) => `<article class="notice-card">
-      <div class="notice-card-top"><span>${esc(item.batch || "All students")}</span><time>${dateLong(item.publishedAt)}</time></div>
+      <div class="notice-card-top"><span>${esc([item.batch, item.subject].filter(Boolean).join(" · ") || "All students")}</span><time>${dateLong(item.publishedAt)}</time></div>
       <h3>${esc(item.title)}</h3>
       <p>${esc(item.body)}</p>
       <footer>${esc(titleCase(item.channel))}</footer>
