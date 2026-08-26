@@ -620,7 +620,7 @@ function renderAssignments() {
     metric("Drafts", String(drafts), drafts > 0),
     metric("Past due", String(overdue))
   ].join("");
-  const rows = all.filter(item => state.assignmentFilter === "all" || assignmentState(item) === state.assignmentFilter);
+  const rows = all.filter(item => state.assignmentFilter === "all" || assignmentState(item) === state.assignmentFilter).slice(0, 12);
   $("#assignment-list").innerHTML = rows.length ? rows.map(item => {
     const itemState = assignmentState(item);
     const resourceUrl = safeExternalUrl(item.externalUrl);
@@ -689,7 +689,7 @@ function renderExaminations() {
   $("#sidebar-examination-badge").textContent = action.length;
   $("#sidebar-examination-badge").classList.toggle("hidden", !action.length);
   const rows = all.filter(item => state.examinationFilter === "all"
-    || (state.examinationFilter === "published" ? item.status === "published" : examinationState(item) === state.examinationFilter));
+    || (state.examinationFilter === "published" ? item.status === "published" : examinationState(item) === state.examinationFilter)).slice(0, 12);
   $("#examination-list").innerHTML = rows.length ? rows.map(item => {
     const itemState = examinationState(item);
     const progress = item.participantCount ? Math.round(Number(item.marksEntered || 0) / Number(item.participantCount) * 100) : 0;
@@ -775,10 +775,11 @@ function renderBatches() {
 }
 
 function renderNotices() {
-  const notices = state.data.notices;
-  const batchNotices = notices.filter(item => item.batch).length;
+  const allNotices = state.data.notices;
+  const notices = allNotices.slice(0, 8);
+  const batchNotices = allNotices.filter(item => item.batch).length;
   $("#notice-metrics").innerHTML = [
-    metric("Published", String(notices.length)),
+    metric("Published", String(allNotices.length)),
     metric("Batch notices", String(batchNotices)),
     metric("Latest", notices[0] ? dateText(notices[0].publishedAt) : "None")
   ].join("");

@@ -1,6 +1,6 @@
 importScripts("/push-service-worker.js?v=1");
-const CACHE = "lakshya-student-v40";
-const ASSETS = ["./", "../portal-shared.css?v=5", "./styles.css?v=17", "../auth-shared.css?v=12", "../push-shared.css?v=1", "../push-client.js?v=1", "./app.js?v=26", "./manifest.webmanifest", "../lakshya-logo-576.png?v=20260804-no-tm", "../pwa-icon-192.png?v=20260804-no-tm"];
+const CACHE = "lakshya-student-v41";
+const ASSETS = ["./", "../portal-shared.css?v=5", "./styles.css?v=17", "../auth-shared.css?v=12", "../push-shared.css?v=1", "../push-client.js?v=1", "./app.js?v=27", "./manifest.webmanifest", "../lakshya-logo-576.png?v=20260804-no-tm", "../pwa-icon-192.png?v=20260804-no-tm"];
 self.addEventListener("install", event => { event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))); self.skipWaiting(); });
 self.addEventListener("activate", event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE && key.startsWith("lakshya-student-")).map(key => caches.delete(key))))); self.clients.claim(); });
 self.addEventListener("fetch", event => {

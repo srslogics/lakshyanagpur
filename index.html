@@ -28,7 +28,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=59">
+  <link rel="stylesheet" href="/styles.css?v=60">
   <link rel="stylesheet" href="/auth-shared.css?v=9">
   <link rel="stylesheet" href="/push-shared.css?v=1">
 </head>
@@ -295,7 +295,7 @@
           </section>
           <section class="attendance-panel" id="attendance-students-panel" role="tabpanel" aria-labelledby="attendance-students-tab" data-attendance-panel="students" hidden>
             <div class="compact-metrics" id="attendance-metrics"></div>
-            <article class="surface table-surface"><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Class</th><th>Faculty</th><th>Room</th><th>Students</th><th>Register</th><th></th></tr></thead><tbody id="attendance-table-body"></tbody></table></div><div class="mobile-records" id="attendance-mobile-list"></div></article>
+            <article class="surface table-surface"><div class="attendance-register-toolbar"><label><span>Show</span><select id="attendance-register-filter"><option value="current">Current week</option><option value="action">Needs attention</option><option value="submitted">Recently submitted</option><option value="all">All records</option></select></label><p id="attendance-result-summary">Current week</p></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Class</th><th>Faculty</th><th>Room</th><th>Students</th><th>Register</th><th></th></tr></thead><tbody id="attendance-table-body"></tbody></table></div><div class="mobile-records" id="attendance-mobile-list"></div></article>
           </section>
         </section>
 
@@ -405,6 +405,6 @@
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
   <script src="/push-client.js?v=1" defer></script>
-  <script src="/app.js?v=75" defer></script>
+  <script src="/app.js?v=76" defer></script>
 </body>
 </html>

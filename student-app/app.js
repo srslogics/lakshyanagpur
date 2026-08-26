@@ -25,8 +25,9 @@ const views = new Set(["home", "schedule", "assignments", "examinations", "atten
 const overflowViews = new Set(["examinations", "messages", "notices", "profile", "more"]);
 const CONSENT_VERSION = "student-parent-v1-2026-08-15";
 const CONSENT_STORAGE_PREFIX = "lakshya_student_consent_";
-const UPCOMING_CLASS_LIMIT = 12;
-const RECENT_ATTENDANCE_LIMIT = 12;
+const UPCOMING_CLASS_LIMIT = 7;
+const RECENT_ATTENDANCE_LIMIT = 7;
+const PORTAL_LIST_LIMIT = 8;
 const titles = {
   home: "Home",
   schedule: "Schedule",
@@ -681,9 +682,9 @@ function renderAssignments() {
     $(selector).textContent = pending;
     $(selector).classList.toggle("hidden", !pending);
   });
-  const rows = state.assignmentFilter === "all"
+  const rows = (state.assignmentFilter === "all"
     ? all
-    : all.filter((item) => assignmentState(item) === state.assignmentFilter);
+    : all.filter((item) => assignmentState(item) === state.assignmentFilter)).slice(0, PORTAL_LIST_LIMIT);
   $("#assignment-list").innerHTML = rows.length
     ? rows.map((item) => {
       const itemState = assignmentState(item);
@@ -754,6 +755,7 @@ function renderExaminations() {
   let rows = all;
   if (state.examinationFilter === "upcoming") rows = [...upcoming, ...awaiting];
   if (state.examinationFilter === "results") rows = results;
+  rows = rows.slice(0, PORTAL_LIST_LIMIT);
   $("#examination-list").innerHTML = rows.length
     ? rows.map((item) => {
       const published = item.status === "published";
@@ -838,10 +840,11 @@ function renderAttendance() {
 }
 
 function renderNotices() {
-  const notices = state.data.notices;
-  const batchNotices = notices.filter((item) => item.batch).length;
+  const allNotices = state.data.notices;
+  const notices = allNotices.slice(0, 6);
+  const batchNotices = allNotices.filter((item) => item.batch).length;
   $("#notice-metrics").innerHTML = [
-    moduleMetric("Published", String(notices.length)),
+    moduleMetric("Published", String(allNotices.length)),
     moduleMetric("For your batch", String(batchNotices)),
     moduleMetric("Latest", notices[0] ? dateText(notices[0].publishedAt) : "None"),
   ].join("");

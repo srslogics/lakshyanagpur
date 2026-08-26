@@ -73,6 +73,9 @@ let settingsAccountFilter = "all";
 let settingsSection = "accounts";
 let timetableSelectedDate = "";
 let timetableView = "schedule";
+let attendanceRegisterFilter = "current";
+const COLLECTION_PAGE_SIZE = 12;
+const collectionCaps = Object.create(null);
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
 const STUDENT_PROGRAM_ORDER = ["JEE", "NEET", "MHT-CET", "Boards"];
 const STUDENT_SUBJECTS = ["Physics", "Chemistry", "Maths", "Biology"];
@@ -159,6 +162,18 @@ const dateInputValue = (date = new Date()) => {
 };
 const indiaInputToISOString = value => new Date(`${String(value)}:00+05:30`).toISOString();
 const status = value => `<span class="status status-${normalize(value) || "neutral"}">${esc(String(value || "Unknown").replaceAll("_", " "))}</span>`;
+
+function collectionWindow(key, rows, pageSize = COLLECTION_PAGE_SIZE) {
+  const cap = collectionCaps[key] || pageSize;
+  return { rows: rows.slice(0, cap), shown: Math.min(rows.length, cap), total: rows.length, hasMore: rows.length > cap };
+}
+
+function collectionMoreButton(key, shown, total, noun = "records") {
+  if (shown >= total) return "";
+  return `<button class="collection-more-button" type="button" data-collection-more="${esc(key)}" data-collection-shown="${shown}">Show ${Math.min(COLLECTION_PAGE_SIZE, total - shown)} more <span>${shown} of ${total} ${esc(noun)}</span></button>`;
+}
+
+function resetCollection(key) { delete collectionCaps[key]; }
 
 function injectIcons(root = document) {
   $$('[data-icon]', root).forEach(node => { if (icons[node.dataset.icon]) node.innerHTML = icon(node.dataset.icon); });
@@ -685,9 +700,10 @@ function renderStudentRows() {
   }).join("");
   const programTabs = [["", "All", batchRows.length], ...[...programCounts.entries()].filter(([, count]) => count > 0).map(([program, count]) => [program, program, count])]
     .map(([value, label, count]) => `<button type="button" class="student-program-chip${studentHierarchyState.program === value ? " active" : ""}" data-student-program="${esc(value)}"><span>${esc(label)}</span><strong>${count}</strong></button>`).join("");
+  const page = collectionWindow("students", rows, 14);
   const resultLabel = `${rows.length} ${rows.length === 1 ? "student" : "students"}`;
   $("#student-result-count").textContent = resultLabel;
-  $("#student-hierarchy").innerHTML = `<div class="student-batch-tabs" role="tablist" aria-label="Student batches">${batchTabs}</div><div class="student-directory-bar"><div class="student-program-chips" aria-label="Filter by program">${programTabs}</div></div><div class="student-directory-list" role="list">${rows.length ? rows.map(renderStudentDirectoryRow).join("") : emptyState("search", "No students here", "Choose another batch or clear the filters.")}</div>`;
+  $("#student-hierarchy").innerHTML = `<div class="student-batch-tabs" role="tablist" aria-label="Student batches">${batchTabs}</div><div class="student-directory-bar"><div class="student-program-chips" aria-label="Filter by program">${programTabs}</div></div><div class="student-directory-list" role="list">${rows.length ? page.rows.map(renderStudentDirectoryRow).join("") : emptyState("search", "No students here", "Choose another batch or clear the filters.")}</div>${collectionMoreButton("students", page.shown, page.total, "students")}`;
 }
 
 function studentPayments(studentId) {
@@ -771,13 +787,14 @@ function renderAgreementRows() {
     const matchesFilter = !filter || (filter === "closed" ? item.accountClosed : filter === "reconcile" ? !item.accountClosed && item.needsReconciliation : !item.accountClosed && item.balanceState === filter);
     return matchesSearch && matchesFilter;
   });
+  const page = collectionWindow("agreements", rows);
   const visibleOutstanding = rows.reduce((sum, item) => sum + (item.accountClosed ? 0 : Math.max(item.balance, 0)), 0);
   $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
   const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}Ledger</button>`;
   const editAccountButton = item => canAccess("finance", "edit") ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
   const balanceBadge = item => item.accountClosed ? `<span class="ledger-balance-state ledger-balance-settled">Closed</span>` : `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
-  $("#agreements-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="receivable-fee-summary"><strong class="currency">${money(item.agreed)}</strong><small>${money(item.paid)} paid</small></td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("search", "No matching balances", "Clear a filter to see every student balance.")}</td></tr>`;
-  $("#agreements-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
+  $("#agreements-table-body").innerHTML = rows.length ? page.rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="receivable-fee-summary"><strong class="currency">${money(item.agreed)}</strong><small>${money(item.paid)} paid</small></td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="5">${collectionMoreButton("agreements", page.shown, page.total, "accounts")}</td></tr>` : "") : `<tr><td colspan="5">${emptyState("search", "No matching balances", "Clear a filter to see every student balance.")}</td></tr>`;
+  $("#agreements-mobile-list").innerHTML = rows.length ? page.rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") + collectionMoreButton("agreements", page.shown, page.total, "accounts") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
 }
 
 function renderPaymentRows() {
@@ -802,6 +819,7 @@ function renderPaymentRows() {
     const matchesSearch = !search || [item.studentName, item.method, item.sourceNote, item.reference, item.receiptNumber, item.date, item.amount, item.type].some(value => String(value || "").toLowerCase().includes(search));
     return matchesStudent && matchesStatus && matchesSearch;
   });
+  const page = collectionWindow("payments", rows, 15);
   const student = financeStudentFilter
     ? register.find(item => item.studentId === financeStudentFilter) || state.agreements.find(item => item.studentId === financeStudentFilter)
     : null;
@@ -840,8 +858,8 @@ function renderPaymentRows() {
       : item.type === "payment" && canManageFinance()
         ? `<button class="button button-secondary button-small" type="button" data-payment-reverse="${esc(item.id)}">${icon("refresh")}Reverse</button>`
         : "";
-  $("#payments-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.admissionNumber || `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc([item.receiptNumber, item.reference, item.notes || item.sourceNote].filter(Boolean).join(" · "))}"><strong>${esc(sourceLabel(item).slice(0, 32))}</strong>${item.reference && item.receiptNumber ? `<br><small>${esc(item.reference.slice(0, 32))}</small>` : ""}</td><td><div class="cell-actions">${status(displayState(item))}${action(item)}</div></td></tr>`).join("") : `<tr><td colspan="7">${emptyState("search", "No matching payments", "Clear a filter to see every payment.")}</td></tr>`;
-  $("#payments-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(displayState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Receipt</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") : emptyState("search", "No matching payments", "Clear a filter to see every payment.");
+  $("#payments-table-body").innerHTML = rows.length ? page.rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.admissionNumber || `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc([item.receiptNumber, item.reference, item.notes || item.sourceNote].filter(Boolean).join(" · "))}"><strong>${esc(sourceLabel(item).slice(0, 32))}</strong>${item.reference && item.receiptNumber ? `<br><small>${esc(item.reference.slice(0, 32))}</small>` : ""}</td><td><div class="cell-actions">${status(displayState(item))}${action(item)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="7">${collectionMoreButton("payments", page.shown, page.total, "entries")}</td></tr>` : "") : `<tr><td colspan="7">${emptyState("search", "No matching payments", "Clear a filter to see every payment.")}</td></tr>`;
+  $("#payments-mobile-list").innerHTML = rows.length ? page.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(displayState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Receipt</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") + collectionMoreButton("payments", page.shown, page.total, "entries") : emptyState("search", "No matching payments", "Clear a filter to see every payment.");
 }
 
 function activateFinanceTab(name, focus = false) {
@@ -958,9 +976,10 @@ function renderAdmissions() {
 function renderLeadRows() {
   const search = $("#lead-search").value.trim().toLowerCase(), stage = $("#lead-stage-filter").value;
   const rows = state.leads.filter(item => (!search || [item.student, item.mobile, item.program].some(value => String(value || "").toLowerCase().includes(search))) && (!stage || item.stage === stage));
+  const page = collectionWindow("leads", rows);
   const actions = item => `<div class="cell-actions"><button class="button button-secondary button-small" type="button" data-lead-follow-up="${esc(item.id)}">${icon("message")}Follow-up</button>${item.stage === "Admission Confirmed" && canConvertAdmissions() ? `<button class="button button-primary button-small" type="button" data-lead-convert="${esc(item.id)}">${icon("arrow-right")}Convert</button>` : ""}${ownerEditButton("lead", item.id)}</div>`;
-  $("#leads-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td>${actions(item)}</td></tr>`).join("") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "No enquiries", state.leads.length ? "Clear a filter." : "Create an enquiry to begin.")}</td></tr>`;
-  $("#leads-mobile-list").innerHTML = rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div>${actions(item)}</article>`).join("");
+  $("#leads-table-body").innerHTML = rows.length ? page.rows.map(item => `<tr><td>${studentPrimary(item.student, item.mobile)}</td><td>${esc(item.program || "—")}</td><td>${esc(item.counsellor || "Unassigned")}</td><td>${status(item.stage)}</td><td>${esc(item.nextAction || "—")}</td><td>${actions(item)}</td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("leads", page.shown, page.total, "enquiries")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("spark", state.leads.length ? "No matching enquiries" : "No enquiries", state.leads.length ? "Clear a filter." : "Create an enquiry to begin.")}</td></tr>`;
+  $("#leads-mobile-list").innerHTML = page.rows.map(item => `<article class="mobile-record-card"><div>${studentPrimary(item.student, item.mobile)}${status(item.stage)}</div><div class="mobile-record-meta"><div><span>Program</span><strong>${esc(item.program || "—")}</strong></div><div><span>Next action</span><strong>${esc(item.nextAction || "—")}</strong></div></div>${actions(item)}</article>`).join("") + collectionMoreButton("leads", page.shown, page.total, "enquiries");
 }
 
 function renderTimetable() {
@@ -1016,9 +1035,11 @@ function teachingAssignmentEditButton(item) {
 
 function renderAcademics() {
   const now = Date.now();
+  const assignments = [...state.assignments].sort((a, b) => asInstant(b.dueAt) - asInstant(a.dueAt));
+  const page = collectionWindow("assignments", assignments);
   $("#academics-metrics").innerHTML = compactMetrics([{ label: "Assignments", value: String(state.assignments.length) }, { label: "Published", value: String(state.assignments.filter(item => item.status === "published").length) }, { label: "Due", value: String(state.assignments.filter(item => asInstant(item.dueAt).getTime() >= now).length) }, { label: "Recipients", value: String(state.assignments.reduce((sum, item) => sum + Number(item.recipientCount || 0), 0)) }]);
-  $("#assignments-table-body").innerHTML = state.assignments.length ? state.assignments.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small><a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></small></td><td>${esc(item.batch)}<br><small>${esc(item.program || "")}</small></td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("assignment", item.id)}</div></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
-  $("#assignments-mobile-list").innerHTML = state.assignments.length ? state.assignments.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}${item.program ? ` · ${esc(item.program)}` : ""}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><div class="mobile-card-actions"><a class="button button-secondary" href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a>${ownerEditButton("assignment", item.id)}</div></article>`).join("") : emptyState("book", "No assignments");
+  $("#assignments-table-body").innerHTML = assignments.length ? page.rows.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small><a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></small></td><td>${esc(item.batch)}<br><small>${esc(item.program || "")}</small></td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("assignment", item.id)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("assignments", page.shown, page.total, "assignments")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
+  $("#assignments-mobile-list").innerHTML = assignments.length ? page.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}${item.program ? ` · ${esc(item.program)}` : ""}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><div class="mobile-card-actions"><a class="button button-secondary" href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a>${ownerEditButton("assignment", item.id)}</div></article>`).join("") + collectionMoreButton("assignments", page.shown, page.total, "assignments") : emptyState("book", "No assignments");
 }
 
 function filteredExaminations() {
@@ -1058,16 +1079,27 @@ function renderExaminations() {
 }
 
 function renderAttendance() {
-  const submitted = state.attendanceSessions.filter(item => item.registerStatus === "submitted").length;
-  const staffRecords = state.staffAttendance?.records || [];
+  const now = Date.now(), day = 86400000;
+  const allRegisters = [...state.attendanceSessions];
+  const submitted = allRegisters.filter(item => item.registerStatus === "submitted").length;
+  const needsAction = allRegisters.filter(item => item.registerStatus !== "submitted" && asInstant(item.startsAt).getTime() <= now);
+  const currentWeek = allRegisters.filter(item => { const time = asInstant(item.startsAt).getTime(); return time >= now - (3 * day) && time <= now + (7 * day); });
+  const recentlySubmitted = allRegisters.filter(item => item.registerStatus === "submitted");
+  const source = attendanceRegisterFilter === "action" ? needsAction : attendanceRegisterFilter === "submitted" ? recentlySubmitted : attendanceRegisterFilter === "all" ? allRegisters : currentWeek;
+  const registers = [...source].sort((a, b) => attendanceRegisterFilter === "current" ? asInstant(a.startsAt) - asInstant(b.startsAt) : asInstant(b.startsAt) - asInstant(a.startsAt));
+  const registerPage = collectionWindow("attendance", registers, 12);
+  const staffRecords = [...(state.staffAttendance?.records || [])].sort((a, b) => asInstant(b.arrivalAt || b.date) - asInstant(a.arrivalAt || a.date));
+  const staffPage = collectionWindow("staff-attendance", staffRecords, 12);
   const unassignedStaff = new Set(staffRecords.filter(item => !item.staffUserId).map(item => item.deviceUserId)).size;
-  $("#staff-attendance-metrics").innerHTML = compactMetrics([{ label: "Staff members", value: String(state.staffAttendance?.staffCount || 0) }, { label: "Attendance records", value: String(state.staffAttendance?.recordCount || staffRecords.length) }, { label: "Unassigned devices", value: String(unassignedStaff) }, { label: "Latest record", value: staffRecords[0]?.date ? formatDate(staffRecords[0].date) : "—" }]);
-  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Classes", value: String(state.attendanceSessions.length) }, { label: "Submitted", value: String(submitted) }, { label: "Draft", value: String(state.attendanceSessions.filter(item => item.registerStatus === "draft").length) }, { label: "Pending", value: String(state.attendanceSessions.length - submitted) }]);
-  $("#attendance-table-body").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<tr><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</small></td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${item.markedCount}/${item.studentCount}</td><td>${status(item.registerStatus)}</td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">Open</button></td></tr>`).join("") : `<tr><td colspan="6">${emptyState("calendar-check", "No attendance registers")}</td></tr>`;
-  $("#attendance-mobile-list").innerHTML = state.attendanceSessions.length ? state.attendanceSessions.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${esc(item.batch)} · ${esc(item.program || "")} · ${formatDateTime(item.startsAt)}</p></div>${status(item.registerStatus)}</div><div class="mobile-record-meta"><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Marked</span><strong>${item.markedCount}/${item.studentCount}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">Open register</button></article>`).join("") : emptyState("calendar-check", "No attendance registers");
-  $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffRecords.map(item => `<tr><td><strong>${esc(item.fullName)}</strong><br><small>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)}</small></td><td>${formatDate(item.date)}</td><td>${classTime(item.arrivalAt)}</td><td>${item.departureAt ? classTime(item.departureAt) : "—"}</td><td><span class="status status-active">Recorded</span></td></tr>`).join("") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.")}</td></tr>`;
-  $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffRecords.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.fullName)}</h3><p>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)} · ${formatDate(item.date)}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "—"}</strong></div></div></article>`).join("") : emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.");
-  $("#staff-attendance-count").textContent = `${staffRecords.length} ${staffRecords.length === 1 ? "record" : "records"}`;
+  $("#staff-attendance-metrics").innerHTML = compactMetrics([{ label: "Staff members", value: String(state.staffAttendance?.staffCount || 0) }, { label: "Unassigned devices", value: String(unassignedStaff) }, { label: "Latest record", value: staffRecords[0]?.date ? formatDate(staffRecords[0].date) : "—" }]);
+  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Current week", value: String(currentWeek.length) }, { label: "Needs attention", value: String(needsAction.length) }, { label: "Submitted", value: String(submitted) }]);
+  $("#attendance-result-summary").textContent = registers.length ? `Showing ${registerPage.shown} of ${registers.length}` : "No matching registers";
+  $("#attendance-register-filter").value = attendanceRegisterFilter;
+  $("#attendance-table-body").innerHTML = registers.length ? registerPage.rows.map(item => `<tr><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.batch)} · ${formatDateTime(item.startsAt)}</small></td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${item.markedCount}/${item.studentCount}</td><td>${status(item.registerStatus)}</td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">Open</button></td></tr>`).join("") + (registerPage.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("attendance", registerPage.shown, registerPage.total, "registers")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("calendar-check", "No matching registers", "Choose another view to see more attendance records.")}</td></tr>`;
+  $("#attendance-mobile-list").innerHTML = registers.length ? registerPage.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${esc(item.batch)} · ${formatDateTime(item.startsAt)}</p></div>${status(item.registerStatus)}</div><div class="mobile-record-meta"><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Marked</span><strong>${item.markedCount}/${item.studentCount}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">Open register</button></article>`).join("") + collectionMoreButton("attendance", registerPage.shown, registerPage.total, "registers") : emptyState("calendar-check", "No matching registers");
+  $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffPage.rows.map(item => `<tr><td><strong>${esc(item.fullName)}</strong><br><small>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)}</small></td><td>${formatDate(item.date)}</td><td>${classTime(item.arrivalAt)}</td><td>${item.departureAt ? classTime(item.departureAt) : "—"}</td><td><span class="status status-active">Recorded</span></td></tr>`).join("") + (staffPage.hasMore ? `<tr class="collection-more-row"><td colspan="5">${collectionMoreButton("staff-attendance", staffPage.shown, staffPage.total, "records")}</td></tr>` : "") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.")}</td></tr>`;
+  $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffPage.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.fullName)}</h3><p>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)} · ${formatDate(item.date)}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "—"}</strong></div></div></article>`).join("") + collectionMoreButton("staff-attendance", staffPage.shown, staffPage.total, "records") : emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.");
+  $("#staff-attendance-count").textContent = `${staffPage.shown} of ${staffRecords.length} records`;
 }
 
 function activateAttendanceTab(name, focus = false) {
@@ -1158,6 +1190,7 @@ function renderInventory() {
     (!search || [item.name, item.sku, item.category].some(value => String(value || "").toLowerCase().includes(search)))
     && (!category || item.category === category)
   );
+  const page = collectionWindow("inventory", rows);
   $("#new-inventory-item").classList.toggle("hidden", !canManageInventory());
   $("#inventory-metrics").innerHTML = compactMetrics([
     { label: "Stock items", value: String(summary.activeItems || 0) },
@@ -1169,9 +1202,9 @@ function renderInventory() {
   const actions = item => canManageInventory() ? `<div class="cell-actions"><button class="button button-primary button-small" type="button" data-inventory-movement="${esc(item.id)}">${icon("inventory")}Movement</button><button class="button button-secondary button-small" type="button" data-inventory-edit="${esc(item.id)}">${icon("edit")}Edit</button></div>` : "";
   const stockState = item => !item.isActive ? "inactive" : item.quantityOnHand == null ? "quantity pending" : Number(item.quantityOnHand) <= Number(item.reorderLevel || 0) ? "low stock" : "active";
   const quantity = item => item.quantityOnHand == null ? `<strong>Quantity pending</strong><small>Record opening stock</small>` : `<strong>${esc(item.quantityOnHand)} ${esc(item.unit)}</strong><small>Reorder at ${esc(item.reorderLevel || 0)}</small>`;
-  $("#inventory-table-body").innerHTML = rows.length ? rows.map(item => `<tr><td>${studentPrimary(item.name, item.vendorReference || item.sourceNote || "ERP entry")}</td><td><strong>${esc(item.sku)}</strong></td><td>${esc(inventoryCategory(item.category))}</td><td>${esc(item.unit)}</td><td><span class="inventory-quantity">${quantity(item)}</span></td><td>${status(stockState(item))}</td><td>${actions(item)}</td></tr>`).join("") : `<tr><td colspan="7">${emptyState("inventory", "No matching inventory items", "Clear a filter or add a new item.")}</td></tr>`;
-  $("#inventory-mobile-list").innerHTML = rows.length ? rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(stockState(item))}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Quantity pending" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Reorder level</span><strong>${esc(item.reorderLevel || 0)} ${esc(item.unit)}</strong></div></div>${actions(item)}</article>`).join("") : emptyState("inventory", "No matching inventory items");
-  const movements = inventory.recentMovements || [];
+  $("#inventory-table-body").innerHTML = rows.length ? page.rows.map(item => `<tr><td>${studentPrimary(item.name, item.vendorReference || item.sourceNote || "ERP entry")}</td><td><strong>${esc(item.sku)}</strong></td><td>${esc(inventoryCategory(item.category))}</td><td>${esc(item.unit)}</td><td><span class="inventory-quantity">${quantity(item)}</span></td><td>${status(stockState(item))}</td><td>${actions(item)}</td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="7">${collectionMoreButton("inventory", page.shown, page.total, "items")}</td></tr>` : "") : `<tr><td colspan="7">${emptyState("inventory", "No matching inventory items", "Clear a filter or add a new item.")}</td></tr>`;
+  $("#inventory-mobile-list").innerHTML = rows.length ? page.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.sku)} · ${esc(inventoryCategory(item.category))}</p></div>${status(stockState(item))}</div><div class="mobile-record-meta"><div><span>Available</span><strong>${item.quantityOnHand == null ? "Quantity pending" : `${esc(item.quantityOnHand)} ${esc(item.unit)}`}</strong></div><div><span>Reorder level</span><strong>${esc(item.reorderLevel || 0)} ${esc(item.unit)}</strong></div></div>${actions(item)}</article>`).join("") + collectionMoreButton("inventory", page.shown, page.total, "items") : emptyState("inventory", "No matching inventory items");
+  const movements = (inventory.recentMovements || []).slice(0, 8);
   $("#inventory-movement-list").innerHTML = movements.length ? movements.map(item => `<div class="audit-row"><span class="icon-tile">${icon("inventory")}</span><span><strong>${esc(item.itemName)} · ${esc(item.movementType.replaceAll("_", " "))}</strong><small>${esc(item.createdBy)} · ${formatDate(item.occurredOn)}${item.targetReference ? ` · ${esc(item.targetReference)}` : ""} · ${esc(item.reason)}</small></span><em>${item.quantityDelta > 0 ? "+" : ""}${esc(item.quantityDelta)} · ${esc(item.balanceAfter)} left</em></div>`).join("") : emptyState("inventory", "No stock movements", "Record opening stock or an inward, issue, return or adjustment.");
 }
 
@@ -1304,8 +1337,9 @@ function renderSettingsAccounts() {
     const searchable = [item.fullName, item.mobile, item.email, item.role, student?.admissionNumber, parent?.admissionNumber, parent?.studentName].filter(Boolean).join(" ").toLowerCase();
     return (settingsAccountFilter === "all" || group === settingsAccountFilter) && (!query || searchable.includes(query));
   });
+  const page = collectionWindow("settings", rows, 14);
   $("#settings-account-count").textContent = `${rows.length} of ${(masters.users || []).length} accounts`;
-  $("#settings-users").innerHTML = rows.length ? rows.map(item => {
+  $("#settings-users").innerHTML = rows.length ? page.rows.map(item => {
     const student = studentLinks.get(item.id);
     const parent = parentLinks.get(item.id);
     const context = student?.admissionNumber || (parent ? `${parent.studentName} · ${parent.admissionNumber}` : item.email || "Institute account");
@@ -1313,7 +1347,7 @@ function renderSettingsAccounts() {
       ? item.hasCustomPermissions ? `Custom · ${permissionSummary(item.permissions)}` : "Recommended access"
       : settingsAccountGroup(item.role) === "staff" ? "Operations" : "Portal access";
     return `<div class="settings-account-row"><span class="settings-account-identity"><i>${esc(initials(item.fullName))}</i><span><strong>${esc(item.fullName)}</strong><small>${esc(context)}</small></span></span><span class="settings-account-access"><strong>${esc(settingsAccountLabel(item.role))}</strong><small>${esc(accessCopy)}</small></span><span class="settings-account-login"><strong>${esc(mobileLabel(item.mobile))}</strong><small>${item.mobile ? "Mobile login" : "Setup required"}</small></span><span class="settings-account-status">${status(item.isActive ? "active" : "inactive")}</span><span class="settings-account-edit">${settingsPermissionsButton(item)}${ownerEditButton("user", item.id)}</span></div>`;
-  }).join("") : emptyState("search", "No matching accounts", "Try another name, mobile number or access type.");
+  }).join("") + collectionMoreButton("settings", page.shown, page.total, "accounts") : emptyState("search", "No matching accounts", "Try another name, mobile number or access type.");
 }
 
 function openUserPermissions(userId) {
@@ -3009,6 +3043,14 @@ function bindEvents() {
       togglePassword(passwordToggle);
       return;
     }
+    const moreButton = event.target.closest("[data-collection-more]");
+    if (moreButton) {
+      const key = moreButton.dataset.collectionMore;
+      collectionCaps[key] = Number(moreButton.dataset.collectionShown || 0) + COLLECTION_PAGE_SIZE;
+      const renderers = { students: renderStudentRows, agreements: renderAgreementRows, payments: renderPaymentRows, leads: renderLeadRows, assignments: renderAcademics, attendance: renderAttendance, "staff-attendance": renderAttendance, inventory: renderInventory, settings: renderSettingsAccounts };
+      renderers[key]?.();
+      return;
+    }
     const view = event.target.closest("[data-view], [data-view-target]")?.dataset; if (view) showView(view.view || view.viewTarget);
     const dashboardAction = event.target.closest("[data-dashboard-action]")?.dataset.dashboardAction;
     if (dashboardAction === "lead") openLeadForm();
@@ -3028,11 +3070,13 @@ function bindEvents() {
     if (batchButton) {
       studentHierarchyState.batch = batchButton.dataset.studentBatch;
       studentHierarchyState.program = "";
+      resetCollection("students");
       renderStudentRows();
     }
     const programButton = event.target.closest("[data-student-program]");
     if (programButton) {
       studentHierarchyState.program = programButton.dataset.studentProgram;
+      resetCollection("students");
       renderStudentRows();
     }
     const ownerEdit = event.target.closest("[data-owner-edit]");
@@ -3110,28 +3154,28 @@ function bindEvents() {
   $("#theme-toggle").addEventListener("click", toggleTheme);
   [$("#user-menu-button"), $("#topbar-profile-button")].forEach(button => button.addEventListener("click", event => toggleAccountMenu(event.currentTarget)));
   $("#logout-button").addEventListener("click", () => logout());
-  $("#student-search").addEventListener("input", renderStudentRows); $("#student-quality-filter").addEventListener("change", renderStudentRows);
-  $("#agreement-search").addEventListener("input", renderAgreementRows); $("#agreement-balance-filter").addEventListener("change", renderAgreementRows); $("#payment-search").addEventListener("input", renderPaymentRows); $("#payment-status-filter").addEventListener("change", renderPaymentRows);
+  $("#student-search").addEventListener("input", () => { resetCollection("students"); renderStudentRows(); }); $("#student-quality-filter").addEventListener("change", () => { resetCollection("students"); renderStudentRows(); });
+  $("#agreement-search").addEventListener("input", () => { resetCollection("agreements"); renderAgreementRows(); }); $("#agreement-balance-filter").addEventListener("change", () => { resetCollection("agreements"); renderAgreementRows(); }); $("#payment-search").addEventListener("input", () => { resetCollection("payments"); renderPaymentRows(); }); $("#payment-status-filter").addEventListener("change", () => { resetCollection("payments"); renderPaymentRows(); });
   $("#clear-payment-student-filter").addEventListener("click", () => { financeStudentFilter = ""; renderPaymentRows(); });
   $("#ledger-back").addEventListener("click", () => closeStudentLedger());
   $("#ledger-payment-register").addEventListener("click", () => { const studentId = ledgerCurrentStudentId; if (studentId) showStudentPayments(studentId); });
   $("#print-student-ledger").addEventListener("click", () => window.print());
-  $("#lead-search").addEventListener("input", renderLeadRows); $("#lead-stage-filter").addEventListener("change", renderLeadRows); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#lead-search").addEventListener("input", () => { resetCollection("leads"); renderLeadRows(); }); $("#lead-stage-filter").addEventListener("change", () => { resetCollection("leads"); renderLeadRows(); }); $("#refresh-leads").addEventListener("click", async () => { try { state.leads = await fetchAll("/api/admissions/leads"); renderAdmissions(); toast("Enquiries refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#new-lead-button").addEventListener("click", openLeadForm); $("#new-student").addEventListener("click", openStudentCreateForm); $("#export-students").addEventListener("click", exportStudents);
   $("#new-session").addEventListener("click", openSessionForm); $("#new-teaching-assignment").addEventListener("click", () => openTeachingAssignmentForm()); $("#new-assignment").addEventListener("click", openAssignmentForm); $("#new-notice").addEventListener("click", openNoticeForm); $("#settings-add-account").addEventListener("click", openSettingsAccountPicker); $("#new-master").addEventListener("click", openMasterForm);
   $("#new-inventory-item").addEventListener("click", () => openInventoryItemForm());
   $("#new-future-payment").addEventListener("click", () => openFuturePaymentForm());
   $("#new-payment").addEventListener("click", openPaymentForm);
   $("#new-fee-agreement").addEventListener("click", openFeeAgreementForm);
-  $("#inventory-search").addEventListener("input", renderInventory);
-  $("#inventory-category-filter").addEventListener("change", renderInventory);
+  $("#inventory-search").addEventListener("input", () => { resetCollection("inventory"); renderInventory(); });
+  $("#inventory-category-filter").addEventListener("change", () => { resetCollection("inventory"); renderInventory(); });
   $("#new-examination").addEventListener("click", () => openExaminationForm());
   $("#examination-search").addEventListener("input", renderExaminations);
   $("#examination-status-filter").addEventListener("change", renderExaminations);
   $("#academic-import-file").addEventListener("change", importAcademicData);
   $("#admission-revision-file").addEventListener("change", importAdmissionRevision);
-  $("#settings-account-search").addEventListener("input", event => { settingsAccountSearch = event.target.value; renderSettingsAccounts(); });
-  $("#settings-account-filter").addEventListener("change", event => { settingsAccountFilter = event.target.value; renderSettingsAccounts(); });
+  $("#settings-account-search").addEventListener("input", event => { settingsAccountSearch = event.target.value; resetCollection("settings"); renderSettingsAccounts(); });
+  $("#settings-account-filter").addEventListener("change", event => { settingsAccountFilter = event.target.value; resetCollection("settings"); renderSettingsAccounts(); });
   $(".settings-tabs").addEventListener("keydown", event => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     const tabs = $$("[data-settings-section]");
@@ -3142,6 +3186,7 @@ function bindEvents() {
     tabs[next].focus();
   });
   $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/sessions"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#attendance-register-filter").addEventListener("change", event => { attendanceRegisterFilter = event.target.value; resetCollection("attendance"); renderAttendance(); });
   $$('[data-attendance-tab]').forEach(button => button.addEventListener("click", () => activateAttendanceTab(button.dataset.attendanceTab)));
   $("#attendance-view-tabs").addEventListener("keydown", event => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

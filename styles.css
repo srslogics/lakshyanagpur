@@ -1147,3 +1147,19 @@ p, li, td, th, label, input, select, textarea, button { line-height: 1.45; }
   .mobile-record-meta span { font-size: .75rem; }
   .compact-metric { min-width: 168px; }
 }
+/* Concise collection controls */
+.collection-more-row td { padding: 0 !important; background: var(--surface, #fff); }
+.collection-more-button { width: 100%; min-height: 52px; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--primary); font: inherit; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.collection-more-button:hover { background: var(--surface-soft); }
+.collection-more-button span { color: var(--muted); font-size: .78rem; font-weight: 650; }
+.attendance-register-toolbar { min-height: 72px; padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.attendance-register-toolbar label { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .82rem; font-weight: 750; }
+.attendance-register-toolbar select { min-width: 210px; height: 44px; padding: 0 38px 0 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; font-weight: 700; }
+.attendance-register-toolbar p { margin: 0; color: var(--muted); font-size: .86rem; }
+
+@media (max-width: 720px) {
+  .attendance-register-toolbar { align-items: stretch; flex-direction: column; }
+  .attendance-register-toolbar label { align-items: stretch; flex-direction: column; }
+  .attendance-register-toolbar select { width: 100%; min-width: 0; }
+  .attendance-register-toolbar p { padding-left: 2px; }
+}

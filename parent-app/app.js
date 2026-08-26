@@ -4,8 +4,8 @@ const icons={arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',home:'<path d="m3 11 9-8 
 const views=new Set(["overview","attendance","academics","fees","messages","more"]);
 const CONSENT_VERSION="student-parent-v1-2026-08-15";
 const CONSENT_STORAGE_PREFIX="lakshya_parent_consent_";
-const UPCOMING_CLASS_LIMIT=12;
-const RECENT_ATTENDANCE_LIMIT=12;
+const UPCOMING_CLASS_LIMIT=7;
+const RECENT_ATTENDANCE_LIMIT=7;
 const hashView=()=>views.has(location.hash.slice(1))?location.hash.slice(1):"overview";
 const state={token:localStorage.getItem("lakshya_parent_token"),identity:(()=>{try{return JSON.parse(localStorage.getItem("lakshya_parent_user")||"null");}catch{return null;}})(),data:null,communication:null,view:hashView(),online:navigator.onLine};
 const $=(selector,root=document)=>root.querySelector(selector),$$=(selector,root=document)=>[...root.querySelectorAll(selector)];
