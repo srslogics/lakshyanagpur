@@ -14,11 +14,12 @@ def test_signed_manual_attendance_manifest_is_complete_and_consistent():
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     registers = manifest["registers"]
 
-    assert len(registers) == 17
+    assert len(registers) == 19
     assert {row["date"] for row in registers} == {
         "2026-08-18",
         "2026-08-19",
         "2026-08-20",
+        "2026-08-21",
         "2026-08-22",
         "2026-08-23",
         "2026-08-24",
@@ -26,9 +27,7 @@ def test_signed_manual_attendance_manifest_is_complete_and_consistent():
         "2026-08-26",
         "2026-08-27",
     }
-    assert manifest["controls"]["missingDatesNotFabricated"] == [
-        "2026-08-21"
-    ]
+    assert manifest["controls"]["missingDatesNotFabricated"] == []
     assert manifest["controls"]["missingRegistersNotFabricated"] == [
         "2026-08-27:Essential"
     ]
