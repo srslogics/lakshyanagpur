@@ -1,6 +1,15 @@
 from datetime import date
 
-from app.models import Enrollment, FeeAgreement, PaymentTransaction, Student, User
+from app.models import (
+    AttendanceEntry,
+    AttendancePeriodSummary,
+    AttendanceRegister,
+    Enrollment,
+    FeeAgreement,
+    PaymentTransaction,
+    Student,
+    User,
+)
 from app.security import create_token, hash_password
 
 
@@ -136,3 +145,66 @@ def test_report_date_range_validation(client, owner_headers):
         headers=owner_headers,
     )
     assert response.status_code == 422
+
+
+def test_report_overview_extends_confirmed_baseline_with_new_daily_register(
+    client,
+    database,
+    owner_headers,
+):
+    student = Student(
+        admission_number="LI-2026-00992",
+        full_name="Attendance Report Student",
+        mobile="9000000992",
+        status="active",
+    )
+    database.add(student)
+    database.flush()
+    database.add(
+        AttendancePeriodSummary(
+            student_id=student.id,
+            source_student_code="T-99",
+            batch_name="Tatva",
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 8, 3),
+            present_days=2,
+            absent_days=1,
+            working_days=3,
+            attendance_rate=66.67,
+            source_name="Client workbook",
+            source_reference="test.xlsx",
+            status="confirmed",
+        )
+    )
+    owner = database.query(User).filter_by(role="owner").one()
+    register = AttendanceRegister(
+        register_kind="manual",
+        attendance_date=date(2026, 8, 18),
+        batch_name="Tatva",
+        stream_name="__all__",
+        subject_name="Daily attendance",
+        status="submitted",
+        submitted_by=owner.id,
+    )
+    database.add(register)
+    database.flush()
+    database.add(
+        AttendanceEntry(
+            register_id=register.id,
+            student_id=student.id,
+            status="present",
+            reason="Signed paper register",
+            marked_by=owner.id,
+        )
+    )
+    database.commit()
+
+    response = client.get("/api/reports/overview", headers=owner_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["metrics"]["attendanceRate"] == 75.0
+    assert {row["status"]: row["count"] for row in payload["attendance"]} == {
+        "absent": 1,
+        "present": 3,
+    }

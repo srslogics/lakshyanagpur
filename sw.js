@@ -1,12 +1,12 @@
 importScripts("/push-service-worker.js?v=1");
-const CACHE_NAME = "lakshya-erp-app-v96";
+const CACHE_NAME = "lakshya-erp-app-v99";
 const ASSETS = [
   "/operations",
-  "/styles.css?v=60",
+  "/styles.css?v=61",
   "/auth-shared.css?v=9",
   "/push-shared.css?v=1",
   "/push-client.js?v=1",
-  "/app.js?v=76",
+  "/app.js?v=79",
   "/manifest.webmanifest",
   "/lakshya-logo-576.png?v=20260804-no-tm",
   "/pwa-icon-192.png?v=20260804-no-tm"

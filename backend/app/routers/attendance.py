@@ -508,6 +508,93 @@ def _manual_register_summary(
     }
 
 
+def _standalone_register_summaries(db: Session):
+    registers = (
+        db.query(AttendanceRegister)
+        .filter(
+            AttendanceRegister.class_session_id.is_(None),
+            AttendanceRegister.register_kind.in_(("manual", "biometric")),
+            AttendanceRegister.status == "submitted",
+        )
+        .order_by(AttendanceRegister.attendance_date.desc())
+        .all()
+    )
+    if not registers:
+        return []
+
+    register_ids = [item.id for item in registers]
+    status_counts = {
+        (register_id, status): count
+        for register_id, status, count in (
+            db.query(
+                AttendanceEntry.register_id,
+                AttendanceEntry.status,
+                func.count(AttendanceEntry.student_id),
+            )
+            .filter(AttendanceEntry.register_id.in_(register_ids))
+            .group_by(AttendanceEntry.register_id, AttendanceEntry.status)
+            .all()
+        )
+    }
+    batch_names = {item.batch_name for item in registers}
+    batch_counts = {
+        batch_name: count
+        for batch_name, count in (
+            db.query(
+                Enrollment.batch,
+                func.count(func.distinct(Enrollment.student_id)),
+            )
+            .join(Student, Student.id == Enrollment.student_id)
+            .filter(
+                Student.status == "active",
+                Enrollment.is_active.is_(True),
+                Enrollment.batch.in_(batch_names),
+            )
+            .group_by(Enrollment.batch)
+            .all()
+        )
+    }
+    summaries = []
+    for register in registers:
+        counts = {
+            status: status_counts.get((register.id, status), 0)
+            for status in ("present", "late", "absent", "excused")
+        }
+        marked_count = sum(counts.values())
+        student_count = (
+            batch_counts.get(register.batch_name, 0)
+            if register.stream_name == BATCH_WIDE_STREAM
+            else len(_eligible_manual_students(
+                db,
+                register.batch_name,
+                register.stream_name,
+                register.subject_name,
+            ))
+        )
+        summary = _manual_register_summary(
+            register,
+            student_count,
+            marked_count,
+        )
+        summary.update({
+            "presentCount": counts["present"],
+            "lateCount": counts["late"],
+            "absentCount": counts["absent"],
+            "excusedCount": counts["excused"],
+        })
+        summaries.append(summary)
+    return summaries
+
+
+@router.get("/registers")
+def list_attendance_registers(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*ROLES)),
+):
+    """Read-only monitoring feed for Operations; attendance is entered elsewhere."""
+    return _standalone_register_summaries(db)
+
+
 def _manual_register_payload(db: Session, register: AttendanceRegister):
     students = _eligible_manual_students(
         db,

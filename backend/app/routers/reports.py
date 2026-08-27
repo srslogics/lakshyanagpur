@@ -78,6 +78,28 @@ def overview(
             AttendancePeriodSummary.status == "confirmed",
         ).one()
         attendance = {"present": int(present), "absent": int(absent)}
+        # The client-confirmed workbook is a historical baseline. Extend it
+        # with newer submitted daily registers so Reports matches the Student,
+        # Parent and Operations attendance views. Standalone registers are the
+        # authoritative daily source and the import path consolidates any
+        # biometric/manual duplicate for the same batch and date.
+        submitted_rows = (
+            db.query(AttendanceEntry.status, func.count())
+            .join(
+                AttendanceRegister,
+                AttendanceRegister.id == AttendanceEntry.register_id,
+            )
+            .filter(
+                AttendanceRegister.status == "submitted",
+                AttendanceRegister.class_session_id.is_(None),
+                AttendanceRegister.register_kind.in_(("manual", "biometric")),
+                AttendanceRegister.attendance_date > latest_period_end,
+            )
+            .group_by(AttendanceEntry.status)
+            .all()
+        )
+        for status, count in submitted_rows:
+            attendance[status] = attendance.get(status, 0) + int(count)
     else:
         attendance_rows = db.query(AttendanceEntry.status, func.count()).group_by(AttendanceEntry.status).all()
         attendance = {status: count for status, count in attendance_rows}

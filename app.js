@@ -136,6 +136,12 @@ const formatDateTime = value => value ? new Intl.DateTimeFormat("en-IN", {
   hour: "2-digit",
   minute: "2-digit",
 }).format(asInstant(value)) : "—";
+const formatInstantDate = value => value ? new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+}).format(asInstant(value)) : "—";
 const indiaDateKey = value => {
   const parts = indiaDateParts(value);
   return `${parts.year}-${parts.month}-${parts.day}`;
@@ -494,7 +500,7 @@ async function loadResource(resource) {
     else if (resource === "examinations") state.examinations = await api("/api/examinations");
     else if (resource === "attendance") {
       [state.attendanceSessions, state.staffAttendance] = await Promise.all([
-        api("/api/attendance/sessions"),
+        api("/api/attendance/registers"),
         api("/api/attendance/staff-biometric"),
       ]);
     }
@@ -1080,23 +1086,27 @@ function renderExaminations() {
 
 function renderAttendance() {
   const now = Date.now(), day = 86400000;
-  const allRegisters = [...state.attendanceSessions];
-  const submitted = allRegisters.filter(item => item.registerStatus === "submitted").length;
-  const needsAction = allRegisters.filter(item => item.registerStatus !== "submitted" && asInstant(item.startsAt).getTime() <= now);
-  const currentWeek = allRegisters.filter(item => { const time = asInstant(item.startsAt).getTime(); return time >= now - (3 * day) && time <= now + (7 * day); });
-  const recentlySubmitted = allRegisters.filter(item => item.registerStatus === "submitted");
-  const source = attendanceRegisterFilter === "action" ? needsAction : attendanceRegisterFilter === "submitted" ? recentlySubmitted : attendanceRegisterFilter === "all" ? allRegisters : currentWeek;
-  const registers = [...source].sort((a, b) => attendanceRegisterFilter === "current" ? asInstant(a.startsAt) - asInstant(b.startsAt) : asInstant(b.startsAt) - asInstant(a.startsAt));
+  const todayKey = indiaDateKey(new Date(now));
+  const todayStart = new Date(`${todayKey}T00:00:00+05:30`).getTime();
+  const todayNoon = new Date(`${todayKey}T12:00:00+05:30`);
+  const weekStart = todayStart - (((todayNoon.getUTCDay() + 6) % 7) * day);
+  const weekEnd = weekStart + (7 * day);
+  const allRegisters = [...state.attendanceSessions].sort((a, b) => asInstant(b.startsAt) - asInstant(a.startsAt));
+  const currentWeek = allRegisters.filter(item => { const time = asInstant(item.startsAt).getTime(); return time >= weekStart && time < weekEnd; });
+  const recentRegisters = allRegisters.filter(item => asInstant(item.startsAt).getTime() >= todayStart - (30 * day));
+  const registers = attendanceRegisterFilter === "recent" ? recentRegisters : attendanceRegisterFilter === "all" ? allRegisters : currentWeek;
   const registerPage = collectionWindow("attendance", registers, 12);
   const staffRecords = [...(state.staffAttendance?.records || [])].sort((a, b) => asInstant(b.arrivalAt || b.date) - asInstant(a.arrivalAt || a.date));
   const staffPage = collectionWindow("staff-attendance", staffRecords, 12);
   const unassignedStaff = new Set(staffRecords.filter(item => !item.staffUserId).map(item => item.deviceUserId)).size;
   $("#staff-attendance-metrics").innerHTML = compactMetrics([{ label: "Staff members", value: String(state.staffAttendance?.staffCount || 0) }, { label: "Unassigned devices", value: String(unassignedStaff) }, { label: "Latest record", value: staffRecords[0]?.date ? formatDate(staffRecords[0].date) : "—" }]);
-  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Current week", value: String(currentWeek.length) }, { label: "Needs attention", value: String(needsAction.length) }, { label: "Submitted", value: String(submitted) }]);
+  const weekDays = new Set(currentWeek.map(item => indiaDateKey(item.startsAt))).size;
+  const weekPresent = currentWeek.reduce((sum, item) => sum + Number(item.presentCount || 0) + Number(item.lateCount || 0), 0);
+  $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Imported days", value: String(weekDays) }, { label: "Present this week", value: String(weekPresent) }, { label: "Latest import", value: formatInstantDate(allRegisters[0]?.startsAt) }]);
   $("#attendance-result-summary").textContent = registers.length ? `Showing ${registerPage.shown} of ${registers.length}` : "No matching registers";
   $("#attendance-register-filter").value = attendanceRegisterFilter;
-  $("#attendance-table-body").innerHTML = registers.length ? registerPage.rows.map(item => `<tr><td><strong>${esc(item.subject)}</strong><br><small>${esc(item.batch)} · ${formatDateTime(item.startsAt)}</small></td><td>${esc(item.faculty)}</td><td>${esc(item.room)}</td><td>${item.markedCount}/${item.studentCount}</td><td>${status(item.registerStatus)}</td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">Open</button></td></tr>`).join("") + (registerPage.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("attendance", registerPage.shown, registerPage.total, "registers")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("calendar-check", "No matching registers", "Choose another view to see more attendance records.")}</td></tr>`;
-  $("#attendance-mobile-list").innerHTML = registers.length ? registerPage.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.subject)}</h3><p>${esc(item.batch)} · ${formatDateTime(item.startsAt)}</p></div>${status(item.registerStatus)}</div><div class="mobile-record-meta"><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Marked</span><strong>${item.markedCount}/${item.studentCount}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">Open register</button></article>`).join("") + collectionMoreButton("attendance", registerPage.shown, registerPage.total, "registers") : emptyState("calendar-check", "No matching registers");
+  $("#attendance-table-body").innerHTML = registers.length ? registerPage.rows.map(item => `<tr><td><strong>${formatInstantDate(item.startsAt)}</strong><br><small>${esc(item.registerKind === "biometric" ? "Biometric import" : "Attendance Desk")}</small></td><td><strong>${esc(item.batch)}</strong></td><td>${Number(item.presentCount || 0) + Number(item.lateCount || 0)}</td><td>${Number(item.absentCount || 0)}</td><td><span class="status status-active">Recorded</span></td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">View</button></td></tr>`).join("") + (registerPage.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("attendance", registerPage.shown, registerPage.total, "records")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("calendar-check", "No imported attendance", "Attendance appears here after the biometric file is imported.")}</td></tr>`;
+  $("#attendance-mobile-list").innerHTML = registers.length ? registerPage.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.batch)}</h3><p>${formatInstantDate(item.startsAt)} · ${esc(item.registerKind === "biometric" ? "Biometric import" : "Attendance Desk")}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Present</span><strong>${Number(item.presentCount || 0) + Number(item.lateCount || 0)}</strong></div><div><span>Absent</span><strong>${Number(item.absentCount || 0)}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">View summary</button></article>`).join("") + collectionMoreButton("attendance", registerPage.shown, registerPage.total, "records") : emptyState("calendar-check", "No imported attendance", "Attendance appears here after the biometric file is imported.");
   $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffPage.rows.map(item => `<tr><td><strong>${esc(item.fullName)}</strong><br><small>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)}</small></td><td>${formatDate(item.date)}</td><td>${classTime(item.arrivalAt)}</td><td>${item.departureAt ? classTime(item.departureAt) : "—"}</td><td><span class="status status-active">Recorded</span></td></tr>`).join("") + (staffPage.hasMore ? `<tr class="collection-more-row"><td colspan="5">${collectionMoreButton("staff-attendance", staffPage.shown, staffPage.total, "records")}</td></tr>` : "") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.")}</td></tr>`;
   $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffPage.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.fullName)}</h3><p>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)} · ${formatDate(item.date)}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "—"}</strong></div></div></article>`).join("") + collectionMoreButton("staff-attendance", staffPage.shown, staffPage.total, "records") : emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.");
   $("#staff-attendance-count").textContent = `${staffPage.shown} of ${staffRecords.length} records`;
@@ -2080,7 +2090,7 @@ function openSessionForm() {
 async function submitSession(event) {
   event.preventDefault(); const form = new FormData(event.currentTarget), button = $("button[type=submit]", event.currentTarget); button.disabled = true;
   const payload = { batchId: form.get("batchId"), subjectId: form.get("subjectId"), facultyId: form.get("facultyId"), roomId: form.get("roomId"), startsAt: indiaInputToISOString(form.get("startsAt")), endsAt: indiaInputToISOString(form.get("endsAt")), notes: String(form.get("notes") || "").trim(), allowOverride: form.get("allowOverride") === "on", overrideReason: String(form.get("overrideReason") || "").trim() || null };
-  try { await api("/api/timetable/sessions", { method: "POST", body: JSON.stringify(payload) }); state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; state.attendanceSessions = await api("/api/attendance/sessions"); closeDetail(); renderTimetable(); renderAttendance(); toast("Class scheduled."); }
+  try { await api("/api/timetable/sessions", { method: "POST", body: JSON.stringify(payload) }); state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; closeDetail(); renderTimetable(); toast("Class scheduled."); }
   catch (error) { showFormError("#session-form-error", error); button.disabled = false; }
 }
 
@@ -2570,32 +2580,19 @@ async function submitNotice(event) {
 }
 
 async function openAttendance(sessionId) {
-  openDrawer("Attendance", '<div class="skeleton-line"></div>');
+  openDrawer("Attendance summary", '<div class="skeleton-line"></div>');
   try {
-    const roster = await api(`/api/attendance/sessions/${encodeURIComponent(sessionId)}`), locked = roster.session.registerStatus === "submitted";
-    const editable = canAccess("attendance", "edit");
-    $("#drawer-title").textContent = `${roster.session.subject} · ${roster.session.batch} · ${roster.session.program || ""}`;
-    $("#detail-drawer-body").innerHTML = `<form class="attendance-form" id="attendance-form" data-session-id="${esc(sessionId)}" data-locked="${locked}"><div class="attendance-form-head">${status(roster.session.registerStatus)}<span>${roster.entries.length} students</span></div>${!editable ? `<div class="inline-notice">${icon("shield")}<span>This register is read-only for your account.</span></div>` : ""}${roster.entries.map(entry => `<label class="attendance-student"><span><strong>${esc(entry.fullName)}</strong><small>${esc(entry.admissionNumber)}</small></span><select name="${esc(entry.studentId)}" data-original="${esc(entry.status)}"${editable ? "" : " disabled"}><option value="present" ${entry.status === "present" ? "selected" : ""}>Present</option><option value="late" ${entry.status === "late" ? "selected" : ""}>Late</option><option value="absent" ${entry.status === "absent" ? "selected" : ""}>Absent</option><option value="excused" ${entry.status === "excused" ? "selected" : ""}>Excused</option></select></label>`).join("")}${editable && locked ? `<label class="field"><span>Correction reason</span><textarea name="correctionReason" rows="3" required></textarea></label>` : ""}${editable ? `${formError("attendance-form-error")}<div class="drawer-actions">${locked ? `<button class="button button-primary" type="submit">Apply corrections</button>` : `<button class="button button-secondary" type="button" id="save-attendance">Save draft</button><button class="button button-primary" type="submit">Submit &amp; lock</button>`}</div>` : ""}</form>`;
-    if (editable) {
-      $("#attendance-form").addEventListener("submit", submitAttendance);
-      $("#save-attendance")?.addEventListener("click", () => saveAttendance(false));
-    }
+    const selected = state.attendanceSessions.find(item => item.id === sessionId);
+    if (!selected?.registerKind) throw new Error("This attendance record is not available in the monitoring view.");
+    const roster = await api(`/api/attendance/manual-registers/${encodeURIComponent(sessionId)}`);
+    const orderedEntries = [...roster.entries].sort((a, b) => {
+      const priority = { absent: 0, late: 1, excused: 2, present: 3 };
+      return (priority[a.status] ?? 4) - (priority[b.status] ?? 4) || a.fullName.localeCompare(b.fullName);
+    });
+    const counts = orderedEntries.reduce((result, entry) => ({ ...result, [entry.status]: (result[entry.status] || 0) + 1 }), {});
+    $("#drawer-title").textContent = `${roster.session.batch} · ${formatInstantDate(roster.session.startsAt)}`;
+    $("#detail-drawer-body").innerHTML = `<div class="attendance-monitor-summary"><div class="compact-metrics">${compactMetrics([{ label: "Present", value: String((counts.present || 0) + (counts.late || 0)) }, { label: "Absent", value: String(counts.absent || 0) }, { label: "Total", value: String(orderedEntries.length) }])}</div><div class="inline-notice">${icon("shield")}<span>Read-only confirmed attendance. Records are published automatically from the Attendance Desk or an authorised import.</span></div><details class="attendance-roster-details"><summary>View individual attendance <span>${orderedEntries.length} students</span></summary><div class="attendance-readonly-list">${orderedEntries.map(entry => `<div class="attendance-student"><span><strong>${esc(entry.fullName)}</strong><small>${esc(entry.admissionNumber)}${entry.arrivalAt ? ` · ${classTime(entry.arrivalAt)}` : ""}</small></span>${status(entry.status)}</div>`).join("")}</div></details></div>`;
   } catch (error) { $("#detail-drawer-body").innerHTML = emptyState("alert", "Could not open register", error.message); }
-}
-
-function attendanceEntries(form) { return $$('select[data-original]', form).map(select => ({ studentId: select.name, status: select.value, reason: "" })); }
-async function saveAttendance(submit) {
-  const form = $("#attendance-form"), button = $(submit ? 'button[type="submit"]' : "#save-attendance", form); button.disabled = true;
-  try { await api(`/api/attendance/sessions/${encodeURIComponent(form.dataset.sessionId)}${submit ? "/submit" : ""}`, { method: submit ? "POST" : "PUT", body: JSON.stringify({ entries: attendanceEntries(form) }) }); state.attendanceSessions = await api("/api/attendance/sessions"); closeDetail(); renderAttendance(); toast(submit ? "Attendance submitted and locked." : "Attendance draft saved."); }
-  catch (error) { showFormError("#attendance-form-error", error); button.disabled = false; }
-}
-async function submitAttendance(event) {
-  event.preventDefault(); const form = event.currentTarget;
-  if (form.dataset.locked !== "true") { await saveAttendance(true); return; }
-  const changed = $$('select[data-original]', form).filter(select => select.value !== select.dataset.original), reason = String(new FormData(form).get("correctionReason") || "").trim(), button = $('button[type="submit"]', form); button.disabled = true;
-  if (!changed.length) { showFormError("#attendance-form-error", new Error("Change at least one attendance status.")); button.disabled = false; return; }
-  try { await Promise.all(changed.map(select => api(`/api/attendance/sessions/${encodeURIComponent(form.dataset.sessionId)}/corrections/${encodeURIComponent(select.name)}`, { method: "POST", body: JSON.stringify({ status: select.value, reason }) }))); state.attendanceSessions = await api("/api/attendance/sessions"); closeDetail(); renderAttendance(); toast("Attendance correction recorded."); }
-  catch (error) { showFormError("#attendance-form-error", error); button.disabled = false; }
 }
 
 function operationsRoleOptions(current = "") {
@@ -2820,7 +2817,7 @@ async function submitOwnerEdit(event) {
     else if (kind === "lead") state.leads = await fetchAll("/api/admissions/leads");
     else if (kind === "agreement") state.agreements = await fetchAll("/api/finance/agreements");
     else if (kind === "payment") state.payments = await fetchAll("/api/finance/transactions");
-    else if (kind === "session") { state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; state.attendanceSessions = await api("/api/attendance/sessions"); }
+    else if (kind === "session") { state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; }
     else if (kind === "assignment") state.assignments = await api("/api/academics/assignments");
     else if (kind === "notice") state.notices = await api("/api/communication/notices");
     else { state.masters = await api("/api/settings/bootstrap"); state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; }
@@ -3185,7 +3182,7 @@ function bindEvents() {
     showSettingsSection(tabs[next].dataset.settingsSection);
     tabs[next].focus();
   });
-  $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/sessions"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/registers"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#attendance-register-filter").addEventListener("change", event => { attendanceRegisterFilter = event.target.value; resetCollection("attendance"); renderAttendance(); });
   $$('[data-attendance-tab]').forEach(button => button.addEventListener("click", () => activateAttendanceTab(button.dataset.attendanceTab)));
   $("#attendance-view-tabs").addEventListener("keydown", event => {

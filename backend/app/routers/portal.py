@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -281,6 +281,83 @@ def attendance_period_summary(db: Session, student: Student):
     }
 
 
+def _attendance_day(value) -> date | None:
+    if isinstance(value, datetime):
+        return _aware(value).date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def extend_attendance_period_summary(period_summary, attendance):
+    """Extend the confirmed workbook baseline with newer submitted days.
+
+    A student can have a class register, biometric register and signed-paper
+    register for the same calendar day.  Daily paper/manual registers are the
+    most authoritative source, so one date is counted once using source
+    priority instead of inflating the denominator.
+    """
+    if not period_summary:
+        return None
+
+    period_end = _attendance_day(period_summary.get("periodEnd"))
+    if not period_end:
+        return period_summary
+
+    source_priority = {
+        "manual_register": 4,
+        "biometric_register": 3,
+        "class_register": 2,
+        "imported_daily": 1,
+    }
+    newer_days: dict[date, dict] = {}
+    for row in attendance:
+        attendance_day = _attendance_day(
+            row.get("startsAt") or row.get("dateLabel")
+        )
+        if not attendance_day or attendance_day <= period_end:
+            continue
+        if row.get("status") == "unclassified":
+            continue
+        current = newer_days.get(attendance_day)
+        priority = source_priority.get(row.get("source"), 0)
+        if current is None or priority > current["priority"]:
+            newer_days[attendance_day] = {
+                "priority": priority,
+                "rows": [row],
+            }
+        elif priority == current["priority"]:
+            current["rows"].append(row)
+
+    if not newer_days:
+        return period_summary
+
+    attended_statuses = {"present", "late", "excused"}
+    present_days = sum(
+        any(row.get("status") in attended_statuses for row in day["rows"])
+        for day in newer_days.values()
+    )
+    working_days = int(period_summary["workingDays"]) + len(newer_days)
+    total_present = int(period_summary["presentDays"]) + present_days
+    result = dict(period_summary)
+    result.update({
+        "periodEnd": max(newer_days),
+        "presentDays": total_present,
+        "absentDays": int(period_summary["absentDays"])
+        + len(newer_days)
+        - present_days,
+        "workingDays": working_days,
+        "attendanceRate": round(total_present / working_days * 100, 1),
+        "source": "Confirmed baseline + submitted attendance registers",
+    })
+    return result
+
+
 def examination_rows(
     db: Session,
     student: Student,
@@ -481,7 +558,10 @@ def _portal_payload(
     schedule = schedule_rows(db, student, enrollment)
     assignments = assignment_rows(db, student, enrollment)
     attendance = attendance_rows(db, student)
-    period_summary = attendance_period_summary(db, student)
+    period_summary = extend_attendance_period_summary(
+        attendance_period_summary(db, student),
+        attendance,
+    )
     examinations = examination_rows(db, student, enrollment)
     notices = notice_rows(db, enrollment, notice_audience)
     now = datetime.now(timezone.utc)

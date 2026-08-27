@@ -229,6 +229,7 @@ def test_faculty_cannot_access_or_write_attendance(client, database):
     marks = {"entries": [{"studentId": student.id, "status": "present", "reason": ""}]}
 
     assert client.get("/api/attendance/sessions", headers=headers).status_code == 403
+    assert client.get("/api/attendance/registers", headers=headers).status_code == 403
     assert client.get(f"/api/attendance/sessions/{started.id}", headers=headers).status_code == 403
     assert client.put(
         f"/api/attendance/sessions/{started.id}",
@@ -430,6 +431,21 @@ def test_operator_selects_only_group_for_manual_attendance(
     assert register.stream_name == "__all__"
     assert register.subject_name == "Attendance"
     assert register.status == "submitted"
+    operations_registers = client.get(
+        "/api/attendance/registers",
+        headers=headers,
+    )
+    assert operations_registers.status_code == 200
+    listed_register = next(
+        item for item in operations_registers.json()
+        if item["id"] == register.id
+    )
+    assert listed_register["registerKind"] == "manual"
+    assert listed_register["registerStatus"] == "submitted"
+    assert listed_register["studentCount"] == 2
+    assert listed_register["markedCount"] == 2
+    assert listed_register["presentCount"] == 2
+    assert listed_register["absentCount"] == 0
     from app.routers.portal import attendance_rows
     student_attendance = attendance_rows(database, students[0])
     manual_row = next(
@@ -486,3 +502,52 @@ def test_owner_can_create_attendance_operator(client, owner_headers):
     )
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "This mobile number is already assigned to another account"
+
+
+def test_confirmed_attendance_summary_extends_with_one_authoritative_row_per_day():
+    from app.routers.portal import extend_attendance_period_summary
+
+    baseline = {
+        "periodStart": date(2026, 7, 1),
+        "periodEnd": date(2026, 8, 3),
+        "presentDays": 20,
+        "absentDays": 4,
+        "workingDays": 24,
+        "attendanceRate": 83.3,
+        "source": "Client workbook",
+    }
+    attendance = [
+        {
+            "startsAt": date(2026, 8, 18),
+            "status": "absent",
+            "source": "manual_register",
+        },
+        # A biometric row for the same date must not add another working day.
+        {
+            "startsAt": date(2026, 8, 18),
+            "status": "present",
+            "source": "biometric_register",
+        },
+        {
+            "startsAt": datetime(2026, 8, 19, 9, tzinfo=timezone.utc),
+            "status": "present",
+            "source": "manual_register",
+        },
+        # Rows inside the confirmed baseline are already represented there.
+        {
+            "startsAt": date(2026, 8, 3),
+            "status": "present",
+            "source": "manual_register",
+        },
+    ]
+
+    result = extend_attendance_period_summary(baseline, attendance)
+
+    assert result["periodEnd"] == date(2026, 8, 19)
+    assert result["workingDays"] == 26
+    assert result["presentDays"] == 21
+    assert result["absentDays"] == 5
+    assert result["attendanceRate"] == 80.8
+    assert result["source"] == (
+        "Confirmed baseline + submitted attendance registers"
+    )

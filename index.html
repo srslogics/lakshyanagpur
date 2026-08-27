@@ -28,7 +28,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=60">
+  <link rel="stylesheet" href="/styles.css?v=61">
   <link rel="stylesheet" href="/auth-shared.css?v=9">
   <link rel="stylesheet" href="/push-shared.css?v=1">
 </head>
@@ -288,14 +288,14 @@
 
         <section class="app-view" id="attendance" aria-labelledby="attendance-heading">
           <div class="page-heading"><h2 id="attendance-heading">Attendance</h2><button class="button button-secondary" id="refresh-attendance" type="button"><span data-icon="refresh"></span>Refresh</button></div>
-          <nav class="segmented-control attendance-view-tabs" id="attendance-view-tabs" role="tablist" aria-label="Attendance views"><button class="active" id="attendance-staff-tab" type="button" role="tab" aria-selected="true" aria-controls="attendance-staff-panel" data-attendance-tab="staff">Staff attendance</button><button id="attendance-students-tab" type="button" role="tab" aria-selected="false" aria-controls="attendance-students-panel" tabindex="-1" data-attendance-tab="students">Student registers</button></nav>
+          <nav class="segmented-control attendance-view-tabs" id="attendance-view-tabs" role="tablist" aria-label="Attendance views"><button class="active" id="attendance-staff-tab" type="button" role="tab" aria-selected="true" aria-controls="attendance-staff-panel" data-attendance-tab="staff">Staff attendance</button><button id="attendance-students-tab" type="button" role="tab" aria-selected="false" aria-controls="attendance-students-panel" tabindex="-1" data-attendance-tab="students">Student attendance</button></nav>
           <section class="attendance-panel active" id="attendance-staff-panel" role="tabpanel" aria-labelledby="attendance-staff-tab" data-attendance-panel="staff">
             <div class="compact-metrics" id="staff-attendance-metrics"></div>
             <article class="surface table-surface staff-attendance-surface"><div class="surface-head"><div><h3>Staff attendance</h3><p>Biometric arrival and departure records for institute staff.</p></div><span class="status status-active" id="staff-attendance-count">0 records</span></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Staff member</th><th>Date</th><th>Arrival</th><th>Departure</th><th>Status</th></tr></thead><tbody id="staff-attendance-table-body"></tbody></table></div><div class="mobile-records" id="staff-attendance-mobile-list"></div></article>
           </section>
           <section class="attendance-panel" id="attendance-students-panel" role="tabpanel" aria-labelledby="attendance-students-tab" data-attendance-panel="students" hidden>
             <div class="compact-metrics" id="attendance-metrics"></div>
-            <article class="surface table-surface"><div class="attendance-register-toolbar"><label><span>Show</span><select id="attendance-register-filter"><option value="current">Current week</option><option value="action">Needs attention</option><option value="submitted">Recently submitted</option><option value="all">All records</option></select></label><p id="attendance-result-summary">Current week</p></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Class</th><th>Faculty</th><th>Room</th><th>Students</th><th>Register</th><th></th></tr></thead><tbody id="attendance-table-body"></tbody></table></div><div class="mobile-records" id="attendance-mobile-list"></div></article>
+            <article class="surface table-surface"><div class="attendance-register-toolbar"><label><span>Show</span><select id="attendance-register-filter"><option value="current">This week</option><option value="recent">Last 30 days</option><option value="all">All imports</option></select></label><p id="attendance-result-summary">This week</p></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Group</th><th>Present</th><th>Absent</th><th>Source</th><th></th></tr></thead><tbody id="attendance-table-body"></tbody></table></div><div class="mobile-records" id="attendance-mobile-list"></div></article>
           </section>
         </section>
 
@@ -405,6 +405,6 @@
 
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
   <script src="/push-client.js?v=1" defer></script>
-  <script src="/app.js?v=76" defer></script>
+  <script src="/app.js?v=79" defer></script>
 </body>
 </html>

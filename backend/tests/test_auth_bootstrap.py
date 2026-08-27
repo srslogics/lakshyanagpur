@@ -190,7 +190,7 @@ def test_operations_exposes_owner_managed_module_access(client):
     assert 'data-settings-account-type="operations"' in script.text
     assert "data-create-permission-module" in script.text
     assert "/permissions" in script.text
-    assert 'canAccess("attendance", "edit")' in script.text
+    assert 'api("/api/attendance/registers")' in script.text
 
 
 def test_every_application_uses_a_mobile_login_field(client):
