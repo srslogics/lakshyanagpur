@@ -375,6 +375,21 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-linecap:round;st
   .login-screen{padding-inline:16px}
   .login-brand img{width:132px}
   .login-card{margin-top:56px;padding:24px 18px;border-radius:22px}
+  #faculty-main{padding-right:16px;padding-left:16px}
+  .faculty-hero{min-height:190px;padding:21px;border-radius:22px}
+  .faculty-hero h1{font-size:clamp(1.75rem,8vw,2.3rem)}
+  .hero-action{margin-top:18px;padding:12px 14px}
+  .metric-grid,.module-metrics{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    overflow:visible;
+    margin:14px 0 0;
+    padding:0;
+    scroll-snap-type:none;
+  }
+  .module-metrics{margin-bottom:16px}
+  .metric-card{min-height:104px;padding:16px;border-radius:17px}
+  .metric-card strong{font-size:1.4rem}
   .section-head{margin-bottom:14px}
   .session-card{grid-template-columns:62px minmax(0,1fr);gap:12px;padding:14px}
   .session-action{grid-column:1/-1;width:100%}

@@ -476,18 +476,36 @@ main {
 }
 
 @media (max-width: 560px) {
-  main { padding-right: 14px; padding-left: 14px; }
-  .welcome-card, .child-hero { min-height: 196px; padding: 23px; }
-  .welcome-card h1 { font-size: clamp(2.1rem,12vw,3rem); }
+  main { padding-top: 18px; padding-right: 16px; padding-left: 16px; }
+  .welcome-card, .child-hero { min-height: 184px; padding: 21px; border-radius: 22px; }
+  .welcome-card h1 { margin-top: 12px; font-size: clamp(2rem,10vw,2.7rem); }
+  .child-identity { gap: 13px; }
+  .child-avatar { width: 54px; height: 54px; border-radius: 16px; }
+  .child-identity h1 { font-size: clamp(1.75rem,8vw,2.35rem); }
   .welcome-mark { width: 46px; height: 46px; padding: 12px; }
-  .summary-strip, .metric-grid { margin-right: -14px; margin-left: -14px; padding-right: 14px; padding-left: 14px; }
-  .content-block, .panel { padding: 18px 16px; border-radius: 19px; }
+  .summary-strip, .metric-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 10px;
+    overflow: visible;
+    margin: 14px 0 0;
+    padding: 0;
+    scroll-snap-type: none;
+  }
+  .summary-card, .metric-card { min-height: 104px; padding: 16px; border-radius: 17px; }
+  .summary-card strong, .metric-card strong { margin-top: 18px; font-size: 1.25rem; }
+  .content-block, .panel { margin-top: 16px; padding: 18px 16px; border-radius: 19px; }
   .attendance-summary { grid-template-columns: 112px minmax(0,1fr); gap: 15px; padding: 18px; }
   .attendance-ring { width: 106px; height: 106px; }
   .account-grid { grid-template-columns: 1fr; }
   .fee-total { gap: 10px; }
   .fee-total span { min-width: 0; }
   .timeline-card { grid-template-columns: 78px minmax(0,1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-card,
+  .metric-card,
+  .bottom-nav button { transition: none; }
 }
 
 @media (prefers-color-scheme: dark) {

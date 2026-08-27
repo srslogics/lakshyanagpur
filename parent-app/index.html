@@ -14,9 +14,9 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png?v=20260804-no-tm">
   <link rel="icon" href="../pwa-icon-192.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="../portal-shared.css?v=5">
+  <link rel="stylesheet" href="../portal-shared.css?v=6">
   <link rel="stylesheet" href="./styles.css?v=6">
-  <link rel="stylesheet" href="../auth-shared.css?v=12">
+  <link rel="stylesheet" href="../auth-shared.css?v=14">
   <link rel="stylesheet" href="../push-shared.css?v=1">
 </head>
 <body>
@@ -51,13 +51,16 @@
           <label for="login-password"><span>Password</span><span class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" minlength="6" required><button id="password-toggle" type="button" data-password-toggle data-password-label="password" aria-label="Show password" aria-pressed="false"><span data-icon="eye"></span></button></span><small class="field-help">Use at least 6 characters.</small></label>
           <section class="login-consent" id="login-consent" aria-labelledby="parent-consent-title">
             <h2 id="parent-consent-title">Consent and portal terms</h2>
-            <div class="login-consent-copy" tabindex="0">
-              <p>This portal processes the student’s identification, contact, enrolment, attendance, academic, examination, communication, security and related administrative records to provide Institute services.</p>
-              <p>Attendance records may include classroom entries and biometric-device identifiers and timestamps. Fingerprint images or templates are not uploaded to this ERP unless a separate notice and consent process is completed.</p>
-              <p>Academic results are not guaranteed. Accounts must not be shared. Institute rules, the written fee and refund policy, child-safety duties and rights available under applicable law continue to apply.</p>
-              <p>If the student is under 18, I confirm that I am the parent or lawful guardian, or that I am otherwise lawfully authorised to act for the student.</p>
-              <p>This consent covers necessary academic, safety, account and fee communications. It does not include optional promotional messages or publicity use of photographs or videos.</p>
-            </div>
+            <details class="login-consent-details">
+              <summary>Review consent details</summary>
+              <div class="login-consent-copy">
+                <p>This portal processes the student’s identification, contact, enrolment, attendance, academic, examination, communication, security and related administrative records to provide Institute services.</p>
+                <p>Attendance records may include classroom entries and biometric-device identifiers and timestamps. Fingerprint images or templates are not uploaded to this ERP unless a separate notice and consent process is completed.</p>
+                <p>Academic results are not guaranteed. Accounts must not be shared. Institute rules, the written fee and refund policy, child-safety duties and rights available under applicable law continue to apply.</p>
+                <p>If the student is under 18, I confirm that I am the parent or lawful guardian, or that I am otherwise lawfully authorised to act for the student.</p>
+                <p>This consent covers necessary academic, safety, account and fee communications. It does not include optional promotional messages or publicity use of photographs or videos.</p>
+              </div>
+            </details>
             <label class="login-consent-check">
               <input id="login-consent-checkbox" name="consentAccepted" type="checkbox" required>
               <span>I have read and agree to the <a href="/legal/student-parent-consent.html" target="_blank" rel="noopener">Student and Parent Consent and Terms</a>.</span>
