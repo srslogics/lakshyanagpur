@@ -9,5 +9,6 @@ backend/data/
 .pytest_cache/
 .DS_Store
 output/
+dist/
 tmp/
 windows-attendance-connector/artifacts/

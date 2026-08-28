@@ -91,6 +91,7 @@ PUBLIC_ROOT_FILES = frozenset({
     "push-service-worker.js",
     "pwa-icon-192.png",
     "pwa-icon-512.png",
+    "runtime-config.js",
     "share-card.png",
     "styles.css",
     "sw.js",

@@ -11,7 +11,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://lakshyaedutech.onrender.com
+        value: https://lakshyaedutech.onrender.com,https://lakshya-portals.onrender.com
       - key: APP_ENV
         value: production
       - key: SEED_DEMO_DATA
@@ -24,5 +24,48 @@ services:
         value: 0.0.0.0
       - key: APP_PORT
         value: 10000
+
+  - type: web
+    name: lakshya-portals
+    runtime: static
+    buildCommand: bash scripts/build_static_site.sh
+    staticPublishPath: ./dist
+    envVars:
+      - key: LAKSHYA_API_BASE
+        value: https://lakshyaedutech.onrender.com
+    routes:
+      - type: rewrite
+        source: /operations
+        destination: /index.html
+      - type: rewrite
+        source: /operations/*
+        destination: /index.html
+      - type: rewrite
+        source: /lakshya-site/about
+        destination: /lakshya-site/about.html
+      - type: rewrite
+        source: /lakshya-site/contact
+        destination: /lakshya-site/contact.html
+      - type: rewrite
+        source: /lakshya-site/dmit
+        destination: /lakshya-site/dmit.html
+      - type: rewrite
+        source: /lakshya-site/lgsat
+        destination: /lakshya-site/lgsat.html
+      - type: rewrite
+        source: /lakshya-site/programs
+        destination: /lakshya-site/programs.html
+      - type: rewrite
+        source: /lakshya-site/results
+        destination: /lakshya-site/results.html
+      - type: rewrite
+        source: /lakshya-site/system
+        destination: /lakshya-site/system.html
+      - type: redirect
+        source: /attendance
+        destination: /attendance-app/
+      - type: redirect
+        source: /attendence
+        destination: /attendance-app/
 
 # Attendance schema changes are applied by Alembic during every deployment.

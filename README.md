@@ -1,6 +1,6 @@
 # Lakshya ERP
 
-This repository is now the product foundation for the real Lakshya ERP application, with the frontend and FastAPI backend deployable together as one service.
+This repository is now the product foundation for the real Lakshya ERP application. Production uses one shared FastAPI service plus a free static site for all browser portals, while local development can still run everything from FastAPI.
 
 ## Current direction
 
@@ -55,21 +55,33 @@ Do not open an app by double-clicking its `index.html` file. The student, parent
 
 ## Deploy on Render
 
-This app can be deployed as a single Render web service.
+Use the included `render.yaml` blueprint. It creates only two services:
 
-Render settings:
+- `lakshya-erp`: the single shared Python API used by every portal
+- `lakshya-portals`: one free static site containing Operations, Student, Parent, Faculty, and Attendance
 
-- Root directory: `backend`
+The static site does not consume free web-service instance hours. All portals use the same API and Supabase database, so attendance, communication, assignments, and account data continue to have one source of truth.
+
+The blueprint expects the API at `https://lakshyaedutech.onrender.com`. If the API service URL changes, update `LAKSHYA_API_BASE` on the static service and add the static site's exact origin to `CORS_ORIGINS` on the API service.
+
+The API service uses:
+
 - Runtime: `Python`
-- Build command: `pip install -r requirements.txt`
-- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- Build command: `pip install -r backend/requirements.txt && cd backend && alembic upgrade head`
+- Start command: `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - Health check path: `/api/health`
+
+The static site uses:
+
+- Build command: `bash scripts/build_static_site.sh`
+- Publish directory: `dist`
+- `LAKSHYA_API_BASE=https://lakshyaedutech.onrender.com`
 
 Required environment variables:
 
 - `DATABASE_URL`
 - `SECRET_KEY`
-- `CORS_ORIGINS` (the deployed Render URL)
+- `CORS_ORIGINS` (comma-separated exact portal origins)
 
 Optional:
 
@@ -162,7 +174,7 @@ balances through auditable ledger credits, creates confirmed post-cutoff
 payments once, and retains contradictory or missing values for review instead
 of guessing.
 
-You can deploy either by using the included `render.yaml` blueprint or by creating the web service manually in the Render dashboard.
+Do not create one backend per portal. If services are created manually instead of from the blueprint, keep the same one-API/one-static-site layout.
 
 ## Build approach
 

@@ -1,6 +1,7 @@
 "use strict";
 
 (() => {
+  const apiUrl = path => window.LakshyaRuntime?.apiUrl(path) || path;
   const supported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
   const decodeKey = value => {
     const padding = "=".repeat((4 - value.length % 4) % 4);
@@ -8,7 +9,7 @@
     return Uint8Array.from([...raw].map(character => character.charCodeAt(0)));
   };
   const request = async (path, token, options = {}) => {
-    const response = await fetch(path, {
+    const response = await fetch(apiUrl(path), {
       ...options,
       headers: {"Content-Type":"application/json", Authorization:`Bearer ${token}`, ...(options.headers || {})}
     });

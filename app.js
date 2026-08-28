@@ -1,5 +1,7 @@
 "use strict";
 
+const apiUrl = path => window.LakshyaRuntime?.apiUrl(path) || path;
+
 const icons = {
   eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
   "eye-off": '<path d="m3 3 18 18M10.6 5.2A11.4 11.4 0 0 1 12 5c6.5 0 10 7 10 7a16 16 0 0 1-2.1 3.2M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.1-.8M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
@@ -219,7 +221,7 @@ async function api(path, options = {}) {
   const requestPath = method === "GET" && path.startsWith("/api/")
     ? `${path}${path.includes("?") ? "&" : "?"}_fresh=${Date.now()}`
     : path;
-  const response = await fetch(requestPath, { ...options, headers, cache: method === "GET" ? "no-store" : undefined });
+  const response = await fetch(apiUrl(requestPath), { ...options, headers, cache: method === "GET" ? "no-store" : undefined });
   let body = null;
   try { body = await response.json(); } catch { body = {}; }
   if (!response.ok) {
@@ -1266,7 +1268,7 @@ async function downloadReport(reportName, button) {
       toast("Demo report downloaded.");
       return;
     }
-    const response = await fetch(`/api/reports/export/${encodeURIComponent(reportName)}`, {
+    const response = await fetch(apiUrl(`/api/reports/export/${encodeURIComponent(reportName)}`), {
       headers: { Authorization: `Bearer ${state.token}` },
       cache: "no-store",
     });
@@ -3062,7 +3064,7 @@ async function logout(notify = true) {
   closeAccountMenu();
   if (token) {
     await window.LakshyaPush?.unsubscribe({token});
-    try { await fetch("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${token}` } }); }
+    try { await fetch(apiUrl("/api/auth/logout"), { method: "POST", headers: { Authorization: `Bearer ${token}` } }); }
     catch { /* Local sign-out must still complete when the network is unavailable. */ }
   }
   clearSession();

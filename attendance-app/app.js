@@ -1,5 +1,7 @@
 "use strict";
 
+const apiUrl = path => window.LakshyaRuntime?.apiUrl(path) || path;
+
 const icons = {
   arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',
   eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
@@ -109,7 +111,7 @@ async function resilientFetch(path, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(path, {cache:"no-store", ...fetchOptions, signal:controller.signal});
+      const response = await fetch(apiUrl(path), {cache:"no-store", ...fetchOptions, signal:controller.signal});
       clearTimeout(timer);
       setConnectionState(true);
       if (response.status >= 500 && attempt + 1 < attempts) continue;
@@ -554,7 +556,7 @@ async function logout() {
   if (token) {
     await window.LakshyaPush?.unsubscribe({token});
     try {
-      await fetch("/api/auth/logout", {method:"POST", headers:{Authorization:`Bearer ${token}`}});
+      await fetch(apiUrl("/api/auth/logout"), {method:"POST", headers:{Authorization:`Bearer ${token}`}});
     } catch {}
   }
   clearSession();
