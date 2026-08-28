@@ -305,7 +305,10 @@ def _selected_punches(payload: BiometricImportSelection, actor: User):
         if not sheet:
             raise HTTPException(422, "Choose a valid worksheet")
         try:
-            punches, row_errors, _ = parse_essl_form_j_sheet(sheet)
+            punches, row_errors, _ = parse_essl_form_j_sheet(
+                sheet,
+                report_month=(preview.get("sourceReport") or {}).get("reportMonth"),
+            )
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
     else:

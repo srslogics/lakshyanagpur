@@ -341,17 +341,87 @@ def _essl_report_month(report_text: str) -> tuple[int, int]:
 def is_essl_form_j_sheet(sheet: SheetData) -> bool:
     report_text = "\n".join(_text(cell) for row in sheet.rows for cell in row if _text(cell))
     upper = report_text.upper()
-    return 'FORM "J"' in upper and "REGISTER OF EMPLOYMENT" in upper and "FOR THE MONTH ENDING" in upper
+    has_form_heading = 'FORM "J"' in upper and "REGISTER OF EMPLOYMENT" in upper
+    has_punch_layout = (
+        "INTIME" in upper
+        and "OUTTIME" in upper
+        and bool(re.search(r"(?:^|\n)CODE\s*:[^\n]+", upper))
+    )
+    # Some eSSL DetailedFormJ exports omit the printed month caption even though
+    # the day columns and biometric rows are complete. They are still Form J
+    # workbooks and must not fall through to the generic column-mapping screen.
+    return has_form_heading and ("FOR THE MONTH ENDING" in upper or has_punch_layout)
 
 
-def parse_essl_form_j_sheet(sheet: SheetData) -> tuple[list[dict], list[dict], dict]:
+def _form_j_day_columns(sheet: SheetData, month_days: int = 31) -> dict[int, int]:
+    day_columns: dict[int, int] = {}
+    for row in sheet.rows:
+        detected_days = {}
+        for column, value in enumerate(row):
+            match = re.match(r"^\s*(\d{1,2})(?:\s|$)", _text(value))
+            if match and 1 <= int(match.group(1)) <= month_days:
+                detected_days[column] = int(match.group(1))
+        if len(detected_days) >= 5:
+            day_columns = detected_days
+    return day_columns
+
+
+def _form_j_active_days(sheet: SheetData, day_columns: dict[int, int]) -> set[int]:
+    active_days: set[int] = set()
+    for row in sheet.rows:
+        if not any(_text(value) == "InTime" for value in row):
+            continue
+        for column, day in day_columns.items():
+            value = row[column] if column < len(row) else None
+            if _text(value) and _text(value) not in {"0", "00:00", "00:00:00"}:
+                active_days.add(day)
+    return active_days
+
+
+def _form_j_report_month(
+    report_text: str,
+    active_days: set[int],
+    reference_date: date | None = None,
+) -> tuple[int, int, str]:
+    try:
+        year, month = _essl_report_month(report_text)
+        return year, month, "report"
+    except ValueError:
+        # eSSL sometimes leaves the month caption blank in DetailedFormJ XLS
+        # exports. Daily uploads are for the current month; immediately after a
+        # month boundary, punch days greater than today's date identify the
+        # previous month. Exposing the source in metadata keeps this auditable.
+        reference = reference_date or datetime.now(INDIA_TZ).date()
+        if active_days and max(active_days) > reference.day:
+            if reference.month == 1:
+                return reference.year - 1, 12, "upload_date"
+            return reference.year, reference.month - 1, "upload_date"
+        return reference.year, reference.month, "upload_date"
+
+
+def parse_essl_form_j_sheet(
+    sheet: SheetData,
+    reference_date: date | None = None,
+    report_month: str | None = None,
+) -> tuple[list[dict], list[dict], dict]:
     """Read an eSSL Form J XLS/XLSX worksheet and retain each first daily punch."""
     if not is_essl_form_j_sheet(sheet):
         raise ValueError("This worksheet is not an eSSL Form J attendance report")
     report_text = "\n".join(_text(cell) for row in sheet.rows for cell in row if _text(cell))
-    year, month = _essl_report_month(report_text)
+    day_columns = _form_j_day_columns(sheet)
+    active_days = _form_j_active_days(sheet, day_columns)
+    if report_month:
+        try:
+            year, month = (int(value) for value in report_month.split("-", 1))
+            if not 1 <= month <= 12:
+                raise ValueError
+        except (TypeError, ValueError) as error:
+            raise ValueError("The saved attendance month is not valid") from error
+        month_source = "preview"
+    else:
+        year, month, month_source = _form_j_report_month(report_text, active_days, reference_date)
     month_days = calendar.monthrange(year, month)[1]
-    day_columns: dict[int, int] = {}
+    day_columns = {column: day for column, day in day_columns.items() if day <= month_days}
     current_name = ""
     identities: dict[str, str] = {}
     daily_punches: dict[tuple[str, date], dict] = {}
@@ -360,14 +430,6 @@ def parse_essl_form_j_sheet(sheet: SheetData) -> tuple[list[dict], list[dict], d
 
     for row_index, row in enumerate(sheet.rows):
         source_row = row_index + 1
-        detected_days = {}
-        for column, value in enumerate(row):
-            match = re.match(r"^\s*(\d{1,2})(?:\s|$)", _text(value))
-            if match and 1 <= int(match.group(1)) <= month_days:
-                detected_days[column] = int(match.group(1))
-        if len(detected_days) >= 5:
-            day_columns = detected_days
-
         for value in row:
             text = _text(value)
             if text.startswith("Name:"):
@@ -431,6 +493,7 @@ def parse_essl_form_j_sheet(sheet: SheetData) -> tuple[list[dict], list[dict], d
     return punches, errors, {
         "format": "essl_form_j_workbook",
         "reportMonth": f"{year:04d}-{month:02d}",
+        "monthSource": month_source,
         "identityCount": len(identities),
         "identities": [
             {"deviceUserId": device_user_id, "deviceName": device_name}

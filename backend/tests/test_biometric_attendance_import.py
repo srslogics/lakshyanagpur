@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from io import BytesIO
 
 from app.models import (
@@ -450,6 +450,28 @@ def test_essl_form_j_sheet_parser_keeps_first_punches():
     assert [(item["attendanceDate"].day, item["firstPunchAt"].hour, item["firstPunchAt"].minute) for item in punches] == [
         (1, 4, 29),
         (3, 6, 2),
+    ]
+
+
+def test_essl_detailed_form_j_without_month_uses_upload_month():
+    sheet = SheetData("DetailedFormJ", [
+        [None, 'FORM "J"'],
+        [None, "REGISTER OF EMPLOYMENT"],
+        ["Sr No.", "Employee", "Type", "1 St", "2 S", "3 M", "20 Th", "23 S"],
+        [1, "Name:Kamal Parsatwar", "M"],
+        [None, "Code:T-1", "InTime", None, None, None, "09:59", "11:32"],
+        [None, "Designation:", "OutTime", None, None, None, "14:59", "13:43"],
+    ])
+    punches, errors, report = parse_essl_form_j_sheet(
+        sheet,
+        reference_date=date(2026, 8, 28),
+    )
+    assert errors == []
+    assert report["reportMonth"] == "2026-08"
+    assert report["monthSource"] == "upload_date"
+    assert [item["attendanceDate"].isoformat() for item in punches] == [
+        "2026-08-20",
+        "2026-08-23",
     ]
 
 
