@@ -8,6 +8,55 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* Keep Chrome/Safari autofill aligned with the light sign-in surface. */
+.login-screen .login-card input:-webkit-autofill,
+.login-screen .login-card input:-webkit-autofill:hover {
+  -webkit-text-fill-color: #171821 !important;
+  caret-color: #171821;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+}
+
+.login-screen .login-card > .login-form-wrap input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #171821 !important;
+  caret-color: #171821;
+  -webkit-box-shadow: 0 0 0 1000px #fff inset, 0 0 0 4px rgba(48, 53, 120, .12) !important;
+  box-shadow: 0 0 0 1000px #fff inset, 0 0 0 4px rgba(48, 53, 120, .12) !important;
+}
+
+.login-screen .login-card .password-field input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+}
+
+.login-screen .login-card input:autofill {
+  color: #171821 !important;
+  background: #fff !important;
+}
+
+.student-shell .sidebar-account {
+  grid-template-columns: 38px minmax(0, 1fr) 34px;
+  gap: 8px;
+}
+
+.student-shell .sidebar-account strong {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.28;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.student-shell .sidebar-account small {
+  font-size: .64rem;
+}
+
+.student-shell .sidebar-account button {
+  width: 34px;
+  height: 34px;
+}
+
 .sidebar-section-label {
   width: auto !important;
   height: auto !important;

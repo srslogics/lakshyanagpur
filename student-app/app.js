@@ -538,7 +538,7 @@ function classCard(item) {
 
 function renderAll() {
   const { profile } = state.data;
-  const meta = [profile.admissionNumber, profile.program].filter(Boolean).join(" · ");
+  const meta = profile.admissionNumber || profile.program || "Student account";
   $("#today-label").textContent = new Intl.DateTimeFormat("en-IN", {
     weekday: "long",
     day: "numeric",
@@ -549,7 +549,7 @@ function renderAll() {
   $("#header-avatar").textContent = initials(profile.fullName);
   $("#sidebar-avatar").textContent = initials(profile.fullName);
   $("#sidebar-name").textContent = profile.fullName;
-  $("#sidebar-meta").textContent = meta || "Student account";
+  $("#sidebar-meta").textContent = meta;
   renderHome();
   renderSchedule();
   renderAssignments();
