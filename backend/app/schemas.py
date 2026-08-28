@@ -91,6 +91,10 @@ class TokenResponse(BaseModel):
     user: AuthenticatedUser
 
 
+class PortalTokenResponse(TokenResponse):
+    bootstrap: dict | None = None
+
+
 class LeadCreate(BaseModel):
     student: str = Field(min_length=2, max_length=255)
     mobile: str

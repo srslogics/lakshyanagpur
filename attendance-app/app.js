@@ -464,11 +464,12 @@ async function login(event) {
   $("#login-error").classList.add("hidden");
   try {
     const form = new FormData(event.currentTarget);
-    const result = await api("/api/auth/login", {
+    const result = await api("/api/auth/portal-login", {
       method:"POST",
       body:JSON.stringify({
         mobile:String(form.get("mobile")).trim(),
-        password:String(form.get("password"))
+        password:String(form.get("password")),
+        portal:"attendance"
       })
     });
     if (result.user.role !== "attendance_operator") {
@@ -482,7 +483,7 @@ async function login(event) {
       showPasswordChange(result.user);
       return;
     }
-    await loadDesk();
+    await loadDesk("", result.bootstrap);
   } catch (error) {
     if (state.token && error.status !== 401 && (error.transient || error.status === 0)) {
       showStartupError(error);
@@ -535,8 +536,8 @@ async function changePassword(event) {
   }
 }
 
-async function loadDesk(message = "") {
-  state.data = await api(`/api/attendance/bootstrap?day=${encodeURIComponent(state.selectedDate)}`);
+async function loadDesk(message = "", initialData = null) {
+  state.data = initialData || await api(`/api/attendance/bootstrap?day=${encodeURIComponent(state.selectedDate)}`);
   const profile = state.data.profile;
   $("#operator-name").textContent = profile.fullName;
   $("#menu-name").textContent = profile.fullName;

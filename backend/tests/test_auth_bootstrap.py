@@ -2,6 +2,45 @@ from app.models import AuditLog, User
 from app.security import hash_password
 
 
+def test_portal_login_returns_operations_startup_data_in_one_response(client):
+    response = client.post(
+        "/api/auth/portal-login",
+        json={
+            "mobile": "9000000001",
+            "password": "Password123!",
+            "portal": "operations",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["access_token"]
+    assert payload["user"]["role"] == "owner"
+    assert set(payload["bootstrap"]) >= {
+        "students",
+        "agreements",
+        "payments",
+        "installments",
+        "leads",
+        "admissionsMeta",
+    }
+
+
+def test_portal_login_rejects_an_account_from_another_portal(client):
+    response = client.post(
+        "/api/auth/portal-login",
+        json={
+            "mobile": "9000000002",
+            "password": "Password123!",
+            "portal": "operations",
+            "consentAccepted": True,
+            "consentVersion": "student-parent-v1-2026-08-15",
+        },
+    )
+
+    assert response.status_code == 403
+
+
 def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
     database.query(User).delete()
     database.commit()

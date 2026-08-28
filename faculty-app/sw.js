@@ -1,13 +1,13 @@
 importScripts("/push-service-worker.js?v=1");
-const CACHE = "lakshya-faculty-v32";
+const CACHE = "lakshya-faculty-v33";
 const ASSETS = [
   "./",
   "./styles.css?v=14",
   "../auth-shared.css?v=14",
   "../push-shared.css?v=1",
-  "../runtime-config.js?v=1",
+  "../runtime-config.js?v=2",
   "../push-client.js?v=2",
-  "./app.js?v=22",
+  "./app.js?v=23",
   "./manifest.webmanifest",
   "../lakshya-logo-576.png?v=20260804-no-tm",
   "../pwa-icon-192.png?v=20260804-no-tm"

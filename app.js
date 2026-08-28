@@ -280,7 +280,7 @@ async function initialize() {
   try {
     if (state.token) {
       try {
-        state.user = await api("/api/auth/me");
+        state.user = state.user || await api("/api/auth/me");
         sessionStorage.setItem("lakshya_user", JSON.stringify(state.user));
         await enterWorkspace();
       }
@@ -288,9 +288,13 @@ async function initialize() {
         if (error.status !== 401 && state.token) showBootError("Workspace unavailable", error.message);
       }
     } else {
-      const setup = await api("/api/auth/bootstrap-status");
-      setAuthMode(setup.setupRequired, setup.allowLegacyEmailLogin);
+      // Show the existing-account form immediately while a sleeping free API
+      // wakes and confirms whether first-time owner setup is still required.
+      setAuthMode(false, false);
       showAuth();
+      api("/api/auth/bootstrap-status")
+        .then(setup => setAuthMode(setup.setupRequired, setup.allowLegacyEmailLogin))
+        .catch(() => {});
     }
   } catch (error) {
     if (error.status !== 401) showBootError("Service unavailable", "The latest workspace data could not be loaded.");
@@ -372,13 +376,13 @@ async function handleAuth(event) {
   try {
     const payload = state.setupRequired
       ? { fullName, mobile, password }
-      : legacyEmail ? { email: identity, password } : accountId ? { username: accountId, password } : { mobile, password };
-    const result = await api(state.setupRequired ? "/api/auth/bootstrap" : "/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
+      : legacyEmail ? { email: identity, password, portal: "operations" } : accountId ? { username: accountId, password, portal: "operations" } : { mobile, password, portal: "operations" };
+    const result = await api(state.setupRequired ? "/api/auth/bootstrap" : "/api/auth/portal-login", { method: "POST", body: JSON.stringify(payload) });
     state.token = result.access_token; sessionStorage.setItem("lakshya_token", state.token);
     state.user = result.user;
     sessionStorage.setItem("lakshya_user", JSON.stringify(state.user));
     if (state.user.mustChangePassword) { showOperationsPasswordChange(); return; }
-    await enterWorkspace();
+    await enterWorkspace(result.bootstrap);
   } catch (error) {
     $("#auth-error").textContent = error.message; $("#auth-error").classList.remove("hidden");
     $("#auth-password").value = "";
@@ -435,7 +439,7 @@ async function submitOperationsPasswordChange(event) {
   }
 }
 
-async function enterWorkspace() {
+async function enterWorkspace(initialWorkspace = null) {
   if (state.user?.mustChangePassword) { showOperationsPasswordChange(); return; }
   if (!ROLE_VIEWS[state.user?.role] && !OPERATIONS_MODULES.some(module => canAccess(module, "read"))) {
     const portal = state.user?.role === "parent" ? "Parent portal" : ["student","parent_student"].includes(state.user?.role) ? "Student portal" : state.user?.role === "attendance_operator" ? "Attendance Desk" : "assigned portal";
@@ -449,7 +453,7 @@ async function enterWorkspace() {
   $("#dashboard-date").textContent = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   $("#account-menu-name").textContent = name; $("#account-menu-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
   [$("#user-avatar"), $("#topbar-avatar"), $("#account-menu-avatar")].forEach(node => node.textContent = initials(name));
-  await loadInitialWorkspace();
+  await loadInitialWorkspace(initialWorkspace);
   $("#boot-screen").classList.add("hidden");
   $("#auth-screen").classList.add("hidden");
   $("#app-shell").classList.remove("hidden");
@@ -482,8 +486,8 @@ async function optional(load, fallback) {
   }
 }
 
-async function loadInitialWorkspace() {
-  const workspace = await api("/api/workspace/bootstrap");
+async function loadInitialWorkspace(initialWorkspace = null) {
+  const workspace = initialWorkspace || await api("/api/workspace/bootstrap");
   Object.assign(state, {
     students: workspace.students || [],
     agreements: workspace.agreements || [],

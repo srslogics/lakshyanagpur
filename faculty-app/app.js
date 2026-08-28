@@ -358,11 +358,12 @@ async function login(event) {
   try {
     const data = new FormData(form);
     const identity = String(data.get("identity")).trim();
-    const result = await api("/api/auth/login", {
+    const result = await api("/api/auth/portal-login", {
       method:"POST",
       body:JSON.stringify({
         [state.loginMode]:identity,
-        password:String(data.get("password"))
+        password:String(data.get("password")),
+        portal:"faculty"
       })
     });
     if (result.user.role !== "faculty") throw new Error("This account does not have Faculty access.");
@@ -378,7 +379,7 @@ async function login(event) {
       showFacultyPasswordChange(result.user);
       return;
     }
-    await loadPortal();
+    await loadPortal(result.bootstrap);
   } catch (error) {
     if (state.token && error.status !== 401 && (error.transient || error.status === 0)) {
       showStartupError(error);
@@ -470,8 +471,8 @@ async function changeFacultyPassword(event) {
   }
 }
 
-async function loadPortal() {
-  state.data = await api("/api/faculty/bootstrap");
+async function loadPortal(initialData = null) {
+  state.data = initialData || await api("/api/faculty/bootstrap");
   $("#startup-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");
   $("#mobile-setup-screen").classList.add("hidden");

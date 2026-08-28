@@ -365,7 +365,7 @@ async function login(event) {
   $("#login-error").classList.add("hidden");
   try {
     const form = new FormData(event.currentTarget);
-    const result = await api("/api/auth/login", {
+    const result = await api("/api/auth/portal-login", {
       method: "POST",
       body: JSON.stringify({
         mobile: String(form.get("mobile")).trim(),
@@ -388,7 +388,7 @@ async function login(event) {
       showPasswordChange(account);
       return;
     }
-    await loadPortal();
+    await loadPortal(result.bootstrap);
   } catch (error) {
     if (error.status === 400 && /Consent and Terms/i.test(error.message)) {
       forgetConsent($("#login-mobile").value);
@@ -449,8 +449,8 @@ async function changePassword(event) {
   }
 }
 
-async function loadPortal() {
-  state.data = await api("/api/portal/bootstrap");
+async function loadPortal(initialData = null) {
+  state.data = initialData || await api("/api/portal/bootstrap");
   renderAll();
   $("#boot-screen").classList.add("hidden");
   $("#login-screen").classList.add("hidden");

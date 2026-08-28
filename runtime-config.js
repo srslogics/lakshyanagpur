@@ -14,5 +14,15 @@
     return `${apiBase}${String(path).startsWith("/") ? "" : "/"}${path}`;
   };
 
-  window.LakshyaRuntime = Object.freeze({apiBase, apiUrl});
+  let warmPromise;
+  const warmApi = () => {
+    if (!warmPromise) {
+      warmPromise = fetch(apiUrl("/health"), {cache: "no-store", mode: "cors"})
+        .catch(() => null);
+    }
+    return warmPromise;
+  };
+
+  window.LakshyaRuntime = Object.freeze({apiBase, apiUrl, warmApi});
+  warmApi();
 })();

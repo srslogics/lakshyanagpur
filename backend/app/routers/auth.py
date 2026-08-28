@@ -13,7 +13,7 @@ from ..database import get_db
 from ..identity import normalize_mobile
 from ..models import AuditLog, RevokedToken, User
 from ..permissions import effective_permissions
-from ..schemas import BootstrapOwnerRequest, LoginRequest, PasswordChangeRequest, TokenResponse
+from ..schemas import BootstrapOwnerRequest, LoginRequest, PasswordChangeRequest, PortalTokenResponse, TokenResponse
 from ..security import bearer, create_token, current_user, decode_token, hash_password, verify_password
 from ..services import audit
 
@@ -168,8 +168,7 @@ def bootstrap_owner(payload: BootstrapOwnerRequest, db: Session = Depends(get_db
     return _token_response(user, db)
 
 
-@router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def _authenticate(payload: LoginRequest, request: Request, db: Session) -> User:
     login_key = _login_key(request, payload)
     _check_login_rate_limit(login_key)
     if payload.username:
@@ -191,7 +190,52 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
         raise HTTPException(401, "Invalid sign-in details")
     _clear_login_failures(login_key)
     _record_student_parent_consent(db, user, payload, request)
-    return _token_response(user, db)
+    return user
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    return _token_response(_authenticate(payload, request, db), db)
+
+
+def _portal_bootstrap(payload: LoginRequest, user: User, db: Session):
+    if not payload.portal or user.must_change_password:
+        return None
+    if payload.portal == "student":
+        if user.role not in {"student", "parent_student"}:
+            raise HTTPException(403, "This account is not assigned to the Student portal")
+        from . import portal as portal_router
+        return portal_router.student_bootstrap(db=db, user=user)
+    if payload.portal == "parent":
+        if user.role != "parent":
+            raise HTTPException(403, "This account is not assigned to the Parent portal")
+        from . import portal as portal_router
+        return portal_router.parent_bootstrap(db=db, user=user)
+    if payload.portal == "faculty":
+        if user.role != "faculty":
+            raise HTTPException(403, "This account does not have Faculty access")
+        from . import faculty as faculty_router
+        return faculty_router.bootstrap(db=db, faculty_user=user)
+    if payload.portal == "attendance":
+        if user.role != "attendance_operator":
+            raise HTTPException(403, "This account is not assigned to the Attendance Desk")
+        from . import attendance as attendance_router
+        return attendance_router.attendance_portal_bootstrap(day=None, db=db, operator=user)
+    if payload.portal == "operations":
+        from . import workspace as workspace_router
+        if user.role not in workspace_router.ERP_ROLES:
+            raise HTTPException(403, "This account does not have Operations access")
+        return workspace_router.bootstrap(db=db, actor=user)
+    raise HTTPException(400, "Choose a valid portal")
+
+
+@router.post("/portal-login", response_model=PortalTokenResponse)
+def portal_login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    """Authenticate and return the first portal screen in one round trip."""
+    user = _authenticate(payload, request, db)
+    response = _token_response(user, db)
+    response["bootstrap"] = _portal_bootstrap(payload, user, db)
+    return response
 
 
 @router.get("/me")
