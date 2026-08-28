@@ -21,6 +21,7 @@ def test_first_owner_can_bootstrap_an_empty_workspace(client, database):
     assert all(value == {"read": True, "create": True, "edit": True} for value in permissions.values())
     assert created_user == {
         "id": database.query(User).one().id,
+        "username": None,
         "mobile": "9876543210",
         "email": None,
         "fullName": "Lakshya Director",

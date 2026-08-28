@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import re
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -10,6 +11,7 @@ LEAD_SOURCES = ("walk-in", "website", "phone", "whatsapp", "referral", "campaign
 
 
 class LoginRequest(BaseModel):
+    username: str | None = Field(default=None, min_length=3, max_length=32)
     mobile: str | None = None
     email: EmailStr | None = None
     password: str = Field(min_length=6, max_length=128)
@@ -23,10 +25,20 @@ class LoginRequest(BaseModel):
     def valid_mobile(cls, value):
         return normalize_mobile(value) if value else None
 
+    @field_validator("username")
+    @classmethod
+    def valid_username(cls, value):
+        if not value:
+            return None
+        normalized = value.strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{2,31}", normalized):
+            raise ValueError("Enter a valid account ID")
+        return normalized
+
     @model_validator(mode="after")
     def has_identifier(self):
-        if not self.mobile and not self.email:
-            raise ValueError("A mobile number or email address is required")
+        if not self.mobile and not self.email and not self.username:
+            raise ValueError("A mobile number, email address, or account ID is required")
         return self
 
 
@@ -62,6 +74,7 @@ class BootstrapOwnerRequest(BaseModel):
 
 class AuthenticatedUser(BaseModel):
     id: str
+    username: str | None
     mobile: str | None
     email: str | None
     full_name: str = Field(alias="fullName")

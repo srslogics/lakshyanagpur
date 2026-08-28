@@ -56,7 +56,11 @@ def decode_token(token: str) -> dict:
     return payload
 
 
-def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)) -> User:
+def current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> User:
     if not credentials:
         raise HTTPException(401, "Authentication required", headers={"WWW-Authenticate": "Bearer"})
     payload = decode_token(credentials.credentials)
@@ -73,6 +77,12 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bear
         raise HTTPException(401, "Session is inactive or unavailable", headers={"WWW-Authenticate": "Bearer"})
     if payload.get("ver", 0) != user.token_version:
         raise HTTPException(401, "Session is no longer valid", headers={"WWW-Authenticate": "Bearer"})
+    if user.role == "demo" and request.url.path not in {
+        "/api/auth/me",
+        "/api/auth/logout",
+        "/api/workspace/bootstrap",
+    }:
+        raise HTTPException(403, "Demo workspace is read-only and isolated from live records")
     return user
 
 
@@ -84,6 +94,10 @@ def require_roles(*roles: str):
     ) -> User:
         if user.must_change_password:
             raise HTTPException(403, "Password change required")
+        if user.role == "demo":
+            if request.method in {"GET", "HEAD"} and request.url.path == "/api/workspace/bootstrap":
+                return user
+            raise HTTPException(403, "Demo workspace is read-only and isolated from live records")
         if user.role == "owner":
             return user
         module = module_for_request(request)

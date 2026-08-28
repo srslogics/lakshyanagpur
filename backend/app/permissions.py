@@ -37,6 +37,11 @@ _READ = {"read": True, "create": False, "edit": False}
 _NONE = {"read": False, "create": False, "edit": False}
 
 ROLE_DEFAULTS = {
+    "demo": {
+        "admissions": _READ,
+        "students": _READ,
+        "finance": _READ,
+    },
     "director": {module: _READ for module in MODULES},
     "admissions_manager": {
         "admissions": _FULL,

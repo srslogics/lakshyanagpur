@@ -44,7 +44,12 @@ def _user_payload(row: User, permission_rows: list[UserModulePermission] | None 
 
 @router.get("/bootstrap")
 def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles("owner"))):
-    users = db.query(User).filter(User.is_test_account.is_(False)).order_by(User.full_name).all()
+    users = (
+        db.query(User)
+        .filter(User.is_test_account.is_(False), User.role != "demo")
+        .order_by(User.full_name)
+        .all()
+    )
     permissions_by_user: dict[str, list[UserModulePermission]] = {}
     for permission in db.query(UserModulePermission).all():
         permissions_by_user.setdefault(permission.user_id, []).append(permission)

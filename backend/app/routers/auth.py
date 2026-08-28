@@ -27,7 +27,11 @@ _login_failures_lock = Lock()
 
 
 def _login_key(request: Request, payload: LoginRequest) -> str:
-    identity = normalize_mobile(payload.mobile) if payload.mobile else str(payload.email or "").strip().lower()
+    identity = (
+        normalize_mobile(payload.mobile)
+        if payload.mobile
+        else str(payload.email or payload.username or "").strip().lower()
+    )
     client_host = request.client.host if request.client else "unknown"
     return f"{client_host}:{identity or 'unknown'}"
 
@@ -119,6 +123,7 @@ def _record_student_parent_consent(
 def _user_payload(user: User, db: Session):
     return {
         "id": user.id,
+        "username": user.username,
         "mobile": user.mobile,
         "email": user.email,
         "fullName": user.full_name,
@@ -167,7 +172,9 @@ def bootstrap_owner(payload: BootstrapOwnerRequest, db: Session = Depends(get_db
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     login_key = _login_key(request, payload)
     _check_login_rate_limit(login_key)
-    if payload.mobile:
+    if payload.username:
+        user = db.query(User).filter(User.username == payload.username).first()
+    elif payload.mobile:
         user = db.query(User).filter(User.mobile == normalize_mobile(payload.mobile)).first()
     elif payload.email:
         candidate = db.query(User).filter(User.email == str(payload.email).lower()).first()
@@ -200,6 +207,8 @@ def change_password(
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
+    if user.role == "demo":
+        raise HTTPException(403, "The shared demo password cannot be changed")
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(400, "Current password is incorrect")
     if verify_password(payload.new_password, user.password_hash):

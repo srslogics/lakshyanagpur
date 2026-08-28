@@ -24,6 +24,7 @@ from .students import _list_item
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 ERP_ROLES = (
+    "demo",
     "owner",
     "director",
     "admissions_manager",
@@ -35,6 +36,118 @@ ERP_ROLES = (
     "attendance_operator",
     "storekeeper",
 )
+
+
+def _demo_workspace():
+    """Return a useful Operations tour without reading any tenant records."""
+    students = [
+        {
+            "id": "demo-student-01",
+            "admissionNumber": "DEMO-2026-0001",
+            "fullName": "Demo Student 01",
+            "mobile": None,
+            "secondaryMobile": None,
+            "email": None,
+            "previousSchool": "Sample School",
+            "program": "JEE",
+            "batch": "Tatva",
+            "enrollmentDate": "2026-07-01",
+            "status": "active",
+            "dataQualityStatus": "ready",
+            "legacyImportId": None,
+        },
+        {
+            "id": "demo-student-02",
+            "admissionNumber": "DEMO-2026-0002",
+            "fullName": "Demo Student 02",
+            "mobile": None,
+            "secondaryMobile": None,
+            "email": None,
+            "previousSchool": "Sample School",
+            "program": "NEET",
+            "batch": "Tatva",
+            "enrollmentDate": "2026-07-03",
+            "status": "active",
+            "dataQualityStatus": "ready",
+            "legacyImportId": None,
+        },
+        {
+            "id": "demo-student-03",
+            "admissionNumber": "DEMO-2026-0003",
+            "fullName": "Demo Student 03",
+            "mobile": None,
+            "secondaryMobile": None,
+            "email": None,
+            "previousSchool": "Sample School",
+            "program": "MHT-CET",
+            "batch": "Essential",
+            "enrollmentDate": "2026-07-05",
+            "status": "active",
+            "dataQualityStatus": "ready",
+            "legacyImportId": None,
+        },
+        {
+            "id": "demo-student-04",
+            "admissionNumber": "DEMO-2026-0004",
+            "fullName": "Demo Student 04",
+            "mobile": None,
+            "secondaryMobile": None,
+            "email": None,
+            "previousSchool": "Sample School",
+            "program": "Boards",
+            "batch": "Essential",
+            "enrollmentDate": "2026-07-08",
+            "status": "active",
+            "dataQualityStatus": "ready",
+            "legacyImportId": None,
+        },
+    ]
+    agreed_amounts = (85000, 90000, 60000, 45000)
+    paid_amounts = (25000, 30000, 20000, 15000)
+    agreements = [
+        {
+            "id": f"demo-agreement-{index:02d}",
+            "studentId": student["id"],
+            "studentName": student["fullName"],
+            "studentMobile": None,
+            "studentStatus": "active",
+            "admissionNumber": student["admissionNumber"],
+            "agreedAmount": agreed_amounts[index - 1],
+            "legacyRegistrationTotal": paid_amounts[index - 1],
+            "currency": "INR",
+            "status": "active",
+        }
+        for index, student in enumerate(students, start=1)
+    ]
+    payments = [
+        {
+            "id": f"demo-payment-{index:02d}",
+            "studentId": student["id"],
+            "studentName": student["fullName"],
+            "admissionNumber": student["admissionNumber"],
+            "transactionDate": f"2026-07-{10 + index:02d}",
+            "amount": paid_amounts[index - 1],
+            "receivedAmount": paid_amounts[index - 1],
+            "method": "online",
+            "transactionType": "payment",
+            "sourceNote": "Sample payment",
+            "reference": f"DEMO-RCPT-{index:04d}",
+            "status": "received",
+            "reconciliationStatus": "ready",
+        }
+        for index, student in enumerate(students, start=1)
+    ]
+    return {
+        "students": students,
+        "agreements": agreements,
+        "payments": payments,
+        "installments": [],
+        "leads": [],
+        "admissionsMeta": {
+            "stageOrder": list(LEAD_STAGES),
+            "sources": list(LEAD_SOURCES),
+        },
+    }
 
 
 def _students(db: Session):
@@ -113,6 +226,8 @@ def bootstrap(
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles(*ERP_ROLES)),
 ):
+    if actor.role == "demo":
+        return _demo_workspace()
     permissions = effective_permissions(db, actor)
     students = _students(db) if permissions["students"]["read"] else []
     if permissions["finance"]["read"]:

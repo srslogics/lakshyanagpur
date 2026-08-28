@@ -41,6 +41,7 @@ const loadedResources = new Set();
 const resourceLoads = new Map();
 const ROLE_VIEWS = {
   owner: Object.keys({dashboard:1,admissions:1,students:1,finance:1,attendance:1,academics:1,examinations:1,timetable:1,communication:1,inventory:1,reports:1,settings:1}),
+  demo: ["dashboard", "admissions", "students", "finance"],
   director: ["dashboard", "admissions", "students", "finance", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"],
   admissions_manager: ["dashboard","admissions","students","finance","communication"],
   counsellor: ["dashboard","admissions"],
@@ -258,10 +259,11 @@ function setAuthMode(setup, allowLegacyEmailLogin = false) {
 function setLegacyLoginMode(enabled) {
   state.legacyEmailLogin = enabled;
   const field = $("#auth-mobile");
-  $("#auth-identity-label").textContent = enabled ? "Existing email address" : "Mobile number";
-  field.type = enabled ? "email" : "tel";
-  field.inputMode = enabled ? "email" : "tel";
-  field.placeholder = enabled ? "owner email address" : "10-digit mobile number";
+  const accountIdEnabled = !state.setupRequired && !enabled;
+  $("#auth-identity-label").textContent = enabled ? "Existing email address" : accountIdEnabled ? "Mobile number or demo ID" : "Mobile number";
+  field.type = enabled ? "email" : accountIdEnabled ? "text" : "tel";
+  field.inputMode = enabled ? "email" : accountIdEnabled ? "text" : "tel";
+  field.placeholder = enabled ? "owner email address" : accountIdEnabled ? "10-digit mobile or demo ID" : "10-digit mobile number";
   field.maxLength = enabled ? 255 : 16;
   field.value = "";
   $("#legacy-login-toggle").textContent = enabled ? "Use mobile number" : "Existing account without mobile?";
@@ -351,21 +353,24 @@ async function handleAuth(event) {
   const fullName = String(form.get("fullName") || "").trim();
   const identity = String(form.get("mobile") || "").trim();
   const legacyEmail = !state.setupRequired && state.legacyEmailLogin;
-  const mobile = legacyEmail ? "" : normalizedMobile(identity);
+  const accountId = !state.setupRequired && !legacyEmail && /^[a-z0-9][a-z0-9_-]{2,31}$/i.test(identity)
+    ? identity.toLowerCase()
+    : "";
+  const mobile = legacyEmail || accountId ? "" : normalizedMobile(identity);
   const password = String(form.get("password") || "");
   $$(".field-error").forEach(node => node.textContent = "");
   $("#auth-error").classList.add("hidden");
   let invalid = false;
   if (state.setupRequired && fullName.length < 2) { $('[data-error-for="fullName"]').textContent = "Enter the owner’s full name."; invalid = true; }
   if (legacyEmail && !/^\S+@\S+\.\S+$/.test(identity)) { $('[data-error-for="mobile"]').textContent = "Enter the existing owner email address."; invalid = true; }
-  if (!legacyEmail && !mobile) { $('[data-error-for="mobile"]').textContent = "Enter a valid 10-digit Indian mobile number."; invalid = true; }
+  if (!legacyEmail && !mobile && !accountId) { $('[data-error-for="mobile"]').textContent = state.setupRequired ? "Enter a valid 10-digit Indian mobile number." : "Enter a valid mobile number or account ID."; invalid = true; }
   if (password.length < 6) { $('[data-error-for="password"]').textContent = "Use at least 6 characters."; invalid = true; }
   if (invalid) return;
   const button = $("#auth-submit"); button.disabled = true; $("#auth-submit-label").textContent = state.setupRequired ? "Creating…" : "Signing in…";
   try {
     const payload = state.setupRequired
       ? { fullName, mobile, password }
-      : legacyEmail ? { email: identity, password } : { mobile, password };
+      : legacyEmail ? { email: identity, password } : accountId ? { username: accountId, password } : { mobile, password };
     const result = await api(state.setupRequired ? "/api/auth/bootstrap" : "/api/auth/login", { method: "POST", body: JSON.stringify(payload) });
     state.token = result.access_token; sessionStorage.setItem("lakshya_token", state.token);
     state.user = result.user;
@@ -437,7 +442,7 @@ async function enterWorkspace() {
     return;
   }
   const name = state.user?.fullName || "Lakshya Director";
-  const label = state.user?.role?.replaceAll("_", " ") || "Owner";
+  const label = state.user?.role === "demo" ? "Demo Workspace" : state.user?.role?.replaceAll("_", " ") || "Owner";
   $("#sidebar-user-name").textContent = name; $("#sidebar-user-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
   $("#dashboard-date").textContent = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
   $("#account-menu-name").textContent = name; $("#account-menu-role").textContent = label.replace(/\b\w/g, c => c.toUpperCase());
@@ -1569,6 +1574,21 @@ async function openStudent(studentId, updateRoute = true) {
   syncBodyScrollLock();
   body.innerHTML = '<div class="skeleton-line"></div>';
   setTimeout(() => $("#detail-close").focus(), 10);
+  if (state.user?.role === "demo") {
+    const student = state.students.find(item => item.id === studentId);
+    if (!student) {
+      body.innerHTML = emptyState("alert", "Sample record unavailable", "Return to the student list and choose another record.");
+      return;
+    }
+    $("#drawer-title").textContent = student.fullName;
+    const agreement = state.agreements.find(item => item.studentId === student.id);
+    body.innerHTML = `<div class="profile-hero"><span class="record-avatar">${initials(student.fullName)}</span><h3>${esc(student.fullName)}</h3><p>${esc(student.admissionNumber)} · ${esc(student.program)}</p></div>
+      <div class="inline-notice">${icon("shield")}<span>This is a synthetic demonstration record. No client record is loaded.</span></div>
+      <section class="detail-section"><h4>Student &amp; enrollment</h4><div class="detail-grid">${detailField("Admission number", student.admissionNumber)}${detailField("Program", student.program)}${detailField("Batch", student.batch)}${detailField("Previous school", student.previousSchool)}${detailField("Enrollment date", formatDate(student.enrollmentDate))}${detailField("Status", student.status)}</div></section>
+      <section class="detail-section"><h4>Sample fee account</h4><div class="detail-grid">${detailField("Agreed amount", money(agreement?.agreedAmount))}${detailField("Recorded amount", money(agreement?.legacyRegistrationTotal))}${detailField("Agreement status", agreement?.status)}${detailField("Currency", agreement?.currency || "INR")}</div></section>`;
+    injectIcons(body);
+    return;
+  }
   try {
     const [student, inventory] = await Promise.all([
       api(`/api/students/${encodeURIComponent(studentId)}`),

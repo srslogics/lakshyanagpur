@@ -26,6 +26,7 @@ class TimestampMixin:
 class User(TimestampMixin, Base):
     __tablename__ = "users"
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("usr"))
+    username: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
     mobile: Mapped[str | None] = mapped_column(String(10), unique=True, index=True)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255))
