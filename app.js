@@ -363,7 +363,11 @@ async function handleAuth(event) {
     ? identity.toLowerCase()
     : "";
   const mobile = legacyEmail || accountId ? "" : normalizedMobile(identity);
-  const password = String(form.get("password") || "");
+  const rawPassword = String(form.get("password") || "");
+  // Password managers and copied credentials can append invisible whitespace.
+  // Existing Operations passwords never rely on surrounding whitespace, so
+  // normalize login input before sending it to the API.
+  const password = state.setupRequired ? rawPassword : rawPassword.normalize("NFKC").trim();
   $$(".field-error").forEach(node => node.textContent = "");
   $("#auth-error").classList.add("hidden");
   let invalid = false;
