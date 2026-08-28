@@ -41,7 +41,7 @@ const loadedResources = new Set();
 const resourceLoads = new Map();
 const ROLE_VIEWS = {
   owner: Object.keys({dashboard:1,admissions:1,students:1,finance:1,attendance:1,academics:1,examinations:1,timetable:1,communication:1,inventory:1,reports:1,settings:1}),
-  demo: ["dashboard", "admissions", "students", "finance"],
+  demo: ["dashboard", "admissions", "students", "finance", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"],
   director: ["dashboard", "admissions", "students", "finance", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"],
   admissions_manager: ["dashboard","admissions","students","finance","communication"],
   counsellor: ["dashboard","admissions"],
@@ -458,7 +458,7 @@ async function enterWorkspace() {
   replaceOperationsRoute(requestedView, route.kind === "view" || route.view !== requestedView ? null : route);
   if (route.kind === "student" && requestedView === "students") await openStudent(route.studentId, false);
   else if (route.kind === "ledger" && requestedView === "finance") openStudentLedger(route.studentId, null, false);
-  window.LakshyaPush?.sync({token:state.token, portal:"operations"});
+  if (state.user?.role !== "demo") window.LakshyaPush?.sync({token:state.token, portal:"operations"});
 }
 
 async function fetchAll(path, pageSize = 100) {
@@ -497,6 +497,19 @@ async function loadResource(resource) {
   if (loadedResources.has(resource)) return;
   if (resourceLoads.has(resource)) return resourceLoads.get(resource);
   const request = (async () => {
+    if (state.user?.role === "demo") {
+      if (resource === "reports") {
+        state.report = {
+          metrics: { students: state.students.length, attendanceRate: 92, recordedPayments: 90000, scheduledClasses: 4 },
+          leadFunnel: [{ stage: "New", count: 3 }, { stage: "Counselling", count: 2 }, { stage: "Confirmed", count: 1 }],
+          attendance: [{ status: "Present", count: 44 }, { status: "Absent", count: 4 }],
+          recentAudit: [],
+        };
+      }
+      loadedResources.add(resource);
+      renderResource(resource);
+      return;
+    }
     if (resource === "timetable") {
       state.timetable = await api("/api/timetable/bootstrap");
       state.sessions = state.timetable.sessions || [];
@@ -1235,6 +1248,24 @@ function renderReports() {
 async function downloadReport(reportName, button) {
   button.disabled = true;
   try {
+    if (state.user?.role === "demo") {
+      const rows = [
+        ["Demo report", reportName],
+        ["Workspace", "Synthetic demonstration data"],
+        ["Generated", new Date().toISOString()],
+      ];
+      const blob = new Blob([rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `lakshya-demo-${reportName}.csv`;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast("Demo report downloaded.");
+      return;
+    }
     const response = await fetch(`/api/reports/export/${encodeURIComponent(reportName)}`, {
       headers: { Authorization: `Bearer ${state.token}` },
       cache: "no-store",
@@ -3214,7 +3245,7 @@ function bindEvents() {
     const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
     activateAttendanceTab(buttons[next].dataset.attendanceTab, true);
   });
-  $("#refresh-reports").addEventListener("click", async () => { try { state.report = await api("/api/reports/overview"); renderReports(); toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#refresh-reports").addEventListener("click", async () => { try { if (state.user?.role === "demo") { loadedResources.delete("reports"); await loadResource("reports"); } else { state.report = await api("/api/reports/overview"); renderReports(); } toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
   $$("[data-report-export]").forEach(button => button.addEventListener("click", () => downloadReport(button.dataset.reportExport, button)));
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));
   $("#finance-view-tabs").addEventListener("keydown", event => {
