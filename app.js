@@ -359,10 +359,11 @@ async function handleAuth(event) {
   const fullName = String(form.get("fullName") || "").trim();
   const identity = String(form.get("mobile") || "").trim();
   const legacyEmail = !state.setupRequired && state.legacyEmailLogin;
-  const accountId = !state.setupRequired && !legacyEmail && /^[a-z0-9][a-z0-9_-]{2,31}$/i.test(identity)
+  const mobileCandidate = legacyEmail ? "" : normalizedMobile(identity);
+  const accountId = !state.setupRequired && !legacyEmail && !mobileCandidate && /^[a-z0-9][a-z0-9_-]{2,31}$/i.test(identity)
     ? identity.toLowerCase()
     : "";
-  const mobile = legacyEmail || accountId ? "" : normalizedMobile(identity);
+  const mobile = legacyEmail || accountId ? "" : mobileCandidate;
   const rawPassword = String(form.get("password") || "");
   // Password managers and copied credentials can append invisible whitespace.
   // Existing Operations passwords never rely on surrounding whitespace, so

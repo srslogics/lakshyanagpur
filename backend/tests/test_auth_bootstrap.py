@@ -286,6 +286,13 @@ def test_operations_has_first_login_password_change_flow(client):
     assert 'api("/api/auth/change-password"' in script.text
 
 
+def test_operations_login_prioritizes_mobile_numbers_over_demo_ids(client):
+    script = client.get("/app.js")
+    assert script.status_code == 200
+    assert 'const mobileCandidate = legacyEmail ? "" : normalizedMobile(identity);' in script.text
+    assert "!legacyEmail && !mobileCandidate &&" in script.text
+
+
 def test_portal_service_workers_only_delete_their_own_old_caches(client):
     expected_prefixes = {
         "/sw.js": "lakshya-erp-app-",
