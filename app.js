@@ -77,6 +77,7 @@ let settingsSection = "accounts";
 let timetableSelectedDate = "";
 let timetableView = "schedule";
 let attendanceRegisterFilter = "current";
+let staffAttendanceDate = "";
 const COLLECTION_PAGE_SIZE = 12;
 const collectionCaps = Object.create(null);
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
@@ -1125,10 +1126,26 @@ function renderAttendance() {
   const recentRegisters = allRegisters.filter(item => asInstant(item.startsAt).getTime() >= todayStart - (30 * day));
   const registers = attendanceRegisterFilter === "recent" ? recentRegisters : attendanceRegisterFilter === "all" ? allRegisters : currentWeek;
   const registerPage = collectionWindow("attendance", registers, 12);
-  const staffRecords = [...(state.staffAttendance?.records || [])].sort((a, b) => asInstant(b.arrivalAt || b.date) - asInstant(a.arrivalAt || a.date));
-  const staffPage = collectionWindow("staff-attendance", staffRecords, 12);
-  const unassignedStaff = new Set(staffRecords.filter(item => !item.staffUserId).map(item => item.deviceUserId)).size;
-  $("#staff-attendance-metrics").innerHTML = compactMetrics([{ label: "Staff members", value: String(state.staffAttendance?.staffCount || 0) }, { label: "Unassigned devices", value: String(unassignedStaff) }, { label: "Latest record", value: staffRecords[0]?.date ? formatDate(staffRecords[0].date) : "—" }]);
+  const allStaffRecords = [...(state.staffAttendance?.records || [])];
+  const staffDates = [...new Set(allStaffRecords.map(item => item.date).filter(Boolean))].sort();
+  if (!staffAttendanceDate) staffAttendanceDate = staffDates.at(-1) || todayKey;
+  const staffRecords = allStaffRecords.filter(item => item.date === staffAttendanceDate).sort((a, b) => asInstant(a.arrivalAt || a.date) - asInstant(b.arrivalAt || b.date));
+  const completedShifts = staffRecords.filter(item => item.departureAt).length;
+  const pendingShifts = staffRecords.length - completedShifts;
+  const firstArrival = staffRecords[0]?.arrivalAt;
+  const staffDateInput = $("#staff-attendance-date");
+  staffDateInput.value = staffAttendanceDate;
+  staffDateInput.max = todayKey;
+  $("#staff-attendance-date-label").textContent = staffAttendanceDate === todayKey ? `Today · ${formatDate(staffAttendanceDate)}` : formatDate(staffAttendanceDate);
+  $("#staff-attendance-previous").disabled = !staffDates.some(day => day < staffAttendanceDate);
+  $("#staff-attendance-next").disabled = staffAttendanceDate >= todayKey || !staffDates.some(day => day > staffAttendanceDate);
+  $("#staff-attendance-today").disabled = staffAttendanceDate === todayKey;
+  $("#staff-attendance-metrics").innerHTML = compactMetrics([
+    { label: "Staff recorded", value: String(staffRecords.length) },
+    { label: "Completed shifts", value: String(completedShifts) },
+    { label: staffAttendanceDate === todayKey ? "Still on site" : "No checkout", value: String(pendingShifts) },
+    { label: "First arrival", value: firstArrival ? classTime(firstArrival) : "—" }
+  ]);
   const weekDays = new Set(currentWeek.map(item => indiaDateKey(item.startsAt))).size;
   const weekPresent = currentWeek.reduce((sum, item) => sum + Number(item.presentCount || 0) + Number(item.lateCount || 0), 0);
   $("#attendance-metrics").innerHTML = compactMetrics([{ label: "Imported days", value: String(weekDays) }, { label: "Present this week", value: String(weekPresent) }, { label: "Latest import", value: formatInstantDate(allRegisters[0]?.startsAt) }]);
@@ -1136,9 +1153,27 @@ function renderAttendance() {
   $("#attendance-register-filter").value = attendanceRegisterFilter;
   $("#attendance-table-body").innerHTML = registers.length ? registerPage.rows.map(item => `<tr><td><strong>${formatInstantDate(item.startsAt)}</strong><br><small>${esc(item.registerKind === "biometric" ? "Biometric import" : "Attendance Desk")}</small></td><td><strong>${esc(item.batch)}</strong></td><td>${Number(item.presentCount || 0) + Number(item.lateCount || 0)}</td><td>${Number(item.absentCount || 0)}</td><td><span class="status status-active">Recorded</span></td><td><button class="button button-secondary button-small" type="button" data-attendance-id="${esc(item.id)}">View</button></td></tr>`).join("") + (registerPage.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("attendance", registerPage.shown, registerPage.total, "records")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("calendar-check", "No imported attendance", "Attendance appears here after the biometric file is imported.")}</td></tr>`;
   $("#attendance-mobile-list").innerHTML = registers.length ? registerPage.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.batch)}</h3><p>${formatInstantDate(item.startsAt)} · ${esc(item.registerKind === "biometric" ? "Biometric import" : "Attendance Desk")}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Present</span><strong>${Number(item.presentCount || 0) + Number(item.lateCount || 0)}</strong></div><div><span>Absent</span><strong>${Number(item.absentCount || 0)}</strong></div></div><button class="button button-secondary" type="button" data-attendance-id="${esc(item.id)}">View summary</button></article>`).join("") + collectionMoreButton("attendance", registerPage.shown, registerPage.total, "records") : emptyState("calendar-check", "No imported attendance", "Attendance appears here after the biometric file is imported.");
-  $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffPage.rows.map(item => `<tr><td><strong>${esc(item.fullName)}</strong><br><small>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)}</small></td><td>${formatDate(item.date)}</td><td>${classTime(item.arrivalAt)}</td><td>${item.departureAt ? classTime(item.departureAt) : "—"}</td><td><span class="status status-active">Recorded</span></td></tr>`).join("") + (staffPage.hasMore ? `<tr class="collection-more-row"><td colspan="5">${collectionMoreButton("staff-attendance", staffPage.shown, staffPage.total, "records")}</td></tr>` : "") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.")}</td></tr>`;
-  $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffPage.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.fullName)}</h3><p>${esc(settingsAccountLabel(item.role))} · Device ${esc(item.deviceUserId)} · ${formatDate(item.date)}</p></div><span class="status status-active">Recorded</span></div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "—"}</strong></div></div></article>`).join("") + collectionMoreButton("staff-attendance", staffPage.shown, staffPage.total, "records") : emptyState("calendar-check", "No staff biometric punches", "Map staff device IDs during the next biometric import.");
-  $("#staff-attendance-count").textContent = `${staffPage.shown} of ${staffRecords.length} records`;
+  const staffStatus = item => item.departureAt
+    ? `<span class="status status-active">Complete</span>`
+    : `<span class="status status-review">${staffAttendanceDate === todayKey ? "Checked in" : "No checkout"}</span>`;
+  const staffDuration = item => {
+    if (!item.departureAt) return "—";
+    const minutes = Math.max(0, Math.round((asInstant(item.departureAt) - asInstant(item.arrivalAt)) / 60000));
+    return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+  };
+  const staffName = value => {
+    const name = String(value || "Staff member").trim();
+    return /[a-z]/.test(name) && !/[A-Z]/.test(name) ? name.replace(/\b\w/g, character => character.toUpperCase()) : name;
+  };
+  const staffIdentity = item => {
+    const role = item.role === "staff" ? "Staff" : settingsAccountLabel(item.role);
+    const displayName = staffName(item.fullName);
+    const initials = displayName.split(/\s+/).slice(0, 2).map(word => word[0]).join("").toUpperCase();
+    return `<div class="staff-person"><span class="staff-person-avatar">${esc(initials || "ST")}</span><span><strong>${esc(displayName)}</strong><small>${esc(role)}<i>Device ${esc(item.deviceUserId)}</i></small></span></div>`;
+  };
+  $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffRecords.map(item => `<tr><td>${staffIdentity(item)}</td><td><strong class="staff-time">${classTime(item.arrivalAt)}</strong></td><td><strong class="staff-time ${item.departureAt ? "" : "staff-time-muted"}">${item.departureAt ? classTime(item.departureAt) : "Not recorded"}</strong></td><td><span class="staff-duration">${staffDuration(item)}</span></td><td>${staffStatus(item)}</td></tr>`).join("") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff attendance for this date", "Choose another date or import the biometric attendance file.")}</td></tr>`;
+  $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffRecords.map(item => `<article class="mobile-record-card staff-mobile-card"><div class="mobile-record-card-head">${staffIdentity(item)}${staffStatus(item)}</div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "Not recorded"}</strong></div><div><span>Time on site</span><strong>${staffDuration(item)}</strong></div></div></article>`).join("") : emptyState("calendar-check", "No staff attendance for this date", "Choose another date or import the biometric attendance file.");
+  $("#staff-attendance-count").textContent = `${staffRecords.length} ${staffRecords.length === 1 ? "staff member" : "staff members"}`;
 }
 
 function activateAttendanceTab(name, focus = false) {
@@ -3246,6 +3281,18 @@ function bindEvents() {
   });
   $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/registers"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#attendance-register-filter").addEventListener("change", event => { attendanceRegisterFilter = event.target.value; resetCollection("attendance"); renderAttendance(); });
+  $("#staff-attendance-date").addEventListener("change", event => { staffAttendanceDate = event.target.value || indiaDateKey(new Date()); renderAttendance(); });
+  $("#staff-attendance-today").addEventListener("click", () => { staffAttendanceDate = indiaDateKey(new Date()); renderAttendance(); });
+  $("#staff-attendance-previous").addEventListener("click", () => {
+    const dates = [...new Set((state.staffAttendance?.records || []).map(item => item.date).filter(day => day < staffAttendanceDate))].sort();
+    staffAttendanceDate = dates.at(-1) || staffAttendanceDate;
+    renderAttendance();
+  });
+  $("#staff-attendance-next").addEventListener("click", () => {
+    const dates = [...new Set((state.staffAttendance?.records || []).map(item => item.date).filter(day => day > staffAttendanceDate))].sort();
+    staffAttendanceDate = dates[0] || staffAttendanceDate;
+    renderAttendance();
+  });
   $$('[data-attendance-tab]').forEach(button => button.addEventListener("click", () => activateAttendanceTab(button.dataset.attendanceTab)));
   $("#attendance-view-tabs").addEventListener("keydown", event => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

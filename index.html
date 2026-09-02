@@ -291,8 +291,17 @@
           <div class="page-heading"><h2 id="attendance-heading">Attendance</h2><button class="button button-secondary" id="refresh-attendance" type="button"><span data-icon="refresh"></span>Refresh</button></div>
           <nav class="segmented-control attendance-view-tabs" id="attendance-view-tabs" role="tablist" aria-label="Attendance views"><button class="active" id="attendance-staff-tab" type="button" role="tab" aria-selected="true" aria-controls="attendance-staff-panel" data-attendance-tab="staff">Staff attendance</button><button id="attendance-students-tab" type="button" role="tab" aria-selected="false" aria-controls="attendance-students-panel" tabindex="-1" data-attendance-tab="students">Student attendance</button></nav>
           <section class="attendance-panel active" id="attendance-staff-panel" role="tabpanel" aria-labelledby="attendance-staff-tab" data-attendance-panel="staff">
+            <div class="staff-attendance-toolbar" aria-label="Staff attendance date">
+              <div class="staff-date-copy"><span>Daily register</span><strong id="staff-attendance-date-label">Today</strong></div>
+              <div class="staff-date-actions">
+                <button class="icon-button" id="staff-attendance-previous" type="button" aria-label="Previous attendance date" title="Previous date"><span data-icon="arrow-left"></span></button>
+                <label class="staff-date-picker"><span class="sr-only">Select attendance date</span><input id="staff-attendance-date" type="date"></label>
+                <button class="button button-secondary button-small" id="staff-attendance-today" type="button">Today</button>
+                <button class="icon-button" id="staff-attendance-next" type="button" aria-label="Next attendance date" title="Next date"><span data-icon="chevron-right"></span></button>
+              </div>
+            </div>
             <div class="compact-metrics" id="staff-attendance-metrics"></div>
-            <article class="surface table-surface staff-attendance-surface"><div class="surface-head"><div><h3>Staff attendance</h3><p>Biometric arrival and departure records for institute staff.</p></div><span class="status status-active" id="staff-attendance-count">0 records</span></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Staff member</th><th>Date</th><th>Arrival</th><th>Departure</th><th>Status</th></tr></thead><tbody id="staff-attendance-table-body"></tbody></table></div><div class="mobile-records" id="staff-attendance-mobile-list"></div></article>
+            <article class="surface table-surface staff-attendance-surface"><div class="surface-head"><div><h3>Daily staff register</h3><p>First arrival and final departure from the biometric device.</p></div><span class="staff-register-count" id="staff-attendance-count">0 staff</span></div><div class="data-table-wrap"><table class="data-table staff-attendance-table"><thead><tr><th>Staff member</th><th>Arrival</th><th>Departure</th><th>Time on site</th><th>Day status</th></tr></thead><tbody id="staff-attendance-table-body"></tbody></table></div><div class="mobile-records" id="staff-attendance-mobile-list"></div></article>
           </section>
           <section class="attendance-panel" id="attendance-students-panel" role="tabpanel" aria-labelledby="attendance-students-tab" data-attendance-panel="students" hidden>
             <div class="compact-metrics" id="attendance-metrics"></div>

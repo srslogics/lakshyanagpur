@@ -337,8 +337,29 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .table-surface { min-height: auto; padding: 0; overflow: hidden; }
 .attendance-view-tabs { margin-bottom: 18px; }
 .attendance-panel[hidden] { display: none !important; }
+.staff-attendance-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-xs); }
+.staff-date-copy { display: grid; gap: 3px; }
+.staff-date-copy span { color: var(--ink-500); font-size: .64rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.staff-date-copy strong { color: var(--ink-950); font: 800 .9rem/1.2 "Manrope",sans-serif; }
+.staff-date-actions { display: flex; align-items: center; gap: 8px; }
+.staff-date-actions .icon-button { width: 40px; height: 40px; }
+.staff-date-actions .icon-button:disabled { opacity: .35; cursor: not-allowed; }
+.staff-date-picker input { width: 154px; height: 40px; padding: 0 11px; font-size: .72rem; }
 .staff-attendance-surface > .surface-head { align-items: center; margin: 0; padding: 18px 22px; border-bottom: 1px solid var(--line); }
 .staff-attendance-surface > .surface-head p { margin: 5px 0 0; color: var(--ink-500); font-size: .7rem; line-height: 1.45; }
+.staff-register-count { padding: 6px 10px; border-radius: 999px; color: var(--accent-strong); background: var(--accent-soft); font-size: .66rem; font-weight: 800; }
+.staff-attendance-table td { height: 68px; }
+.staff-person { display: flex; align-items: center; gap: 11px; min-width: 210px; }
+.staff-person-avatar { width: 38px; height: 38px; flex: 0 0 38px; display: grid; place-items: center; border-radius: 12px; color: var(--accent-strong); background: var(--accent-soft); font: 800 .68rem/1 "Manrope",sans-serif; }
+.staff-person > span:last-child { display: grid; gap: 4px; }
+.staff-person strong { color: var(--ink-950); font: 800 .78rem/1.15 "Manrope",sans-serif; }
+.staff-person small { display: flex; align-items: center; gap: 7px; color: var(--ink-500); font-size: .65rem; }
+.staff-person small i { padding-left: 7px; border-left: 1px solid var(--line); font-style: normal; }
+.staff-time { color: var(--ink-900); font-size: .76rem; font-variant-numeric: tabular-nums; }
+.staff-time-muted { color: var(--ink-400); font-weight: 600; }
+.staff-duration { color: var(--ink-600); font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.staff-mobile-card .mobile-record-card-head { align-items: center; }
+.staff-mobile-card .staff-person { min-width: 0; }
 .toolbar { min-height: 72px; display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--line); background: var(--surface-muted); }
 .toolbar select { width: auto; min-width: 160px; height: 44px; padding-right: 34px; font-size: .78rem; }
 .search-field { width: 250px; position: relative; display: block; }
@@ -951,6 +972,12 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
   .metric-card { min-height: 132px; padding: 16px; }
   .compact-metrics { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
   .compact-metric { min-width: 150px; scroll-snap-align: start; }
+  .staff-attendance-toolbar { align-items: stretch; flex-direction: column; padding: 13px; }
+  .staff-date-actions { display: grid; grid-template-columns: 40px minmax(0,1fr) auto 40px; }
+  .staff-date-picker input { width: 100%; font-size: 16px; }
+  .staff-attendance-surface > .surface-head { align-items: flex-start; padding: 16px; }
+  .staff-person { min-width: 0; }
+  .staff-person small { flex-wrap: wrap; }
   .surface { padding: 16px; border-radius: 15px; }
   .settings-page-heading > div:first-child { display: none; }
   .settings-heading-actions { grid-template-columns: 1fr 1fr; }
