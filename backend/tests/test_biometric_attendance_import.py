@@ -334,13 +334,18 @@ def test_vinay_attendance_displays_director_without_changing_access(client, data
     result = client.get("/api/attendance/staff-biometric", headers=headers)
     assert result.status_code == 200
     records = result.json()["records"]
+    assert result.json()["staffCount"] == 1
+    assert result.json()["directorCount"] == 1
+    assert result.json()["recordCount"] == 4
     vinay_rows = [row for row in records if row["deviceUserId"] == "003"]
     assert len(vinay_rows) == 2
     assert {row["date"] for row in vinay_rows} == {"2026-09-01", "2026-09-02"}
     assert all(row["designation"] == "Director" for row in vinay_rows)
+    assert all(row["attendanceGroup"] == "directors" for row in vinay_rows)
     assert all(row["role"] == ("front_desk" if staff else "staff") for row in vinay_rows)
     assert all(row["departureAt"] for row in vinay_rows)
     assert all(row["designation"] is None for row in records if row["deviceUserId"] == "26")
+    assert all(row["attendanceGroup"] == "staff" for row in records if row["deviceUserId"] == "26")
     identity = database.query(DeviceAttendanceIdentity).filter_by(device_user_id="003").one()
     assert identity.device_name == "Vinay Barhate"
     assert identity.staff_user_id == (staff.id if staff else None)
@@ -600,6 +605,8 @@ def test_essl_form_j_single_day_preview_combines_every_worksheet(client, databas
     assert staff_rows.status_code == 200
     names = {item["fullName"] for item in staff_rows.json()["records"]}
     assert names == {"Dr. Vinay Barhate", "Pooja Kamble"}
+    assert staff_rows.json()["staffCount"] == 1
+    assert staff_rows.json()["directorCount"] == 1
 
 
 def test_essl_form_j_sheet_parser_keeps_first_punches():

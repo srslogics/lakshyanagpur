@@ -347,6 +347,8 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .staff-date-picker input { width: 154px; height: 40px; padding: 0 11px; font-size: .72rem; }
 .staff-attendance-surface > .surface-head { align-items: center; margin: 0; padding: 18px 22px; border-bottom: 1px solid var(--line); }
 .staff-attendance-surface > .surface-head p { margin: 5px 0 0; color: var(--ink-500); font-size: .7rem; line-height: 1.45; }
+.director-attendance-surface { margin-bottom: 20px; }
+.director-attendance-surface[hidden] { display: none !important; }
 .staff-register-count { padding: 6px 10px; border-radius: 999px; color: var(--accent-strong); background: var(--accent-soft); font-size: .66rem; font-weight: 800; }
 .staff-attendance-table td { height: 68px; }
 .staff-person { display: flex; align-items: center; gap: 11px; min-width: 210px; }
@@ -1113,6 +1115,9 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 }
 
 @media (max-width: 360px) {
+  .staff-date-actions { grid-template-columns: 44px minmax(0,1fr) 44px; }
+  .staff-date-picker { grid-column: 1 / -1; grid-row: 1; }
+  .staff-date-actions .icon-button { width: 44px; height: 44px; }
   .notification-button { display: none; }
   .topbar h1 { max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .page-container { padding-left: 12px; padding-right: 12px; }

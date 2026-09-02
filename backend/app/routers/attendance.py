@@ -365,12 +365,15 @@ def list_staff_biometric_attendance(
     records = []
     for attendance, staff, identity in rows:
         full_name = staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff"
+        designation = _staff_designation(full_name)
+        attendance_group = "directors" if designation == "Director" or (staff and staff.role == "director") else "staff"
         records.append({
             "id": attendance.id,
             "staffUserId": staff.id if staff else None,
             "fullName": full_name,
             "role": staff.role if staff else "staff",
-            "designation": _staff_designation(full_name),
+            "designation": designation,
+            "attendanceGroup": attendance_group,
             "deviceUserId": attendance.device_user_id,
             "date": attendance.attendance_date.isoformat(),
             "arrivalAt": _aware(attendance.first_punch_at).isoformat(),
@@ -378,7 +381,8 @@ def list_staff_biometric_attendance(
         })
     return {
         "records": records,
-        "staffCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records}),
+        "staffCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "staff"}),
+        "directorCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "directors"}),
         "recordCount": len(records),
     }
 

@@ -1114,6 +1114,10 @@ function renderExaminations() {
   $("#examination-mobile-list").innerHTML = exams.length ? exams.map(item => `<article class="mobile-record-card examination-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.name)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Schedule</span><strong>${formatDateTime(item.scheduledAt)}</strong></div><div><span>Maximum</span><strong>${esc(item.maxMarks)} marks</strong></div><div><span>Faculty</span><strong>${esc(item.faculty)}</strong></div><div><span>Results</span><strong>${item.marksEntered}/${item.participantCount} entered</strong></div></div><div class="mobile-card-actions">${examinationAction(item)}${canAccess("examinations", "edit") && item.status !== "published" ? `<button class="button button-secondary button-small" type="button" data-examination-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : ""}</div></article>`).join("") : emptyState("exam", state.examinations.length ? "No matching examinations" : "No examinations scheduled");
 }
 
+function isDirectorAttendance(item) {
+  return item.attendanceGroup === "directors" || [item.role, item.designation].some(value => String(value || "").trim().toLowerCase() === "director");
+}
+
 function renderAttendance() {
   const now = Date.now(), day = 86400000;
   const todayKey = indiaDateKey(new Date(now));
@@ -1129,7 +1133,9 @@ function renderAttendance() {
   const allStaffRecords = [...(state.staffAttendance?.records || [])];
   const staffDates = [...new Set(allStaffRecords.map(item => item.date).filter(Boolean))].sort();
   if (!staffAttendanceDate) staffAttendanceDate = staffDates.at(-1) || todayKey;
-  const staffRecords = allStaffRecords.filter(item => item.date === staffAttendanceDate).sort((a, b) => asInstant(a.arrivalAt || a.date) - asInstant(b.arrivalAt || b.date));
+  const dailyRecords = allStaffRecords.filter(item => item.date === staffAttendanceDate).sort((a, b) => asInstant(a.arrivalAt || a.date) - asInstant(b.arrivalAt || b.date));
+  const directorRecords = dailyRecords.filter(isDirectorAttendance);
+  const staffRecords = dailyRecords.filter(item => !isDirectorAttendance(item));
   const completedShifts = staffRecords.filter(item => item.departureAt).length;
   const pendingShifts = staffRecords.length - completedShifts;
   const firstArrival = staffRecords[0]?.arrivalAt;
@@ -1171,9 +1177,15 @@ function renderAttendance() {
     const initials = displayName.split(/\s+/).slice(0, 2).map(word => word[0]).join("").toUpperCase();
     return `<div class="staff-person"><span class="staff-person-avatar">${esc(initials || "ST")}</span><span><strong>${esc(displayName)}</strong><small>${esc(role)}<i>Device ${esc(item.deviceUserId)}</i></small></span></div>`;
   };
-  $("#staff-attendance-table-body").innerHTML = staffRecords.length ? staffRecords.map(item => `<tr><td>${staffIdentity(item)}</td><td><strong class="staff-time">${classTime(item.arrivalAt)}</strong></td><td><strong class="staff-time ${item.departureAt ? "" : "staff-time-muted"}">${item.departureAt ? classTime(item.departureAt) : "Not recorded"}</strong></td><td><span class="staff-duration">${staffDuration(item)}</span></td><td>${staffStatus(item)}</td></tr>`).join("") : `<tr><td colspan="5">${emptyState("calendar-check", "No staff attendance for this date", "Choose another date or import the biometric attendance file.")}</td></tr>`;
-  $("#staff-attendance-mobile-list").innerHTML = staffRecords.length ? staffRecords.map(item => `<article class="mobile-record-card staff-mobile-card"><div class="mobile-record-card-head">${staffIdentity(item)}${staffStatus(item)}</div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "Not recorded"}</strong></div><div><span>Time on site</span><strong>${staffDuration(item)}</strong></div></div></article>`).join("") : emptyState("calendar-check", "No staff attendance for this date", "Choose another date or import the biometric attendance file.");
-  $("#staff-attendance-count").textContent = `${staffRecords.length} ${staffRecords.length === 1 ? "staff member" : "staff members"}`;
+  const renderPeople = (prefix, records, singular, plural) => {
+    const empty = emptyState("calendar-check", `No ${singular} attendance for this date`, "Choose another date or import the biometric attendance file.");
+    $(`#${prefix}-attendance-table-body`).innerHTML = records.length ? records.map(item => `<tr><td>${staffIdentity(item)}</td><td><strong class="staff-time">${classTime(item.arrivalAt)}</strong></td><td><strong class="staff-time ${item.departureAt ? "" : "staff-time-muted"}">${item.departureAt ? classTime(item.departureAt) : "Not recorded"}</strong></td><td><span class="staff-duration">${staffDuration(item)}</span></td><td>${staffStatus(item)}</td></tr>`).join("") : `<tr><td colspan="5">${empty}</td></tr>`;
+    $(`#${prefix}-attendance-mobile-list`).innerHTML = records.length ? records.map(item => `<article class="mobile-record-card staff-mobile-card"><div class="mobile-record-card-head">${staffIdentity(item)}${staffStatus(item)}</div><div class="mobile-record-meta"><div><span>Arrival</span><strong>${classTime(item.arrivalAt)}</strong></div><div><span>Departure</span><strong>${item.departureAt ? classTime(item.departureAt) : "Not recorded"}</strong></div><div><span>Time on site</span><strong>${staffDuration(item)}</strong></div></div></article>`).join("") : empty;
+    $(`#${prefix}-attendance-count`).textContent = `${records.length} ${records.length === 1 ? singular : plural}`;
+  };
+  $("#director-attendance-surface").hidden = !allStaffRecords.some(isDirectorAttendance);
+  renderPeople("director", directorRecords, "director", "directors");
+  renderPeople("staff", staffRecords, "staff member", "staff members");
 }
 
 function activateAttendanceTab(name, focus = false) {
