@@ -1166,7 +1166,7 @@ function renderAttendance() {
     return /[a-z]/.test(name) && !/[A-Z]/.test(name) ? name.replace(/\b\w/g, character => character.toUpperCase()) : name;
   };
   const staffIdentity = item => {
-    const role = item.role === "staff" ? "Staff" : settingsAccountLabel(item.role);
+    const role = item.designation || (item.role === "staff" ? "Staff" : settingsAccountLabel(item.role));
     const displayName = staffName(item.fullName);
     const initials = displayName.split(/\s+/).slice(0, 2).map(word => word[0]).join("").toUpperCase();
     return `<div class="staff-person"><span class="staff-person-avatar">${esc(initials || "ST")}</span><span><strong>${esc(displayName)}</strong><small>${esc(role)}<i>Device ${esc(item.deviceUserId)}</i></small></span></div>`;

@@ -1,6 +1,8 @@
 from datetime import date, datetime, timezone
 from io import BytesIO
 
+import pytest
+
 from app.models import (
     AttendanceEntry,
     AttendanceRegister,
@@ -15,6 +17,7 @@ from app.models import (
 from app.security import create_token, hash_password
 from app.importers.biometric_attendance import SheetData, parse_essl_form_j_pdf, parse_essl_form_j_sheet
 from app.routers.portal import attendance_rows
+from app.routers.attendance import _staff_designation
 
 
 def setup_students(database):
@@ -270,6 +273,85 @@ def test_biometric_import_keeps_unassigned_staff_visible(client, database):
     record = staff_rows.json()["records"][0]
     assert record["fullName"] == "Unknown"
     assert record["deviceUserId"] == "900"
+
+
+@pytest.mark.parametrize("name, expected", [
+    ("Vinay Barhate", "Director"),
+    (" vinay  barhate ", "Director"),
+    ("Dr. Vinay Barhate", "Director"),
+    ("DR VINAY BARHATE", "Director"),
+    ("Vinay Deshmukh", None),
+    ("Pooja Kamble", None),
+    ("Vinay Barhate Junior", None),
+    ("", None),
+])
+def test_staff_designation_is_an_exact_display_only_override(name, expected):
+    assert _staff_designation(name) == expected
+
+
+@pytest.mark.parametrize("linked_account", [False, True])
+def test_vinay_attendance_displays_director_without_changing_access(client, database, linked_account):
+    operator, _, _ = setup_students(database)
+    staff = None
+    if linked_account:
+        staff = User(
+            mobile="9000000199",
+            full_name="Dr. Vinay Barhate",
+            role="front_desk",
+            password_hash=hash_password("Password123!"),
+        )
+        database.add(staff)
+        database.commit()
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    mapping = {"staffUserId": staff.id} if staff else {"unassignedStaff": True}
+    # A later biometric import must leave the designation and historical rows
+    # intact, including when there is no linked application login.
+    for day in ("01", "02"):
+        content = (
+            "User ID,Name,Timestamp\n"
+            f"003,Vinay Barhate,2026-09-{day} 12:07:00\n"
+            f"003,Vinay Barhate,2026-09-{day} 14:48:00\n"
+            f"26,Pooja Kamble,2026-09-{day} 10:34:00\n"
+        ).encode()
+        staged = preview(client, headers, content)
+        committed = client.post(
+            "/api/attendance/biometric-imports",
+            headers=headers,
+            json={
+                "previewToken": staged["previewToken"],
+                "sheetName": "Attendance",
+                "deviceIdColumn": "User ID",
+                "nameColumn": "Name",
+                "datetimeColumn": "Timestamp",
+                "mappings": [
+                    {"deviceUserId": "003", **mapping},
+                    {"deviceUserId": "26", "unassignedStaff": True},
+                ],
+            },
+        )
+        assert committed.status_code == 200, committed.text
+
+    result = client.get("/api/attendance/staff-biometric", headers=headers)
+    assert result.status_code == 200
+    records = result.json()["records"]
+    vinay_rows = [row for row in records if row["deviceUserId"] == "003"]
+    assert len(vinay_rows) == 2
+    assert {row["date"] for row in vinay_rows} == {"2026-09-01", "2026-09-02"}
+    assert all(row["designation"] == "Director" for row in vinay_rows)
+    assert all(row["role"] == ("front_desk" if staff else "staff") for row in vinay_rows)
+    assert all(row["departureAt"] for row in vinay_rows)
+    assert all(row["designation"] is None for row in records if row["deviceUserId"] == "26")
+    identity = database.query(DeviceAttendanceIdentity).filter_by(device_user_id="003").one()
+    assert identity.device_name == "Vinay Barhate"
+    assert identity.staff_user_id == (staff.id if staff else None)
+    assert database.query(AttendanceEntry).count() == 0
+    if staff:
+        database.refresh(staff)
+        assert staff.role == "front_desk"
+        assert client.get(
+            "/api/attendance/staff-biometric",
+            headers={"Authorization": f"Bearer {create_token(staff)}"},
+        ).status_code == 403
 
 
 def test_biometric_import_allows_two_device_ids_for_one_student(client, database):

@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta, timezone
+import re
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -36,6 +37,16 @@ ROLES = ("owner", "academic_coordinator", "attendance_operator")
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
 BATCH_WIDE_STREAM = "__all__"
 BATCH_WIDE_SUBJECT = "Attendance"
+
+# Institute-confirmed display titles, independent of biometric categories and
+# security roles. Applying these on read also corrects historical attendance.
+STAFF_DESIGNATIONS = {"vinaybarhate": "Director"}
+
+
+def _staff_designation(full_name: str) -> str | None:
+    name = re.sub(r"^dr\.?\s+", "", full_name.strip(), flags=re.IGNORECASE)
+    name_key = re.sub(r"[^a-z0-9]", "", name.casefold())
+    return STAFF_DESIGNATIONS.get(name_key)
 
 
 def _aware(value: datetime) -> datetime:
@@ -351,16 +362,20 @@ def list_staff_biometric_attendance(
         .limit(500)
         .all()
     )
-    records = [{
-        "id": attendance.id,
-        "staffUserId": staff.id if staff else None,
-        "fullName": staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff",
-        "role": staff.role if staff else "staff",
-        "deviceUserId": attendance.device_user_id,
-        "date": attendance.attendance_date.isoformat(),
-        "arrivalAt": _aware(attendance.first_punch_at).isoformat(),
-        "departureAt": _aware(attendance.last_punch_at).isoformat() if attendance.last_punch_at else None,
-    } for attendance, staff, identity in rows]
+    records = []
+    for attendance, staff, identity in rows:
+        full_name = staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff"
+        records.append({
+            "id": attendance.id,
+            "staffUserId": staff.id if staff else None,
+            "fullName": full_name,
+            "role": staff.role if staff else "staff",
+            "designation": _staff_designation(full_name),
+            "deviceUserId": attendance.device_user_id,
+            "date": attendance.attendance_date.isoformat(),
+            "arrivalAt": _aware(attendance.first_punch_at).isoformat(),
+            "departureAt": _aware(attendance.last_punch_at).isoformat() if attendance.last_punch_at else None,
+        })
     return {
         "records": records,
         "staffCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records}),
