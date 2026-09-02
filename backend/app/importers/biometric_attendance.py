@@ -354,16 +354,24 @@ def is_essl_form_j_sheet(sheet: SheetData) -> bool:
 
 
 def _form_j_day_columns(sheet: SheetData, month_days: int = 31) -> dict[int, int]:
-    day_columns: dict[int, int] = {}
+    labelled_day_columns: dict[int, int] = {}
+    fallback_day_columns: dict[int, int] = {}
     for row in sheet.rows:
-        detected_days = {}
+        detected_days: dict[int, int] = {}
         for column, value in enumerate(row):
             match = re.match(r"^\s*(\d{1,2})(?:\s|$)", _text(value))
             if match and 1 <= int(match.group(1)) <= month_days:
                 detected_days[column] = int(match.group(1))
-        if len(detected_days) >= 5:
-            day_columns = detected_days
-    return day_columns
+        header_tokens = {normalize_header(value) for value in row if _text(value)}
+        # Daily eSSL exports only include one calendar column (for example
+        # ``1 T``). The Sr No./Employee labels distinguish that real calendar
+        # header from employee serial numbers elsewhere in the worksheet.
+        if {"srno", "employee"}.issubset(header_tokens) and detected_days:
+            if len(detected_days) > len(labelled_day_columns):
+                labelled_day_columns = detected_days
+        elif len(detected_days) >= 5 and len(detected_days) > len(fallback_day_columns):
+            fallback_day_columns = detected_days
+    return labelled_day_columns or fallback_day_columns
 
 
 def _form_j_active_days(sheet: SheetData, day_columns: dict[int, int]) -> set[int]:
@@ -500,6 +508,76 @@ def parse_essl_form_j_sheet(
             for device_user_id, device_name in identities.items()
         ],
     }
+
+
+def parse_essl_form_j_sheets(
+    sheets: list[SheetData],
+    reference_date: date | None = None,
+    report_month: str | None = None,
+) -> tuple[list[dict], list[dict], dict]:
+    """Read and combine every Form J worksheet in one eSSL workbook."""
+    if not sheets:
+        raise ValueError("No eSSL Form J worksheets were found")
+
+    parsed: list[tuple[SheetData, list[dict], dict]] = []
+    errors: list[dict] = []
+    report_months: set[str] = set()
+    identities: dict[str, str] = {}
+    month_sources: set[str] = set()
+    rows_seen = 0
+
+    for sheet in sheets:
+        punches, sheet_errors, report = parse_essl_form_j_sheet(
+            sheet,
+            reference_date=reference_date,
+            report_month=report_month,
+        )
+        parsed.append((sheet, punches, report))
+        report_months.add(report["reportMonth"])
+        month_sources.add(report["monthSource"])
+        rows_seen += max((item.get("rowsSeen", 0) for item in punches), default=0)
+        for identity in report["identities"]:
+            device_user_id = identity["deviceUserId"]
+            device_name = identity.get("deviceName", "")
+            if device_user_id not in identities or (not identities[device_user_id] and device_name):
+                identities[device_user_id] = device_name
+        errors.extend({**error, "sheet": sheet.name} for error in sheet_errors)
+
+    if len(report_months) != 1:
+        raise ValueError("The Form J worksheets are for different attendance months")
+
+    daily_punches: dict[tuple[str, date], dict] = {}
+    for _, punches, _ in parsed:
+        for item in punches:
+            key = (item["deviceUserId"], item["attendanceDate"])
+            existing = daily_punches.get(key)
+            if not existing:
+                daily_punches[key] = {**item}
+                continue
+            existing["firstPunchAt"] = min(existing["firstPunchAt"], item["firstPunchAt"])
+            last_values = [value for value in (existing.get("lastPunchAt"), item.get("lastPunchAt")) if value]
+            existing["lastPunchAt"] = max(last_values) if last_values else None
+            if not existing.get("deviceName") and item.get("deviceName"):
+                existing["deviceName"] = item["deviceName"]
+
+    punches = sorted(daily_punches.values(), key=lambda item: (item["attendanceDate"], item["deviceUserId"]))
+    for item in punches:
+        item["rowsSeen"] = rows_seen
+    source_sheets = [sheet.name for sheet in sheets]
+    metadata = {
+        "format": "essl_form_j_workbook",
+        "reportMonth": next(iter(report_months)),
+        "monthSource": next(iter(month_sources)) if len(month_sources) == 1 else "mixed",
+        "identityCount": len(identities),
+        "identities": [
+            {"deviceUserId": device_user_id, "deviceName": device_name}
+            for device_user_id, device_name in identities.items()
+        ],
+        "sourceSheets": source_sheets,
+    }
+    if len(source_sheets) == 1:
+        metadata["sourceSheet"] = source_sheets[0]
+    return punches, errors, metadata
 
 
 def parse_essl_form_j_pdf(content: bytes) -> tuple[list[dict], list[dict], dict]:

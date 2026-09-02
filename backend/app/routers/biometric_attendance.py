@@ -20,7 +20,7 @@ from ..importers.biometric_attendance import (
     is_essl_form_j_sheet,
     normalize_device_id,
     parse_essl_form_j_pdf,
-    parse_essl_form_j_sheet,
+    parse_essl_form_j_sheets,
     parse_punches,
     read_workbook,
     sheet_preview,
@@ -211,9 +211,9 @@ async def preview_biometric_import(
             source_report = report
         else:
             sheets = read_workbook(content, filename)
-            form_j_sheet = next((sheet for sheet in sheets if is_essl_form_j_sheet(sheet)), None)
-            if form_j_sheet:
-                punches, row_errors, report = parse_essl_form_j_sheet(form_j_sheet)
+            form_j_sheets = [sheet for sheet in sheets if is_essl_form_j_sheet(sheet)]
+            if form_j_sheets:
+                punches, row_errors, report = parse_essl_form_j_sheets(form_j_sheets)
                 if row_errors:
                     raise ValueError(row_errors[0]["message"])
                 report_rows = [{
@@ -222,8 +222,13 @@ async def preview_biometric_import(
                     "Date": item["attendanceDate"].isoformat(),
                     "InTime": item["firstPunchAt"].astimezone(INDIA_TZ).strftime("%H:%M"),
                 } for item in punches[:5]]
+                preview_sheet_name = (
+                    form_j_sheets[0].name
+                    if len(form_j_sheets) == 1
+                    else "All Form J worksheets"
+                )
                 sheets_payload = [{
-                    "name": form_j_sheet.name,
+                    "name": preview_sheet_name,
                     "headers": ["Device Code", "Student Name", "Date", "InTime"],
                     "rows": report_rows,
                     "rowCount": len(punches),
@@ -236,7 +241,7 @@ async def preview_biometric_import(
                     },
                 }]
                 source_format = "essl_form_j_workbook"
-                source_report = {**report, "sourceSheet": form_j_sheet.name}
+                source_report = report
             else:
                 sheets_payload = [sheet_preview(sheet) for sheet in sheets]
                 source_format = "workbook"
@@ -301,16 +306,21 @@ def _selected_punches(payload: BiometricImportSelection, actor: User):
             raise HTTPException(422, str(error)) from error
         sheet = SheetData(f"Form J · {report['reportMonth']}", [])
     elif preview.get("sourceFormat") == "essl_form_j_workbook":
-        sheet = next((item for item in sheets if item.name == payload.sheet_name), None)
-        if not sheet:
+        source_report = preview.get("sourceReport") or {}
+        source_sheet_names = source_report.get("sourceSheets") or [
+            source_report.get("sourceSheet") or payload.sheet_name
+        ]
+        selected_sheets = [item for item in sheets if item.name in source_sheet_names]
+        if len(selected_sheets) != len(source_sheet_names):
             raise HTTPException(422, "Choose a valid worksheet")
         try:
-            punches, row_errors, _ = parse_essl_form_j_sheet(
-                sheet,
-                report_month=(preview.get("sourceReport") or {}).get("reportMonth"),
+            punches, row_errors, _ = parse_essl_form_j_sheets(
+                selected_sheets,
+                report_month=source_report.get("reportMonth"),
             )
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
+        sheet = SheetData(payload.sheet_name, [])
     else:
         sheet = next((item for item in sheets if item.name == payload.sheet_name), None)
         if not sheet:

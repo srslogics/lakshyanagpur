@@ -432,6 +432,61 @@ def test_essl_form_j_excel_preview_and_student_code_suggestion(client, database)
     assert people["51"]["matchReason"] == "Confirmed name merge"
 
 
+def test_essl_form_j_single_day_preview_combines_every_worksheet(client, database):
+    from openpyxl import Workbook
+
+    operator, tatva, essential = setup_students(database)
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    workbook = Workbook()
+    student_sheet = workbook.active
+    student_sheet.title = "Sheet1"
+    staff_sheet = workbook.create_sheet("Sheet2")
+
+    for sheet, name, device_code, punch_time in (
+        (student_sheet, "Tatva Student", "T-1", "08:15"),
+        (staff_sheet, "Essential Student", "E-1", "13:44"),
+    ):
+        sheet.append(['FORM "J"'])
+        sheet.append(["REGISTER OF EMPLOYMENT"])
+        sheet.append(["For The Month Ending September To 2026"])
+        sheet.append(["Sr No.", "Employee", "Type", "1 T"])
+        sheet.append([1, f"Name:{name}", "M"])
+        sheet.append([None, f"Code:{device_code}", "InTime", punch_time])
+
+    stream = BytesIO()
+    workbook.save(stream)
+    staged = preview(client, headers, stream.getvalue(), "one-day-form-j.xlsx")
+
+    assert staged["sourceFormat"] == "essl_form_j_workbook"
+    assert staged["report"]["reportMonth"] == "2026-09"
+    assert staged["report"]["sourceSheets"] == ["Sheet1", "Sheet2"]
+    assert staged["report"]["identityCount"] == 2
+    assert staged["sheets"][0]["name"] == "All Form J worksheets"
+    assert staged["sheets"][0]["rowCount"] == 2
+
+    selection = {
+        "previewToken": staged["previewToken"],
+        "sheetName": staged["sheets"][0]["name"],
+        "deviceIdColumn": "Device Code",
+        "nameColumn": "Student Name",
+        "datetimeColumn": None,
+        "dateColumn": "Date",
+        "timeColumn": "InTime",
+    }
+    analysis = client.post(
+        "/api/attendance/biometric-imports/analyze",
+        headers=headers,
+        json=selection,
+    )
+    assert analysis.status_code == 200, analysis.text
+    result = analysis.json()
+    assert result["rowsSeen"] == 2
+    assert result["uniqueAttendanceDays"] == 2
+    people = {item["deviceUserId"]: item for item in result["deviceUsers"]}
+    assert people["T-1"]["studentId"] == tatva.id
+    assert people["E-1"]["studentId"] == essential.id
+
+
 def test_essl_form_j_sheet_parser_keeps_first_punches():
     sheet = SheetData("DetailedFormJ", [
         ['FORM "J"'],
