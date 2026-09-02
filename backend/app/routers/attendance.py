@@ -2,7 +2,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -11,6 +11,7 @@ from ..models import (
     AttendancePeriodSummary,
     AttendanceRegister,
     BiometricAttendanceDay,
+    DeviceAttendanceIdentity,
     Batch,
     ClassSession,
     Enrollment,
@@ -328,8 +329,15 @@ def list_staff_biometric_attendance(
     user: User = Depends(require_roles(*ROLES)),
 ):
     query = (
-        db.query(BiometricAttendanceDay, User)
+        db.query(BiometricAttendanceDay, User, DeviceAttendanceIdentity)
         .outerjoin(User, User.id == BiometricAttendanceDay.staff_user_id)
+        .outerjoin(
+            DeviceAttendanceIdentity,
+            and_(
+                DeviceAttendanceIdentity.device_key == BiometricAttendanceDay.device_key,
+                DeviceAttendanceIdentity.device_user_id == BiometricAttendanceDay.device_user_id,
+            ),
+        )
         .filter(BiometricAttendanceDay.student_id.is_(None))
     )
     if day:
@@ -346,13 +354,13 @@ def list_staff_biometric_attendance(
     records = [{
         "id": attendance.id,
         "staffUserId": staff.id if staff else None,
-        "fullName": staff.full_name if staff else "Unassigned staff",
+        "fullName": staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff",
         "role": staff.role if staff else "staff",
         "deviceUserId": attendance.device_user_id,
         "date": attendance.attendance_date.isoformat(),
         "arrivalAt": _aware(attendance.first_punch_at).isoformat(),
         "departureAt": _aware(attendance.last_punch_at).isoformat() if attendance.last_punch_at else None,
-    } for attendance, staff in rows]
+    } for attendance, staff, identity in rows]
     return {
         "records": records,
         "staffCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records}),

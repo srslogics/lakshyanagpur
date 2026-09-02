@@ -522,7 +522,7 @@ def parse_essl_form_j_sheets(
     parsed: list[tuple[SheetData, list[dict], dict]] = []
     errors: list[dict] = []
     report_months: set[str] = set()
-    identities: dict[str, str] = {}
+    identities: dict[str, dict] = {}
     month_sources: set[str] = set()
     rows_seen = 0
 
@@ -539,20 +539,23 @@ def parse_essl_form_j_sheets(
         for identity in report["identities"]:
             device_user_id = identity["deviceUserId"]
             device_name = identity.get("deviceName", "")
-            if device_user_id not in identities or (not identities[device_user_id] and device_name):
-                identities[device_user_id] = device_name
+            existing_identity = identities.get(device_user_id)
+            if not existing_identity:
+                identities[device_user_id] = {**identity, "sourceSheet": sheet.name}
+            elif not existing_identity.get("deviceName") and device_name:
+                existing_identity["deviceName"] = device_name
         errors.extend({**error, "sheet": sheet.name} for error in sheet_errors)
 
     if len(report_months) != 1:
         raise ValueError("The Form J worksheets are for different attendance months")
 
     daily_punches: dict[tuple[str, date], dict] = {}
-    for _, punches, _ in parsed:
+    for source_sheet, punches, _ in parsed:
         for item in punches:
             key = (item["deviceUserId"], item["attendanceDate"])
             existing = daily_punches.get(key)
             if not existing:
-                daily_punches[key] = {**item}
+                daily_punches[key] = {**item, "sourceSheet": source_sheet.name}
                 continue
             existing["firstPunchAt"] = min(existing["firstPunchAt"], item["firstPunchAt"])
             last_values = [value for value in (existing.get("lastPunchAt"), item.get("lastPunchAt")) if value]
@@ -569,10 +572,7 @@ def parse_essl_form_j_sheets(
         "reportMonth": next(iter(report_months)),
         "monthSource": next(iter(month_sources)) if len(month_sources) == 1 else "mixed",
         "identityCount": len(identities),
-        "identities": [
-            {"deviceUserId": device_user_id, "deviceName": device_name}
-            for device_user_id, device_name in identities.items()
-        ],
+        "identities": list(identities.values()),
         "sourceSheets": source_sheets,
     }
     if len(source_sheets) == 1:

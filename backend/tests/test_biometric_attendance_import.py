@@ -268,7 +268,7 @@ def test_biometric_import_keeps_unassigned_staff_visible(client, database):
     staff_rows = client.get("/api/attendance/staff-biometric", headers=headers)
     assert staff_rows.status_code == 200
     record = staff_rows.json()["records"][0]
-    assert record["fullName"] == "Unassigned staff"
+    assert record["fullName"] == "Unknown"
     assert record["deviceUserId"] == "900"
 
 
@@ -435,23 +435,32 @@ def test_essl_form_j_excel_preview_and_student_code_suggestion(client, database)
 def test_essl_form_j_single_day_preview_combines_every_worksheet(client, database):
     from openpyxl import Workbook
 
-    operator, tatva, essential = setup_students(database)
+    operator, tatva, _ = setup_students(database)
+    staff = User(
+        mobile="9000000299",
+        full_name="Dr. Vinay Barhate",
+        role="director",
+        password_hash=hash_password("Password123!"),
+    )
+    database.add(staff)
+    database.commit()
     headers = {"Authorization": f"Bearer {create_token(operator)}"}
     workbook = Workbook()
     student_sheet = workbook.active
     student_sheet.title = "Sheet1"
     staff_sheet = workbook.create_sheet("Sheet2")
 
-    for sheet, name, device_code, punch_time in (
-        (student_sheet, "Tatva Student", "T-1", "08:15"),
-        (staff_sheet, "Essential Student", "E-1", "13:44"),
-    ):
+    for sheet in (student_sheet, staff_sheet):
         sheet.append(['FORM "J"'])
         sheet.append(["REGISTER OF EMPLOYMENT"])
         sheet.append(["For The Month Ending September To 2026"])
         sheet.append(["Sr No.", "Employee", "Type", "1 T"])
-        sheet.append([1, f"Name:{name}", "M"])
-        sheet.append([None, f"Code:{device_code}", "InTime", punch_time])
+    student_sheet.append([1, "Name:Tatva Student", "M"])
+    student_sheet.append([None, "Code:T-1", "InTime", "08:15"])
+    staff_sheet.append([1, "Name:Vinay Barhate", "M"])
+    staff_sheet.append([None, "Code:003", "InTime", "13:44"])
+    staff_sheet.append([2, "Name:Pooja Kamble", "F"])
+    staff_sheet.append([None, "Code:26", "InTime", "09:10"])
 
     stream = BytesIO()
     workbook.save(stream)
@@ -460,9 +469,10 @@ def test_essl_form_j_single_day_preview_combines_every_worksheet(client, databas
     assert staged["sourceFormat"] == "essl_form_j_workbook"
     assert staged["report"]["reportMonth"] == "2026-09"
     assert staged["report"]["sourceSheets"] == ["Sheet1", "Sheet2"]
-    assert staged["report"]["identityCount"] == 2
+    assert staged["report"]["staffSourceSheets"] == ["Sheet2"]
+    assert staged["report"]["identityCount"] == 3
     assert staged["sheets"][0]["name"] == "All Form J worksheets"
-    assert staged["sheets"][0]["rowCount"] == 2
+    assert staged["sheets"][0]["rowCount"] == 3
 
     selection = {
         "previewToken": staged["previewToken"],
@@ -480,11 +490,34 @@ def test_essl_form_j_single_day_preview_combines_every_worksheet(client, databas
     )
     assert analysis.status_code == 200, analysis.text
     result = analysis.json()
-    assert result["rowsSeen"] == 2
-    assert result["uniqueAttendanceDays"] == 2
+    assert result["rowsSeen"] == 3
+    assert result["uniqueAttendanceDays"] == 3
     people = {item["deviceUserId"]: item for item in result["deviceUsers"]}
     assert people["T-1"]["studentId"] == tatva.id
-    assert people["E-1"]["studentId"] == essential.id
+    assert people["003"]["staffUserId"] == staff.id
+    assert people["003"]["matchReason"] == "Sheet2 · staff name"
+    assert people["26"]["unassignedStaff"] is True
+    assert people["26"]["matchReason"] == "Sheet2 · staff attendance"
+
+    committed = client.post(
+        "/api/attendance/biometric-imports",
+        headers=headers,
+        json={
+            **selection,
+            "mappings": [
+                {"deviceUserId": "T-1", "studentId": tatva.id},
+                {"deviceUserId": "003", "staffUserId": staff.id},
+                {"deviceUserId": "26", "unassignedStaff": True},
+            ],
+        },
+    )
+    assert committed.status_code == 200, committed.text
+    assert committed.json()["staffPunchesCreated"] == 2
+    assert committed.json()["matchedStaff"] == 1
+    staff_rows = client.get("/api/attendance/staff-biometric", headers=headers)
+    assert staff_rows.status_code == 200
+    names = {item["fullName"] for item in staff_rows.json()["records"]}
+    assert names == {"Dr. Vinay Barhate", "Pooja Kamble"}
 
 
 def test_essl_form_j_sheet_parser_keeps_first_punches():

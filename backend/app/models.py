@@ -535,6 +535,7 @@ class DeviceAttendanceIdentity(TimestampMixin, Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("dai"))
     device_key: Mapped[str] = mapped_column(String(120), index=True)
     device_user_id: Mapped[str] = mapped_column(String(120), index=True)
+    device_name: Mapped[str | None] = mapped_column(String(255))
     student_id: Mapped[str | None] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
     staff_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     is_staff_device: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

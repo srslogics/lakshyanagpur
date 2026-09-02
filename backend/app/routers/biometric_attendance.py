@@ -138,6 +138,20 @@ def _active_staff(db: Session):
     ]
 
 
+def _person_name_key(value: str) -> str:
+    return "".join(character for character in value.casefold() if character.isalnum())
+
+
+def _staff_name_keys(value: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", value.casefold())
+    keys = {_person_name_key(value)}
+    honorifics = {"dr", "mr", "mrs", "ms", "sir", "mam", "maam"}
+    without_honorifics = [word for word in words if word not in honorifics]
+    if without_honorifics:
+        keys.add("".join(without_honorifics))
+    return {key for key in keys if key}
+
+
 class BiometricMappingChoice(BaseModel):
     device_user_id: str = Field(alias="deviceUserId", min_length=1, max_length=120)
     student_id: str | None = Field(default=None, alias="studentId")
@@ -241,7 +255,13 @@ async def preview_biometric_import(
                     },
                 }]
                 source_format = "essl_form_j_workbook"
-                source_report = report
+                source_report = {
+                    **report,
+                    # In eSSL's DetailedFormJ workbook, Sheet1 is the enrolled
+                    # student register and each following Form J worksheet is
+                    # the staff register exported by the same device.
+                    "staffSourceSheets": [sheet.name for sheet in form_j_sheets[1:]],
+                }
             else:
                 sheets_payload = [sheet_preview(sheet) for sheet in sheets]
                 source_format = "workbook"
@@ -353,7 +373,8 @@ def analyze_biometric_import(
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles("owner", "academic_coordinator", "attendance_operator")),
 ):
-    _, _, punches = _selected_punches(payload, actor)
+    preview, _, punches = _selected_punches(payload, actor)
+    staff_source_sheets = set((preview.get("sourceReport") or {}).get("staffSourceSheets") or [])
     mappings = _device_mappings(db)
     people = {}
     for item in punches:
@@ -367,6 +388,7 @@ def analyze_biometric_import(
             "staffUserId": None,
             "unassignedStaff": False,
             "ignore": False,
+            "isStaffSource": item.get("sourceSheet") in staff_source_sheets,
         })
         if not person["deviceName"] and item["deviceName"]:
             person["deviceName"] = item["deviceName"]
@@ -378,7 +400,7 @@ def analyze_biometric_import(
     by_name = defaultdict(list)
     by_source_code = defaultdict(list)
     for student in students:
-        normalized_name = "".join(character for character in student["fullName"].casefold() if character.isalnum())
+        normalized_name = _person_name_key(student["fullName"])
         by_name[normalized_name].append(student["id"])
         source_code = student.get("sourceStudentCode") or ""
         match = re.fullmatch(r"([A-Za-z]+)[^0-9]*(\d+)", source_code)
@@ -386,10 +408,28 @@ def analyze_biometric_import(
             by_source_code[f"{match.group(1).upper()}{int(match.group(2))}"].append(student["id"])
     staff_by_name = defaultdict(list)
     for person in staff:
-        normalized_name = "".join(character for character in person["fullName"].casefold() if character.isalnum())
-        staff_by_name[normalized_name].append(person["id"])
+        for normalized_name in _staff_name_keys(person["fullName"]):
+            if person["id"] not in staff_by_name[normalized_name]:
+                staff_by_name[normalized_name].append(person["id"])
     for device_user_id, person in people.items():
         mapping = mappings.get(device_user_id)
+        normalized_name = _person_name_key(person["deviceName"])
+        staff_candidates = {
+            candidate
+            for key in _staff_name_keys(person["deviceName"])
+            for candidate in staff_by_name.get(key, [])
+        }
+        if person["isStaffSource"]:
+            if mapping and mapping.staff_user_id:
+                person["staffUserId"] = mapping.staff_user_id
+                person["matchReason"] = "Saved staff mapping"
+            elif len(staff_candidates) == 1:
+                person["staffUserId"] = next(iter(staff_candidates))
+                person["matchReason"] = "Sheet2 · staff name"
+            else:
+                person["unassignedStaff"] = True
+                person["matchReason"] = "Sheet2 · staff attendance"
+            continue
         if mapping:
             person["studentId"] = mapping.student_id
             person["staffUserId"] = mapping.staff_user_id
@@ -405,14 +445,13 @@ def analyze_biometric_import(
         code_match = re.fullmatch(r"([A-Za-z]+)[^0-9]*(\d+)", source_identifier)
         normalized_code = f"{code_match.group(1).upper()}{int(code_match.group(2))}" if code_match else ""
         code_candidates = by_source_code.get(normalized_code, [])
-        normalized_name = "".join(character for character in person["deviceName"].casefold() if character.isalnum())
         name_candidates = by_name.get(normalized_name, [])
         candidates = code_candidates or name_candidates
         if len(candidates) == 1:
             person["studentId"] = candidates[0]
             person["matchReason"] = "Confirmed name merge" if device_user_id in DEVICE_SOURCE_CODE_ALIASES else "Student code" if code_candidates else "Exact name"
-        elif len(staff_by_name.get(normalized_name, [])) == 1:
-            person["staffUserId"] = staff_by_name[normalized_name][0]
+        elif len(staff_candidates) == 1:
+            person["staffUserId"] = next(iter(staff_candidates))
             person["matchReason"] = "Exact staff name"
     return {
         "rowsSeen": punches[0].get("rowsSeen", len(punches)),
@@ -518,6 +557,13 @@ def commit_biometric_import(
     active_staff_ids = {item["id"] for item in active_staff}
     choices = {normalize_device_id(item.device_user_id): item for item in payload.mappings}
     mappings = _apply_mapping_choices(db, actor, choices, active_ids, active_staff_ids)
+    device_names = {
+        item["deviceUserId"]: item.get("deviceName") or None
+        for item in punches
+    }
+    for device_user_id, mapping in mappings.items():
+        if device_user_id in device_names and device_names[device_user_id]:
+            mapping.device_name = device_names[device_user_id]
     db.flush()
     device_ids = {item["deviceUserId"] for item in punches}
     unresolved = sorted(
