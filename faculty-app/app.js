@@ -40,6 +40,7 @@ const state = {
   activeExam: null,
   publishingAssignment: null,
   editingAssignment: null,
+  savingAssignment: false,
   editingExamination: null,
   lastFocus: null,
   online: navigator.onLine
@@ -47,6 +48,7 @@ const state = {
 const PORTAL_VIEWS = new Set(["dashboard", "assignments", "examinations", "schedule", "batches", "messages", "notices", "profile", "more"]);
 const OVERFLOW_VIEWS = new Set(["batches", "messages", "notices", "profile", "more"]);
 const MAX_ASSIGNMENT_PDF_BYTES = 15 * 1024 * 1024;
+const ASSIGNMENT_UPLOAD_TIMEOUT_MS = 180000;
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -126,13 +128,14 @@ function setConnectionState(online) {
 }
 
 async function resilientFetch(path, options = {}) {
-  const attempts = String(options.method || "GET").toUpperCase() === "GET" ? 2 : 1;
+  const {timeoutMs = 15000, ...requestOptions} = options;
+  const attempts = String(requestOptions.method || "GET").toUpperCase() === "GET" ? 2 : 1;
   let lastError;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetch(apiUrl(path), {cache:"no-store", ...options, signal:controller.signal});
+      const response = await fetch(apiUrl(path), {cache:"no-store", ...requestOptions, signal:controller.signal});
       clearTimeout(timer);
       setConnectionState(true);
       if (response.status >= 500 && attempt + 1 < attempts) continue;
@@ -871,6 +874,10 @@ function openModal(id, trigger) {
 }
 
 function closeModal(id) {
+  if (id === "assignment-modal" && state.savingAssignment) {
+    toast("Please keep this page open while the assignment is saving.");
+    return;
+  }
   const modal = $("#" + id);
   modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
@@ -931,6 +938,7 @@ async function publishNotice(event) {
 }
 
 function openAssignmentModal(trigger, item = null) {
+  if (state.savingAssignment) return;
   const pairs = state.data.teachingPairs;
   if (!pairs.length) {
     toast("Ask the owner to assign you a batch and subject.");
@@ -962,6 +970,7 @@ function openAssignmentModal(trigger, item = null) {
 
 async function saveAssignment(event) {
   event.preventDefault();
+  if (state.savingAssignment) return;
   const form = event.currentTarget;
   if (!form.reportValidity()) return;
   const button = $("#assignment-submit");
@@ -969,11 +978,13 @@ async function saveAssignment(event) {
   const [batchId, subjectId] = String(data.get("pair")).split("|");
   const assignmentId = state.editingAssignment;
   const material = data.get("material");
+  const hasPdf = material instanceof File && material.size > 0;
   if (material instanceof File && material.size > MAX_ASSIGNMENT_PDF_BYTES) {
     $("#assignment-error").textContent = "PDF must be 15 MB or smaller.";
     $("#assignment-error").classList.remove("hidden");
     return;
   }
+  state.savingAssignment = true;
   button.disabled = true;
   button.textContent = assignmentId ? "Saving…" : "Creating…";
   $("#assignment-error").classList.add("hidden");
@@ -991,29 +1002,42 @@ async function saveAssignment(event) {
         status:String(data.get("status"))
       })
     });
-    if (material instanceof File && material.size) {
+    // Preserve the confirmed ID even if the later PDF response is lost.
+    state.editingAssignment = saved.id;
+    $("#assignment-modal-title").textContent = "Edit assignment";
+    if (hasPdf) {
       const upload = new FormData();
       upload.append("file", material, material.name);
       button.textContent = "Uploading PDF…";
       await api(`/api/academics/assignments/${encodeURIComponent(saved.id)}/material`, {
         method:"POST",
-        body:upload
+        body:upload,
+        timeoutMs:ASSIGNMENT_UPLOAD_TIMEOUT_MS
       });
     }
-    form.reset();
-    closeModal("assignment-modal");
-    await refreshPortal(material instanceof File && material.size
-      ? "Assignment and PDF published. The PDF will be removed after 48 hours."
-      : assignmentId ? "Assignment updated." : "Assignment created.");
   } catch (error) {
-    if (saved && !assignmentId) state.editingAssignment = saved.id;
     $("#assignment-error").textContent = saved
-      ? `The assignment was saved, but the PDF was not uploaded. ${error.message}`
+      ? error.transient
+        ? "Assignment saved, but the PDF upload could not be confirmed. Keep the file selected and choose Save changes to retry this assignment."
+        : `Assignment saved. PDF upload failed: ${error.message} Choose Save changes to retry this assignment.`
       : error.message;
     $("#assignment-error").classList.remove("hidden");
+    return;
   } finally {
+    state.savingAssignment = false;
     button.disabled = false;
     button.textContent = state.editingAssignment ? "Save changes" : "Create assignment";
+  }
+  form.reset();
+  closeModal("assignment-modal");
+  const successMessage = hasPdf
+    ? `Assignment and PDF ${String(data.get("status")) === "published" ? "published" : "saved as draft"}. The PDF will be removed after 48 hours.`
+    : assignmentId ? "Assignment updated." : "Assignment created.";
+  try {
+    await refreshPortal(successMessage);
+  } catch {
+    // A failed list refresh does not undo a confirmed save or file upload.
+    toast(`${successMessage} The list could not refresh. Refresh it when your connection is ready.`);
   }
 }
 

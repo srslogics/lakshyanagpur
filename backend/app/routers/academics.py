@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..assignment_materials import (
     MATERIAL_LIFETIME_HOURS,
     MAX_ASSIGNMENT_PDF_BYTES,
+    aware,
     material_maps,
     purge_expired_assignment_materials,
     serialize_material,
@@ -281,8 +282,22 @@ async def upload_assignment_material(
         raise HTTPException(413, "PDF must be 15 MB or smaller")
     if not content:
         raise HTTPException(400, "The selected PDF is empty")
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=MATERIAL_LIFETIME_HOURS)
+    current_time = datetime.now(timezone.utc)
+    expires_at = current_time + timedelta(hours=MATERIAL_LIFETIME_HOURS)
     material = db.get(AssignmentMaterial, assignment.id)
+    # A client may retry after the upload committed but its response timed out.
+    # An identical, unexpired file must not reset expiry or student download history.
+    if (
+        material
+        and aware(material.expires_at) > current_time
+        and material.filename == filename[:255]
+        and material.size_bytes == len(content)
+        and material.content == content
+    ):
+        downloaded = db.query(AssignmentDownload).filter_by(
+            assignment_id=assignment.id,
+        ).count()
+        return serialize_material(material, downloaded_count=downloaded)
     if material:
         material.filename = filename[:255]
         material.mime_type = "application/pdf"

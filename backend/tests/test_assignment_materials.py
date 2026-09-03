@@ -144,6 +144,20 @@ def test_assignment_pdf_download_is_counted_once_per_student_and_expires(
     assert listed.json()[0]["material"]["downloadedCount"] == 1
     assert listed.json()[0]["progress"]["downloaded"] == 1
 
+    # Simulate retrying when the original upload's response never reached the phone.
+    retried = client.post(
+        f"/api/academics/assignments/{assignment_id}/material",
+        headers=faculty_headers,
+        files={"file": ("chemistry worksheet.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")},
+    )
+    assert retried.status_code == 200
+    assert retried.json()["expiresAt"] == uploaded.json()["expiresAt"]
+    assert retried.json()["downloadedCount"] == 1
+    database.expire_all()
+    assert database.query(AssignmentDownload).filter_by(
+        assignment_id=assignment_id, student_id=student.id,
+    ).one().download_count == 2
+
     replaced = client.post(
         f"/api/academics/assignments/{assignment_id}/material",
         headers=faculty_headers,
@@ -196,7 +210,7 @@ def test_faculty_cannot_upload_to_another_facultys_assignment(
     assert denied.status_code == 403
 
 
-def test_assignment_pdf_rejects_files_over_15_mb(client, database):
+def test_assignment_pdf_accepts_15_mb_and_rejects_larger_files(client, database, parent_headers):
     faculty, batch, subject, _ = _assignment_setup(database)
     faculty_headers = {"Authorization": f"Bearer {create_token(faculty)}"}
     created = client.post(
@@ -225,3 +239,44 @@ def test_assignment_pdf_rejects_files_over_15_mb(client, database):
     )
     assert uploaded.status_code == 413
     assert uploaded.json()["detail"] == "PDF must be 15 MB or smaller"
+
+    accepted = client.post(
+        f"/api/academics/assignments/{created.json()['id']}/material",
+        headers=faculty_headers,
+        files={"file": ("large.pdf", oversized_pdf[:-1], "application/pdf")},
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["sizeBytes"] == MAX_ASSIGNMENT_PDF_BYTES
+    downloaded = client.get(
+        f"/api/portal/assignments/{created.json()['id']}/material",
+        headers=parent_headers,
+    )
+    assert downloaded.status_code == 200
+    assert downloaded.content == oversized_pdf[:-1]
+
+
+def test_reuploading_expired_identical_pdf_starts_new_lifetime(client, database):
+    faculty, batch, subject, _ = _assignment_setup(database)
+    headers = {"Authorization": f"Bearer {create_token(faculty)}"}
+    created = client.post(
+        "/api/academics/assignments", headers=headers,
+        json={
+            "batchId": batch.id, "subjectId": subject.id, "title": "Worksheet",
+            "dueAt": (datetime.now(timezone.utc) + timedelta(days=3)).isoformat(),
+            "status": "published",
+        },
+    )
+    assert created.status_code == 201
+    assignment_id = created.json()["id"]
+    path = f"/api/academics/assignments/{assignment_id}/material"
+    files = {"file": ("worksheet.pdf", b"%PDF-1.4\n%%EOF\n", "application/pdf")}
+    assert client.post(path, headers=headers, files=files).status_code == 200
+    database.get(AssignmentMaterial, assignment_id).expires_at = (
+        datetime.now(timezone.utc) - timedelta(seconds=1)
+    )
+    database.commit()
+    retried = client.post(path, headers=headers, files=files)
+    assert retried.status_code == 200
+    assert datetime.fromisoformat(retried.json()["expiresAt"]) > (
+        datetime.now(timezone.utc) + timedelta(hours=47)
+    )
