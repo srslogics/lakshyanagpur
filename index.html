@@ -29,7 +29,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=63">
+  <link rel="stylesheet" href="/styles.css?v=64">
   <link rel="stylesheet" href="/auth-shared.css?v=9">
   <link rel="stylesheet" href="/push-shared.css?v=1">
 </head>
@@ -150,6 +150,7 @@
         <button class="nav-item" type="button" data-view="admissions"><span data-icon="spark"></span><span>Admissions</span><em id="nav-leads-count">0</em></button>
         <button class="nav-item" type="button" data-view="students"><span data-icon="users"></span><span>Students</span></button>
         <button class="nav-item" type="button" data-view="finance"><span data-icon="wallet"></span><span>Fees &amp; finance</span></button>
+        <button class="nav-item" type="button" data-view="payroll"><span data-icon="receipt"></span><span>Payroll</span></button>
         <button class="nav-item" type="button" data-view="attendance"><span data-icon="calendar-check"></span><span>Attendance</span></button>
         <button class="nav-item" type="button" data-view="communication"><span data-icon="message"></span><span>Communication</span></button>
 
@@ -364,6 +365,20 @@
           <div class="notice-grid" id="notice-list"></div>
         </section>
 
+        <section class="app-view" id="payroll" aria-labelledby="payroll-heading">
+          <div class="page-heading"><div><h2 id="payroll-heading">Staff payroll</h2><p class="page-heading-copy">Monthly salary, attendance deductions and advances.</p></div><button class="button button-secondary" id="payroll-refresh" type="button"><span data-icon="refresh"></span>Refresh attendance</button></div>
+          <div class="toolbar payroll-toolbar"><label class="field"><span>Payroll month</span><input type="month" id="payroll-month" min="2000-01" max="2100-12" required></label><label class="search-field"><span data-icon="search"></span><input type="search" id="payroll-search" placeholder="Find staff member" aria-label="Find payroll staff member"></label><span class="count-badge" id="payroll-period"></span></div>
+          <div class="compact-metrics" id="payroll-metrics"></div>
+          <p class="inline-notice payroll-guidance" id="payroll-guidance">Biometric punches show presence. Unrecorded days are not automatically treated as absences.</p>
+          <div class="form-error hidden" id="payroll-error" role="alert"></div>
+          <article class="surface table-surface">
+            <div class="surface-head"><div><h3>Monthly register</h3><p id="payroll-summary" aria-live="polite">Choose a month to prepare payroll.</p></div></div>
+            <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Staff member</th><th>Attendance</th><th>Salary</th><th>Absent / payable days</th><th>Advance</th><th>Net payable</th><th>Status</th><th aria-label="Actions"></th></tr></thead><tbody id="payroll-table-body"></tbody></table></div>
+            <div class="mobile-records" id="payroll-mobile-list"></div>
+          </article>
+          <details class="surface payroll-formula"><summary>How payroll is calculated</summary><p>Payable days = Calendar days in month − Confirmed absent days</p><p>Per-day rate = Monthly salary ÷ Calendar days in month</p><p>Payable amount = Per-day rate × Payable days</p><p>Net payable = Payable amount − Advance given</p><p>Only the final amounts are rounded to paise. Paid holidays and weekly offs must not be included in absent days. Finalising saves a calculation; it does not transfer money.</p></details>
+        </section>
+
         <section class="app-view" id="inventory" aria-labelledby="inventory-heading">
           <div class="page-heading"><div><h2 id="inventory-heading">Inventory</h2><p class="page-heading-copy">Manage books, bags, apparel and institute stock.</p></div><button class="button button-primary" id="new-inventory-item" type="button"><span data-icon="plus"></span>Add item</button></div>
           <div class="compact-metrics" id="inventory-metrics"></div>
@@ -421,6 +436,7 @@
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
   <script src="/runtime-config.js?v=2" defer></script>
   <script src="/push-client.js?v=2" defer></script>
-  <script src="/app.js?v=87" defer></script>
+  <script src="/payroll-ui.js?v=1" defer></script>
+  <script src="/app.js?v=88" defer></script>
 </body>
 </html>

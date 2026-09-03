@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import settings
 from .database import SessionLocal, get_db
 from .assignment_materials import purge_expired_assignment_materials
-from .routers import academics, admissions, attendance, auth, biometric_attendance, communication, examinations, faculty, finance, inventory, portal, push, reports, settings as settings_router, students, timetable, workspace
+from .routers import academics, admissions, attendance, auth, biometric_attendance, communication, examinations, faculty, finance, inventory, payroll, portal, push, reports, settings as settings_router, students, timetable, workspace
 from .push_notifications import dispatch_pending
 from .seed import seed_development_data
 
@@ -79,6 +79,7 @@ PUBLIC_SITE_PAGES = frozenset({
 PUBLIC_SITE_ROOT_FILES = frozenset({"script.js", "styles.css", "sw.js"})
 PUBLIC_ROOT_FILES = frozenset({
     "app.js",
+    "payroll-ui.js",
     "apple-touch-icon.png",
     "auth-shared.css",
     "index.html",
@@ -100,6 +101,7 @@ OPERATIONS_VIEWS = frozenset({
     "admissions",
     "students",
     "finance",
+    "payroll",
     "attendance",
     "academics",
     "examinations",
@@ -128,6 +130,7 @@ app.include_router(auth.router)
 app.include_router(admissions.router)
 app.include_router(students.router)
 app.include_router(finance.router)
+app.include_router(payroll.router)
 app.include_router(timetable.router)
 app.include_router(academics.router)
 app.include_router(examinations.router)

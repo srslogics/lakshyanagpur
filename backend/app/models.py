@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, event, inspect
@@ -585,6 +586,25 @@ class BiometricAttendanceDay(Base):
     last_punch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+
+
+class StaffPayroll(TimestampMixin, Base):
+    """One monthly calculation per biometric staff identity; never a bank payment."""
+
+    __tablename__ = "staff_payroll"
+    __table_args__ = (UniqueConstraint("person_key", "month", name="uq_staff_payroll_month"),)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("pay"))
+    person_key: Mapped[str] = mapped_column(String(150), index=True)
+    month: Mapped[str] = mapped_column(String(7), index=True)
+    monthly_salary: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    advance_given: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    absent_days: Mapped[int] = mapped_column(Integer)
+    attendance_fingerprint: Mapped[str] = mapped_column(String(64))
+    notes: Mapped[str] = mapped_column(Text, default="")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
 
 
 class Assignment(TimestampMixin, Base):

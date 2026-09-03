@@ -10,6 +10,7 @@ MODULES = (
     "admissions",
     "students",
     "finance",
+    "payroll",
     "attendance",
     "academics",
     "examinations",
@@ -23,6 +24,7 @@ MODULE_LABELS = {
     "admissions": "Admissions",
     "students": "Students",
     "finance": "Fees & finance",
+    "payroll": "Payroll",
     "attendance": "Attendance",
     "academics": "Academics",
     "examinations": "Examinations",
@@ -53,6 +55,7 @@ ROLE_DEFAULTS = {
         "communication": _FULL,
     },
     "accounts": {
+        "payroll": _FULL,
         "students": _READ,
         "finance": _FULL,
         "inventory": _READ,
@@ -79,6 +82,7 @@ PATH_MODULES = {
     "/api/admissions": "admissions",
     "/api/students": "students",
     "/api/finance": "finance",
+    "/api/payroll": "payroll",
     "/api/attendance": "attendance",
     "/api/academics": "academics",
     "/api/examinations": "examinations",
@@ -128,9 +132,16 @@ def permissions_from_rows(
     user: User,
     rows: dict[str, UserModulePermission],
 ) -> dict[str, dict[str, bool]]:
-    permissions = role_default_permissions(user.role)
     if user.role == "owner":
-        return permissions
+        return role_default_permissions(user.role)
+    # A custom permission set is a complete allow-list. This also keeps a newly
+    # introduced sensitive module private until the owner explicitly grants it
+    # to accounts that were customised before that module existed.
+    permissions = (
+        {module: dict(_NONE) for module in MODULES}
+        if rows
+        else role_default_permissions(user.role)
+    )
     for module, row in rows.items():
         if module in permissions:
             permissions[module] = {
@@ -169,6 +180,11 @@ def explicit_permission(db: Session, user_id: str, module: str, action: str) -> 
         .one_or_none()
     )
     if row is None:
+        has_custom_permissions = db.query(UserModulePermission.id).filter(
+            UserModulePermission.user_id == user_id,
+        ).first()
+        if has_custom_permissions:
+            return False
         return None
     return bool(getattr(row, f"can_{action}"))
 

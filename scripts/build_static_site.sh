@@ -14,7 +14,7 @@ rm -rf "${publish_dir}"
 mkdir -p "${publish_dir}"
 
 root_files=(
-  app.js apple-touch-icon.png auth-shared.css index.html lakshya-logo-576.png
+  app.js payroll-ui.js apple-touch-icon.png auth-shared.css index.html lakshya-logo-576.png
   lakshya-logo.png manifest.webmanifest portal-shared.css push-client.js
   push-service-worker.js push-shared.css pwa-icon-192.png pwa-icon-512.png
   runtime-config.js share-card.png styles.css sw.js

@@ -53,7 +53,7 @@ const ROLE_VIEWS = {
   faculty: ["dashboard","academics","examinations","timetable"],
   storekeeper: ["dashboard","inventory"]
 };
-const OPERATIONS_MODULES = ["admissions", "students", "finance", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"];
+const OPERATIONS_MODULES = ["admissions", "students", "finance", "payroll", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"];
 const PERMISSION_MODULE_LABELS = { admissions: "Admissions", students: "Students", finance: "Fees & finance", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", inventory: "Inventory", reports: "Reports" };
 function canAccess(module, action = "read") {
   if (state.user?.role === "owner") return true;
@@ -78,6 +78,11 @@ let timetableSelectedDate = "";
 let timetableView = "schedule";
 let attendanceRegisterFilter = "current";
 let staffAttendanceDate = "";
+let payrollMonth = "";
+let payrollData = null;
+let payrollLoadSequence = 0;
+PERMISSION_MODULE_LABELS.payroll = "Payroll";
+for (const role of ["owner", "accounts", "director", "demo"]) ROLE_VIEWS[role].push("payroll");
 const COLLECTION_PAGE_SIZE = 12;
 const collectionCaps = Object.create(null);
 const STUDENT_BATCH_ORDER = ["Essential", "Tatva"];
@@ -89,6 +94,7 @@ const VIEW_PATHS = {
   admissions: "/operations/admissions",
   students: "/operations/students",
   finance: "/operations/finance",
+  payroll: "/operations/payroll",
   attendance: "/operations/attendance",
   academics: "/operations/academics",
   examinations: "/operations/examinations",
@@ -322,6 +328,12 @@ function showBootError(title, message) {
 }
 
 function clearSession() {
+  payrollData = null;
+  payrollMonth = "";
+  payrollLoadSequence += 1;
+  $("#payroll-table-body").innerHTML = "";
+  $("#payroll-mobile-list").innerHTML = "";
+  $("#payroll-metrics").innerHTML = "";
   state.token = null;
   state.user = null;
   state.view = "dashboard";
@@ -510,6 +522,7 @@ async function loadResource(resource) {
   if (resourceLoads.has(resource)) return resourceLoads.get(resource);
   const request = (async () => {
     if (state.user?.role === "demo") {
+      if (resource === "payroll") payrollData = payrollDemoData();
       if (resource === "reports") {
         state.report = {
           metrics: { students: state.students.length, attendanceRate: 92, recordedPayments: 90000, scheduledClasses: 4 },
@@ -537,6 +550,7 @@ async function loadResource(resource) {
     else if (resource === "notices") state.notices = await api("/api/communication/notices");
     else if (resource === "conversations") state.conversations = await api("/api/communication/inbox");
     else if (resource === "inventory") state.inventory = await api("/api/inventory/bootstrap");
+    else if (resource === "payroll") await loadPayrollMonth();
     else if (resource === "reports") state.report = await api("/api/reports/overview");
     else if (resource === "masters") state.masters = await api("/api/settings/bootstrap");
     else if (resource === "audit") state.audit = await api("/api/settings/audit");
@@ -555,6 +569,7 @@ async function loadViewResources(view) {
     attendance: ["attendance"],
     communication: ["references", "notices", "conversations"],
     inventory: ["inventory"],
+    payroll: ["payroll"],
     reports: ["reports"],
     settings: ["timetable", "masters", "audit"],
   }[view] || [];
@@ -577,6 +592,7 @@ function renderCore() {
 }
 
 function renderResource(resource) {
+  if (resource === "payroll") renderPayroll();
   if (resource === "timetable") renderTimetable();
   else if (resource === "assignments") renderAcademics();
   else if (resource === "examinations") {
@@ -594,6 +610,7 @@ function renderResource(resource) {
 }
 
 function renderAll() {
+  renderPayroll();
   renderCore();
   renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings();
   $("#nav-examinations-count").textContent = state.examinations.length;
@@ -2934,7 +2951,7 @@ async function submitOwnerEdit(event) {
   } catch (error) { showFormError("#owner-edit-error", error); button.disabled = false; }
 }
 
-const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", inventory: "Inventory", reports: "Reports", settings: "Settings & audit" };
+const viewTitles = { dashboard: "Overview", admissions: "Enquiries", students: "Students", finance: "Finance", payroll: "Payroll", attendance: "Attendance", academics: "Academics", examinations: "Examinations", timetable: "Faculty & timetable", communication: "Communication", inventory: "Inventory", reports: "Reports", settings: "Settings & audit" };
 
 function currentOperationsRoute() {
   const path = location.pathname.replace(/\/+$/, "") || "/";
@@ -3136,6 +3153,7 @@ function exportStudents() {
 }
 
 function bindEvents() {
+  bindPayrollEvents();
   $("#boot-retry").addEventListener("click", () => window.location.reload());
   $("#auth-form").addEventListener("submit", handleAuth);
   $("#operations-password-change-form").addEventListener("submit", submitOperationsPasswordChange);

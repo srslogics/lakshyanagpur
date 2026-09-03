@@ -261,6 +261,36 @@ def test_mutating_permissions_require_view_access(client, database, owner_header
     assert response.status_code == 422
 
 
+def test_new_modules_are_denied_for_older_custom_permission_sets(client, database):
+    staff = User(
+        mobile="9000000017",
+        full_name="Legacy Custom Accounts",
+        role="accounts",
+        password_hash=hash_password("Password123!"),
+    )
+    database.add(staff)
+    database.flush()
+    database.add(UserModulePermission(
+        user_id=staff.id,
+        module="finance",
+        can_read=True,
+        can_create=False,
+        can_edit=False,
+    ))
+    database.commit()
+
+    headers = {"Authorization": f"Bearer {create_token(staff)}"}
+    me = client.get("/api/auth/me", headers=headers)
+    assert me.status_code == 200
+    assert me.json()["permissions"]["finance"]["read"] is True
+    assert me.json()["permissions"]["payroll"] == {
+        "read": False,
+        "create": False,
+        "edit": False,
+    }
+    assert client.get("/api/payroll/bootstrap?month=2026-08", headers=headers).status_code == 403
+
+
 def test_independent_academic_access_includes_required_reference_data(
     client,
     database,

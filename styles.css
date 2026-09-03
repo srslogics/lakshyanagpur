@@ -1,3 +1,29 @@
+.payroll-toolbar { flex-wrap: wrap; align-items: end; gap: 16px; margin-bottom: 20px; }
+.payroll-toolbar .field { margin: 0; min-width: 180px; }
+.payroll-toolbar .search-field { flex: 1; min-width: 180px; }
+.payroll-guidance { margin: 18px 0; line-height: 1.6; }
+.payroll-formula { min-height: 0; margin-top: 20px; padding: 20px; }
+.payroll-formula summary, .payroll-evidence summary { cursor: pointer; font-weight: 700; padding: 10px 0; }
+.payroll-formula p, .payroll-evidence p { line-height: 1.65; color: var(--ink-700); overflow-wrap: anywhere; }
+.payroll-fields { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
+.payroll-evidence { border: 1px solid var(--line); border-radius: 14px; padding: 10px 16px; }
+.payroll-calculation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; background: var(--surface-muted); border: 1px solid var(--line); border-radius: 16px; }
+.payroll-calculation .compact-metric { min-width: 0; border: 0; padding: 4px; }
+.payroll-calculation strong { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.payroll-calculation p { grid-column: 1 / -1; line-height: 1.6; }
+.payroll-confirm { display: flex; align-items: flex-start; gap: 12px; line-height: 1.6; }
+.payroll-confirm input { flex: 0 0 22px; width: 22px; height: 22px; margin-top: 3px; accent-color: var(--accent); }
+.payroll-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.payroll-actions .button { flex: 1; min-height: 48px; }
+.payroll-reopen { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+#payroll .data-table { font-variant-numeric: tabular-nums; }
+#payroll .mobile-record-card > p { color: var(--ink-600); line-height: 1.6; }
+@media (max-width: 640px) {
+  .payroll-toolbar .field, .payroll-toolbar .search-field { width: 100%; }
+  .payroll-actions { flex-direction: column; }
+  .payroll-calculation { padding: 12px; gap: 8px; }
+}
+
 :root {
   /* Lakshya brand palette: premium navy, yellow, red and warm neutrals. */
   --forest-950: #11133d;

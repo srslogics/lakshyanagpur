@@ -216,6 +216,7 @@ ModulePermissions = dict[
             "admissions",
             "students",
             "finance",
+            "payroll",
             "attendance",
             "academics",
             "examinations",

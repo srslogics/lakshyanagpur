@@ -48,6 +48,7 @@ def test_demo_login_receives_only_synthetic_workspace(client, database):
             "admissions": {"read": True, "create": False, "edit": False},
             "students": {"read": True, "create": False, "edit": False},
             "finance": {"read": True, "create": False, "edit": False},
+            "payroll": {"read": True, "create": False, "edit": False},
             "attendance": {"read": True, "create": False, "edit": False},
             "academics": {"read": True, "create": False, "edit": False},
             "examinations": {"read": True, "create": False, "edit": False},
