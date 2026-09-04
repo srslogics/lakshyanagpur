@@ -54,13 +54,18 @@ function renderPayroll() {
   ]) : "";
   const query = $("#payroll-search").value.trim().toLowerCase();
   const rows = (data?.rows || []).filter(row => row.fullName.toLowerCase().includes(query));
-  $("#payroll-summary").textContent = data ? `${rows.length} staff members · ${data.canFinalizeMonth ? "Month complete" : "Current / future month: draft estimates only"}` : "Payroll is not loaded. Use Refresh attendance to retry.";
-  const action = row => `<button type="button" class="button button-secondary button-small" data-payroll-person="${esc(row.personKey)}">${row.status === "finalized" || !canAccess("payroll", "edit") ? "View" : row.calculation ? "Review" : "Prepare"}</button>`;
+  $("#payroll-summary").textContent = data ? `${rows.length} staff · ${data.canFinalizeMonth ? "Ready to finalise" : "Draft estimates"}` : "Payroll is not loaded. Refresh attendance to retry.";
+  const action = row => {
+    const label = !canAccess("payroll", "edit") ? "View" : row.attendanceChanged ? "Review changes" : row.status === "finalized" ? "View final" : row.calculation ? "Review draft" : "Prepare";
+    return `<button type="button" class="button button-secondary button-small payroll-row-action" data-payroll-person="${esc(row.personKey)}">${label}</button>`;
+  };
   const attendance = row => `${row.presentDays} recorded · ${row.unrecordedDays} unrecorded`;
+  const attendanceCell = row => `<span class="payroll-attendance"><strong>${esc(row.presentDays)}</strong> recorded <i>·</i> <strong>${esc(row.unrecordedDays)}</strong> unrecorded</span>`;
+  const moneyCell = value => value == null ? '<span class="payroll-muted">Not set</span>' : payrollMoney(value);
   $("#payroll-table-body").innerHTML = rows.length ? rows.map(row => {
     const c = row.calculation;
-    return `<tr><td>${studentPrimary(row.fullName, row.designation)}</td><td>${esc(attendance(row))}</td><td>${payrollMoney(c?.monthlySalary)}</td><td>${c ? `${c.absentDays} / ${c.payableDays}` : "—"}</td><td>${c ? payrollMoney(c.advanceGiven) : "—"}</td><td><strong>${c ? payrollMoney(c.netPayable) : "—"}</strong></td><td>${payrollStatus(row)}</td><td>${action(row)}</td></tr>`;
-  }).join("") : `<tr><td colspan="8">${emptyState("wallet", "No matching staff", "Staff biometric mappings appear here after attendance import. Directors are separate and are not included.")}</td></tr>`;
+    return `<tr><td>${studentPrimary(row.fullName, row.designation)}</td><td>${attendanceCell(row)}</td><td class="payroll-number">${moneyCell(c?.monthlySalary)}</td><td class="payroll-number">${c ? `${c.absentDays} / ${c.payableDays}` : '<span class="payroll-muted">—</span>'}</td><td class="payroll-number">${c ? payrollMoney(c.advanceGiven) : '<span class="payroll-muted">—</span>'}</td><td class="payroll-number payroll-net"><strong>${c ? payrollMoney(c.netPayable) : '<span class="payroll-muted">—</span>'}</strong></td><td>${action(row)}</td></tr>`;
+  }).join("") : `<tr><td colspan="7">${emptyState("wallet", "No matching staff", "Staff biometric mappings appear here after attendance import. Directors are separate and are not included.")}</td></tr>`;
   $("#payroll-mobile-list").innerHTML = rows.length ? rows.map(row => {
     const c = row.calculation;
     return `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(row.fullName)}</h3><p>${esc(row.designation)}</p></div>${payrollStatus(row)}</div><p>${esc(attendance(row))}</p><div class="mobile-record-meta"><div><span>Monthly salary</span><strong>${payrollMoney(c?.monthlySalary)}</strong></div><div><span>Absent / payable</span><strong>${c ? `${c.absentDays} / ${c.payableDays} days` : "—"}</strong></div><div><span>Advance</span><strong>${c ? payrollMoney(c.advanceGiven) : "—"}</strong></div><div><span>Net payable</span><strong>${c ? payrollMoney(c.netPayable) : "—"}</strong></div></div>${action(row)}</article>`;
