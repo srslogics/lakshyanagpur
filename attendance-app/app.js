@@ -153,8 +153,9 @@ function biometricSheet() {
   return state.biometric?.sheets?.find(item => item.name === $("#biometric-sheet").value) || state.biometric?.sheets?.[0];
 }
 
-function isEsslFormJ() {
-  return String(state.biometric?.sourceFormat || "").startsWith("essl_form_j");
+function isEsslStructuredReport() {
+  const format = String(state.biometric?.sourceFormat || "");
+  return format.startsWith("essl_form_j") || format === "essl_work_duration";
 }
 
 function optionMarkup(headers, selected, optional = false) {
@@ -175,15 +176,16 @@ function renderBiometricSheet() {
 }
 
 function biometricSelection() {
-  if (isEsslFormJ()) {
+  if (isEsslStructuredReport()) {
+    const workDuration = state.biometric.sourceFormat === "essl_work_duration";
     return {
       previewToken:state.biometric.previewToken,
       sheetName:state.biometric.sheets[0].name,
       deviceIdColumn:"Device Code",
-      nameColumn:"Student Name",
+      nameColumn:workDuration ? "Staff Name" : "Student Name",
       datetimeColumn:null,
       dateColumn:"Date",
-      timeColumn:"InTime"
+      timeColumn:workDuration ? "Work Time" : "InTime"
     };
   }
   return {
@@ -216,9 +218,9 @@ async function chooseBiometricFile() {
     $("#import-biometric").classList.add("hidden");
     $("#back-biometric").classList.add("hidden");
     renderBiometricSheet();
-    $(".mapping-grid", $("#biometric-stage-file")).classList.toggle("hidden", isEsslFormJ());
-    $(".mapping-help", $("#biometric-stage-file")).textContent = isEsslFormJ()
-      ? `eSSL Form J detected · ${state.biometric.report.identityCount} device identities · ${state.biometric.report.reportMonth}`
+    $(".mapping-grid", $("#biometric-stage-file")).classList.toggle("hidden", isEsslStructuredReport());
+    $(".mapping-help", $("#biometric-stage-file")).textContent = isEsslStructuredReport()
+      ? `${state.biometric.sourceFormat === "essl_work_duration" ? "eSSL staff work-duration report" : "eSSL Form J"} detected · ${state.biometric.report.identityCount} device identities · ${state.biometric.report.reportMonth}`
       : "Use either one date-and-time column, or separate date and time columns.";
     $("#biometric-dialog").classList.remove("hidden");
     document.body.style.overflow = "hidden";
@@ -329,7 +331,7 @@ async function importBiometric() {
   }
   const button = $("#import-biometric");
   button.disabled = true;
-  button.textContent = `Importing ${state.biometric.analysis.uniqueAttendanceDays} punches…`;
+  button.textContent = `Importing ${state.biometric.analysis.uniqueAttendanceDays} daily records…`;
   error.classList.add("hidden");
   try {
     const result = await api("/api/attendance/biometric-imports", {method:"POST", timeoutMs:120000, body:JSON.stringify({...biometricSelection(), mappings})});

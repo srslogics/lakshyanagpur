@@ -580,6 +580,180 @@ def parse_essl_form_j_sheets(
     return punches, errors, metadata
 
 
+def is_essl_work_duration_sheet(sheet: SheetData) -> bool:
+    """Return true for eSSL's monthly Detailed Work Duration (Four Punch) report."""
+    report_text = "\n".join(_text(cell) for row in sheet.rows for cell in row if _text(cell))
+    normalized = report_text.casefold()
+    return (
+        "monthly status report" in normalized
+        and "detailed work duration" in normalized
+        and "total work duration" in normalized
+        and "employee:" in normalized
+    )
+
+
+def _work_duration_report_month(report_text: str) -> tuple[int, int]:
+    match = re.search(
+        r"([A-Za-z]{3,9})\s+\d{1,2}\s+(\d{4})\s+To\s+([A-Za-z]{3,9})\s+\d{1,2}\s+(\d{4})",
+        report_text,
+        re.IGNORECASE,
+    )
+    if not match or match.group(1).casefold() != match.group(3).casefold() or match.group(2) != match.group(4):
+        raise ValueError("The month range could not be read from this work-duration report")
+    try:
+        month = list(calendar.month_abbr).index(match.group(1)[:3].title())
+        return int(match.group(2)), month
+    except (ValueError, IndexError) as error:
+        raise ValueError("The month in this work-duration report is not valid") from error
+
+
+def _minutes(value: Any) -> int:
+    text = _text(value)
+    if not text or text in {"0", "00:00", "00:00:00"}:
+        return 0
+    match = re.fullmatch(r"(\d{1,4}):(\d{2})(?::\d{2})?", text)
+    if not match or int(match.group(2)) >= 60:
+        raise ValueError(f"Unrecognised work duration: {text}")
+    return int(match.group(1)) * 60 + int(match.group(2))
+
+
+def _work_status(value: Any) -> str:
+    text = _text(value).upper().replace(" ", "")
+    statuses = {
+        "P": "present", "A": "absent", "½P": "half_day", "1/2P": "half_day",
+        "WO": "weekly_off", "WOP": "weekly_off_present",
+        "WO½P": "weekly_off_half_day", "WO1/2P": "weekly_off_half_day",
+        "H": "holiday", "HD": "holiday", "L": "leave", "LV": "leave",
+    }
+    return statuses.get(text, text.casefold() or "unrecorded")
+
+
+def _summary_number(summary: str, label: str) -> float | None:
+    match = re.search(rf"{re.escape(label)}:\s*(\d+(?:\.\d+)?)", summary, re.IGNORECASE)
+    return float(match.group(1)) if match else None
+
+
+def _summary_minutes(summary: str, label: str) -> int | None:
+    match = re.search(rf"{re.escape(label)}:\s*(\d{{1,4}}:\d{{2}})", summary, re.IGNORECASE)
+    return _minutes(match.group(1)) if match else None
+
+
+def parse_essl_work_duration_sheet(
+    sheet: SheetData,
+) -> tuple[list[dict], list[dict], list[dict], dict]:
+    """Parse an eSSL monthly four-punch staff report with daily status and hours."""
+    if not is_essl_work_duration_sheet(sheet):
+        raise ValueError("This worksheet is not an eSSL monthly work-duration report")
+    report_text = "\n".join(_text(cell) for row in sheet.rows for cell in row if _text(cell))
+    year, month = _work_duration_report_month(report_text)
+    month_days = calendar.monthrange(year, month)[1]
+
+    day_columns: dict[int, int] = {}
+    for row in sheet.rows:
+        if normalize_header(row[0] if row else None) != "days":
+            continue
+        for column, value in enumerate(row):
+            match = re.match(r"^\s*(\d{1,2})(?:\s|$)", _text(value))
+            if match and 1 <= int(match.group(1)) <= month_days:
+                day_columns[column] = int(match.group(1))
+        break
+    if not day_columns:
+        raise ValueError("The daily columns could not be read from this work-duration report")
+
+    punches: list[dict] = []
+    workdays: list[dict] = []
+    errors: list[dict] = []
+    identities: list[dict] = []
+    rows_seen = 0
+
+    for header_index, row in enumerate(sheet.rows):
+        if normalize_header(row[0] if row else None) != "employee":
+            continue
+        employee_text = next((_text(value) for value in row[1:] if re.match(r"^\s*[^:]+\s*:\s*.+", _text(value))), "")
+        employee_match = re.match(r"^\s*([^:]+?)\s*:\s*(.+?)\s*$", employee_text)
+        if not employee_match:
+            errors.append({"row": header_index + 1, "message": "An employee code and name could not be read"})
+            continue
+        device_user_id = normalize_device_id(employee_match.group(1))
+        device_name = employee_match.group(2).strip()
+        summary = next((_text(value) for value in row if "Total Work Duration:" in _text(value)), "")
+        identities.append({
+            "deviceUserId": device_user_id,
+            "deviceName": device_name,
+            "presentDays": _summary_number(summary, "Present"),
+            "absentDays": _summary_number(summary, "Absent"),
+            "weeklyOffDays": _summary_number(summary, "WeeklyOff"),
+            "totalWorkMinutes": _summary_minutes(summary, "Total Duration(+OT)"),
+            "regularMinutes": _summary_minutes(summary, "Total Work Duration"),
+            "overtimeMinutes": _summary_minutes(summary, "Total OT"),
+            "averageWorkMinutes": _summary_minutes(summary, "Average Working Hrs"),
+        })
+
+        block: dict[str, list[Any]] = {}
+        for block_row in sheet.rows[header_index + 1:]:
+            label = _text(block_row[0] if block_row else None)
+            if normalize_header(label) == "employee":
+                break
+            if label in {"Status", "InTime1", "OutTime1", "InTime2", "OutTime2", "Duration", "OT"}:
+                block[label] = block_row
+        status_row = block.get("Status", [])
+        for column, day in day_columns.items():
+            status_text = status_row[column] if column < len(status_row) else None
+            time_values = {
+                label: values[column] if column < len(values) else None
+                for label, values in block.items() if label in {"InTime1", "OutTime1", "InTime2", "OutTime2"}
+            }
+            duration_value = block.get("Duration", [])
+            overtime_value = block.get("OT", [])
+            regular_minutes = _minutes(duration_value[column] if column < len(duration_value) else None)
+            overtime_minutes = _minutes(overtime_value[column] if column < len(overtime_value) else None)
+            if not _text(status_text) and not any(_text(value) for value in time_values.values()) and not (regular_minutes or overtime_minutes):
+                continue
+            attendance_date = date(year, month, day)
+            parsed_times: dict[str, datetime] = {}
+            for label, value in time_values.items():
+                if not _text(value):
+                    continue
+                try:
+                    parsed_times[label] = parse_datetime(date_value=attendance_date, time_value=value)
+                except ValueError as error:
+                    errors.append({"row": header_index + 1, "message": f"{device_name}, {day}: {error}"})
+            first_punch = min((value for key, value in parsed_times.items() if key.startswith("InTime")), default=None)
+            last_punch = max((value for key, value in parsed_times.items() if key.startswith("OutTime")), default=None)
+            if first_punch and last_punch and last_punch < first_punch:
+                last_punch = None
+            rows_seen += max(1, len(parsed_times))
+            workday = {
+                "deviceUserId": device_user_id,
+                "deviceName": device_name,
+                "attendanceDate": attendance_date,
+                "attendanceStatus": _work_status(status_text),
+                "firstPunchAt": first_punch,
+                "lastPunchAt": last_punch,
+                "workDurationMinutes": regular_minutes + overtime_minutes,
+                "overtimeMinutes": overtime_minutes,
+                "punchCount": len(parsed_times),
+                "sourceRow": header_index + 1,
+                "sourceSheet": sheet.name,
+            }
+            workdays.append(workday)
+            if first_punch:
+                punches.append({**workday, "rowsSeen": rows_seen})
+
+    if not identities:
+        raise ValueError("No staff identities were found in this work-duration report")
+    for item in punches:
+        item["rowsSeen"] = len(workdays)
+    return punches, workdays, errors, {
+        "format": "essl_work_duration",
+        "reportMonth": f"{year:04d}-{month:02d}",
+        "identityCount": len(identities),
+        "identities": identities,
+        "sourceSheet": sheet.name,
+        "staffSourceSheets": [sheet.name],
+    }
+
+
 def parse_essl_form_j_pdf(content: bytes) -> tuple[list[dict], list[dict], dict]:
     """Read the eSSL Form J month register and retain every printed InTime."""
     try:

@@ -3,6 +3,10 @@
 const payrollMoney = value => value == null ? "Not set" : new Intl.NumberFormat("en-IN", {
   style:"currency", currency:"INR", minimumFractionDigits:2, maximumFractionDigits:2,
 }).format(Number(value));
+const payrollDuration = value => {
+  const minutes = Math.max(0, Number(value) || 0);
+  return minutes ? `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m` : "—";
+};
 
 function payrollDemoData() {
   payrollMonth ||= indiaDateKey(new Date()).slice(0, 7);
@@ -10,7 +14,7 @@ function payrollDemoData() {
   const days = new Date(year, month, 0).getDate();
   return {month:payrollMonth, daysInMonth:days, canFinalizeMonth:false,
     summary:{staffCount:1, finalizedCount:0, reviewCount:1, netPayable:"0"},
-    rows:[{personKey:"demo", fullName:"Demo staff member", designation:"Staff", deviceIds:["DEMO"], presentDays:0, unrecordedDays:0, presentDates:[], unrecordedDates:[], status:"not_prepared", calculation:null, attendanceChanged:false}]};
+    rows:[{personKey:"demo", fullName:"Demo staff member", designation:"Staff", deviceIds:["DEMO"], presentDays:0, unrecordedDays:0, explicitAbsentDays:0, absenceLimit:0, presentDates:[], unrecordedDates:[], dailyWorkLog:[], totalWorkMinutes:0, overtimeMinutes:0, averageWorkMinutes:0, status:"not_prepared", calculation:null, attendanceChanged:false}]};
 }
 
 async function loadPayrollMonth() {
@@ -50,7 +54,8 @@ function renderPayroll() {
   $("#payroll-period").textContent = data ? `${data.daysInMonth} calendar days` : "";
   $("#payroll-metrics").innerHTML = data ? compactMetrics([
     {label:"Staff members", value:data.summary.staffCount}, {label:"Prepared net payable", value:payrollMoney(data.summary.netPayable)},
-    {label:"Finalised", value:data.summary.finalizedCount}, {label:"Needs review", value:data.summary.reviewCount},
+    {label:"Recorded work time", value:payrollDuration(data.rows.reduce((sum, row) => sum + Number(row.totalWorkMinutes || 0), 0))},
+    {label:"Finalised", value:data.summary.finalizedCount},
   ]) : "";
   const query = $("#payroll-search").value.trim().toLowerCase();
   const rows = (data?.rows || []).filter(row => row.fullName.toLowerCase().includes(query));
@@ -59,8 +64,8 @@ function renderPayroll() {
     const label = !canAccess("payroll", "edit") ? "View" : row.attendanceChanged ? "Review changes" : row.status === "finalized" ? "View final" : row.calculation ? "Review draft" : "Prepare";
     return `<button type="button" class="button button-secondary button-small payroll-row-action" data-payroll-person="${esc(row.personKey)}">${label}</button>`;
   };
-  const attendance = row => `${row.presentDays} recorded · ${row.unrecordedDays} unrecorded`;
-  const attendanceCell = row => `<span class="payroll-attendance"><strong>${esc(row.presentDays)}</strong> recorded <i>·</i> <strong>${esc(row.unrecordedDays)}</strong> unrecorded</span>`;
+  const attendance = row => `${row.presentDays} recorded · ${row.explicitAbsentDays || 0} absent · ${payrollDuration(row.totalWorkMinutes)} worked`;
+  const attendanceCell = row => `<span class="payroll-attendance"><span><strong>${esc(row.presentDays)}</strong> recorded <i>·</i> <strong>${esc(row.explicitAbsentDays || 0)}</strong> absent</span><small>${payrollDuration(row.totalWorkMinutes)} worked${row.overtimeMinutes ? ` · ${payrollDuration(row.overtimeMinutes)} OT` : ""}</small></span>`;
   const moneyCell = value => value == null ? '<span class="payroll-muted">Not set</span>' : payrollMoney(value);
   $("#payroll-table-body").innerHTML = rows.length ? rows.map(row => {
     const c = row.calculation;
@@ -79,7 +84,7 @@ function payrollPreview(salary, absent, advance, days) {
     const [whole, fraction = ""] = value.split(".");
     return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
   };
-  if (!/^\d+$/.test(absent) || Number(absent) > days) throw new Error("Enter absent days");
+  if (!/^\d+(\.5)?$/.test(absent) || Number(absent) > days) throw new Error("Enter absent days in whole or half days");
   const amount = cents(salary), deduction = cents(advance), count = BigInt(days);
   const paid = days - Number(absent);
   const gross = (amount * BigInt(paid) * 2n + count) / (2n * count);
@@ -94,14 +99,16 @@ function openPayrollEntry(row) {
   const saved = row.status === "finalized" ? row.savedAttendance : null;
   const dates = saved || row;
   const dateList = values => values.length ? values.map(value => esc(formatDate(value))).join(", ") : "None";
+  const workLog = dates.dailyWorkLog || [];
+  const workStatus = value => ({present:"Present", absent:"Absent", half_day:"Half day", weekly_off:"Weekly off", weekly_off_present:"Worked weekly off", weekly_off_half_day:"Half day on weekly off", holiday:"Holiday", leave:"Leave"})[value] || String(value || "Unrecorded").replaceAll("_", " ");
   openDrawer(`Payroll · ${row.fullName}`, `<form class="auth-form" id="payroll-entry-form">
     <p>${esc(month)} · ${days} calendar days · ${esc(row.designation)}</p>
     ${row.attendanceChanged ? '<div class="inline-notice">Biometric attendance changed since this calculation was saved. Review deductions; finalised amounts stay unchanged until explicitly reopened.</div>' : ""}
-    <details class="payroll-evidence"><summary>Attendance: ${dates.presentDays} recorded, ${dates.unrecordedDays} unrecorded days</summary><p><strong>Recorded:</strong> ${dateList(dates.presentDates)}</p><p><strong>No record on completed dates:</strong> ${dateList(dates.unrecordedDates)}</p><p>No record does not prove absence. Exclude paid holidays, weekly offs and missing imports from deductions. Today and future dates are not listed as missing.</p></details>
+    <details class="payroll-evidence" open><summary>${payrollDuration(dates.totalWorkMinutes)} recorded work time · ${dates.explicitAbsentDays || 0} device-marked absent</summary><div class="payroll-work-summary"><span><small>Days with duration</small><strong>${dates.workDaysWithDuration || 0}</strong></span><span><small>Average work time</small><strong>${payrollDuration(dates.averageWorkMinutes)}</strong></span><span><small>Overtime recorded</small><strong>${payrollDuration(dates.overtimeMinutes)}</strong></span></div>${workLog.length ? `<div class="payroll-work-log">${workLog.map(item => `<div><time>${esc(formatDate(item.date))}</time><span>${esc(workStatus(item.status))}</span><strong>${payrollDuration(item.workMinutes)}</strong>${item.overtimeMinutes ? `<small>${payrollDuration(item.overtimeMinutes)} OT</small>` : ""}</div>`).join("")}</div>` : `<p><strong>Recorded:</strong> ${dateList(dates.presentDates)}</p>`}<p><strong>No device record on completed dates:</strong> ${dateList(dates.unrecordedDates)}</p><p>Device-marked absences are suggested below. Missing punches still need review and are never deducted automatically.</p></details>
     <fieldset ${locked ? "disabled" : ""} class="payroll-fields">
       <div class="form-pair"><label class="field"><span>Monthly salary (₹)</span><input name="monthlySalary" type="number" inputmode="decimal" min="0" max="999999999999.99" step="0.01" value="${esc(c?.monthlySalary ?? row.salarySuggestion ?? "")}" required></label><label class="field"><span>Advance given this month (₹)</span><input name="advanceGiven" type="number" inputmode="decimal" min="0" max="999999999999.99" step="0.01" value="${esc(c?.advanceGiven ?? "0")}" required></label></div>
       ${!c && row.salarySuggestion != null ? '<small>Salary carried forward from the most recent earlier payroll. Advance is not carried forward.</small>' : ""}
-      <label class="field"><span>Confirmed absent days</span><input name="absentDays" type="number" inputmode="numeric" min="0" max="${row.unrecordedDays}" step="1" value="${esc(c?.absentDays ?? "")}" required aria-describedby="payroll-absence-help"><small id="payroll-absence-help">Confirm the monthly total from attendance. Unrecorded days are not automatically deducted.</small></label>
+      <label class="field"><span>Confirmed absent days</span><input name="absentDays" type="number" inputmode="decimal" min="0" max="${row.absenceLimit}" step="0.5" value="${esc(c?.absentDays ?? row.explicitAbsentDays ?? "")}" required aria-describedby="payroll-absence-help"><small id="payroll-absence-help">The device report suggests ${esc(row.explicitAbsentDays || 0)} absent days. Confirm it after checking weekly offs, paid leave and missing imports.</small></label>
       <label class="field"><span>Payroll note (optional)</span><textarea name="notes" maxlength="1000" rows="2" placeholder="Leave adjustment or advance reference">${esc(row.notes || "")}</textarea></label>
     </fieldset>
     <div id="payroll-calculation" class="payroll-calculation" aria-live="polite"></div>

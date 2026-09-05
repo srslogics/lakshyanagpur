@@ -8,6 +8,7 @@ from app.models import (
     BiometricAttendanceDay,
     BiometricImportBatch,
     DeviceAttendanceIdentity,
+    StaffAttendanceWorkday,
     StaffPayroll,
     User,
 )
@@ -155,6 +156,39 @@ def test_payroll_bootstrap_uses_biometrics_and_excludes_directors(client, databa
     assert client.put(endpoint, headers=_headers(accounts), json=draft).status_code == 200
     draft["version"] = 1
     assert client.put(endpoint, headers=_headers(director), json=draft).status_code == 403
+
+
+def test_payroll_includes_device_work_time_and_half_day_absence_suggestion(client, database):
+    owner, staff, _, _ = _payroll_people(database)
+    batch = database.query(BiometricImportBatch).one()
+    database.add_all([
+        StaffAttendanceWorkday(
+            import_batch_id=batch.id, device_key="payroll-device", device_user_id="41",
+            staff_user_id=staff.id, attendance_date=date(2026, 8, 1), attendance_status="present",
+            first_punch_at=datetime(2026, 8, 1, 3, 0, tzinfo=timezone.utc),
+            last_punch_at=datetime(2026, 8, 1, 11, 0, tzinfo=timezone.utc),
+            work_duration_minutes=480, overtime_minutes=30, punch_count=2,
+        ),
+        StaffAttendanceWorkday(
+            import_batch_id=batch.id, device_key="payroll-device", device_user_id="41",
+            staff_user_id=staff.id, attendance_date=date(2026, 8, 2), attendance_status="half_day",
+            first_punch_at=datetime(2026, 8, 2, 3, 0, tzinfo=timezone.utc),
+            last_punch_at=datetime(2026, 8, 2, 7, 0, tzinfo=timezone.utc),
+            work_duration_minutes=240, overtime_minutes=0, punch_count=2,
+        ),
+        StaffAttendanceWorkday(
+            import_batch_id=batch.id, device_key="payroll-device", device_user_id="41",
+            staff_user_id=staff.id, attendance_date=date(2026, 8, 3), attendance_status="absent",
+            work_duration_minutes=0, overtime_minutes=0, punch_count=0,
+        ),
+    ])
+    database.commit()
+    row = client.get("/api/payroll/bootstrap?month=2026-08", headers=_headers(owner)).json()["rows"][0]
+    assert row["totalWorkMinutes"] == 720
+    assert row["overtimeMinutes"] == 30
+    assert row["averageWorkMinutes"] == 360
+    assert row["explicitAbsentDays"] == 1.5
+    assert row["dailyWorkLog"][2]["status"] == "absent"
 
 
 def test_payroll_finalize_is_confirmed_audited_and_immutable(client, database):

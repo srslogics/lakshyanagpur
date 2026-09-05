@@ -23,9 +23,10 @@
 .payroll-net { color: var(--ink-950); }
 .payroll-control-heading { text-align: right !important; }
 .payroll-register-table td:last-child { text-align: right; }
-.payroll-attendance { color: var(--ink-600); white-space: nowrap; }
+.payroll-attendance { display: grid; gap: 4px; color: var(--ink-600); white-space: nowrap; }
 .payroll-attendance strong { color: var(--ink-900); font-weight: 800; }
 .payroll-attendance i { margin: 0 3px; color: var(--ink-400); font-style: normal; }
+.payroll-attendance small { color: var(--ink-500); font-size: .61rem; font-weight: 700; }
 .payroll-muted { color: var(--ink-400); font-weight: 600; }
 .payroll-row-action { min-width: 82px; }
 .surface.payroll-formula { min-height: 0; margin-top: 16px; padding: 14px 18px; }
@@ -33,6 +34,15 @@
 .payroll-formula p, .payroll-evidence p { line-height: 1.65; color: var(--ink-700); overflow-wrap: anywhere; }
 .payroll-fields { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 18px; }
 .payroll-evidence { border: 1px solid var(--line); border-radius: 14px; padding: 10px 16px; }
+.payroll-work-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 4px 0 14px; }
+.payroll-work-summary span { display: grid; gap: 5px; padding: 11px; border-radius: 12px; background: var(--surface-muted); }
+.payroll-work-summary small { color: var(--ink-500); font-size: .62rem; }
+.payroll-work-summary strong { color: var(--ink-950); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.payroll-work-log { max-height: 270px; overflow-y: auto; border-block: 1px solid var(--line); }
+.payroll-work-log > div { display: grid; grid-template-columns: 96px minmax(110px,1fr) 70px 70px; gap: 8px; align-items: center; min-height: 38px; border-top: 1px solid var(--line); font-size: .65rem; }
+.payroll-work-log > div:first-child { border-top: 0; }
+.payroll-work-log time, .payroll-work-log strong { font-variant-numeric: tabular-nums; }
+.payroll-work-log span, .payroll-work-log small { color: var(--ink-500); }
 .payroll-calculation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; background: var(--surface-muted); border: 1px solid var(--line); border-radius: 16px; }
 .payroll-calculation .compact-metric { min-width: 0; border: 0; padding: 4px; }
 .payroll-calculation strong { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
@@ -49,6 +59,9 @@
   .payroll-actions { flex-direction: column; }
   .payroll-calculation { padding: 12px; gap: 8px; }
   .payroll-register > .surface-head { min-height: 0; padding: 14px 16px; }
+  .payroll-work-summary { grid-template-columns: 1fr; }
+  .payroll-work-log > div { grid-template-columns: 82px minmax(90px,1fr) 58px; }
+  .payroll-work-log > div small { display: none; }
 }
 
 :root {
@@ -412,7 +425,9 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .staff-person small i { padding-left: 7px; border-left: 1px solid var(--line); font-style: normal; }
 .staff-time { color: var(--ink-900); font-size: .76rem; font-variant-numeric: tabular-nums; }
 .staff-time-muted { color: var(--ink-400); font-weight: 600; }
-.staff-duration { color: var(--ink-600); font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.staff-duration { display: grid; gap: 4px; color: var(--ink-600); font-size: .72rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.staff-duration strong { color: var(--ink-900); }
+.staff-duration small { max-width: 210px; color: var(--ink-500); font-size: .6rem; font-weight: 650; white-space: normal; }
 .staff-mobile-card .mobile-record-card-head { align-items: center; }
 .staff-mobile-card .staff-person { min-width: 0; }
 .toolbar { min-height: 72px; display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--line); background: var(--surface-muted); }

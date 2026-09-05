@@ -588,6 +588,34 @@ class BiometricAttendanceDay(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
 
 
+class StaffAttendanceWorkday(Base):
+    """Auditable daily staff status and worked time from monthly biometric reports."""
+
+    __tablename__ = "staff_attendance_workdays"
+    __table_args__ = (
+        UniqueConstraint(
+            "device_key",
+            "device_user_id",
+            "attendance_date",
+            name="uq_staff_attendance_workday",
+        ),
+    )
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("saw"))
+    import_batch_id: Mapped[str] = mapped_column(ForeignKey("biometric_import_batches.id"), index=True)
+    device_key: Mapped[str] = mapped_column(String(120), index=True)
+    device_user_id: Mapped[str] = mapped_column(String(120), index=True)
+    staff_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    attendance_date: Mapped[date] = mapped_column(Date, index=True)
+    attendance_status: Mapped[str] = mapped_column(String(32), index=True)
+    first_punch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    last_punch_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    work_duration_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    overtime_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    punch_count: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+
+
 class StaffPayroll(TimestampMixin, Base):
     """One monthly calculation per biometric staff identity; never a bank payment."""
 
@@ -598,7 +626,7 @@ class StaffPayroll(TimestampMixin, Base):
     month: Mapped[str] = mapped_column(String(7), index=True)
     monthly_salary: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     advance_given: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
-    absent_days: Mapped[int] = mapped_column(Integer)
+    absent_days: Mapped[Decimal] = mapped_column(Numeric(5, 1))
     attendance_fingerprint: Mapped[str] = mapped_column(String(64))
     notes: Mapped[str] = mapped_column(Text, default="")
     version: Mapped[int] = mapped_column(Integer, default=1)

@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import BiometricAttendanceDay, DeviceAttendanceIdentity, StaffPayroll, User
+from ..models import BiometricAttendanceDay, DeviceAttendanceIdentity, StaffAttendanceWorkday, StaffPayroll, User
 from ..payroll import calculate_payroll, month_bounds
 from ..security import require_roles
 from ..services import audit
@@ -49,7 +49,9 @@ def _people(db, month):
         person = people.setdefault(key, {
             "personKey": key, "fullName": name,
             "designation": (user.role.replace("_", " ").title() if user else "Staff"),
-            "deviceIds": [], "presentDates": set(),
+            "deviceIds": [], "presentDates": set(), "coveredDates": set(),
+            "dailyWorkLog": [], "totalWorkMinutes": 0, "overtimeMinutes": 0,
+            "explicitAbsentDays": Decimal(0),
         })
         person["deviceIds"].append(identity.device_user_id)
         device_keys[(identity.device_key, identity.device_user_id)] = key
@@ -62,15 +64,51 @@ def _people(db, month):
         key = device_keys.get((punch.device_key, punch.device_user_id))
         if key:
             people[key]["presentDates"].add(punch.attendance_date.isoformat())
+    workdays = db.query(StaffAttendanceWorkday).filter(
+        StaffAttendanceWorkday.attendance_date.between(start, min(end, today)),
+    ).order_by(StaffAttendanceWorkday.attendance_date).all()
+    for workday in workdays:
+        key = device_keys.get((workday.device_key, workday.device_user_id))
+        if not key:
+            continue
+        person = people[key]
+        day_key = workday.attendance_date.isoformat()
+        person["coveredDates"].add(day_key)
+        if workday.attendance_status in {"present", "half_day", "weekly_off_present", "weekly_off_half_day"}:
+            person["presentDates"].add(day_key)
+        if workday.attendance_status == "absent":
+            person["explicitAbsentDays"] += Decimal(1)
+        elif workday.attendance_status == "half_day":
+            person["explicitAbsentDays"] += Decimal("0.5")
+        person["totalWorkMinutes"] += workday.work_duration_minutes
+        person["overtimeMinutes"] += workday.overtime_minutes
+        person["dailyWorkLog"].append({
+            "date": day_key,
+            "status": workday.attendance_status,
+            "arrivalAt": workday.first_punch_at.isoformat() if workday.first_punch_at else None,
+            "departureAt": workday.last_punch_at.isoformat() if workday.last_punch_at else None,
+            "workMinutes": workday.work_duration_minutes,
+            "overtimeMinutes": workday.overtime_minutes,
+            "punchCount": workday.punch_count,
+        })
     elapsed = [start + timedelta(days=index) for index in range(days) if start + timedelta(days=index) < today]
     for person in people.values():
         person["presentDates"] = sorted(person["presentDates"])
         person["deviceIds"] = sorted(set(person["deviceIds"]))
-        person["unrecordedDates"] = [day.isoformat() for day in elapsed if day.isoformat() not in person["presentDates"]]
+        person["unrecordedDates"] = [
+            day.isoformat() for day in elapsed
+            if day.isoformat() not in person["presentDates"] and day.isoformat() not in person["coveredDates"]
+        ]
+        person.pop("coveredDates")
         person["presentDays"] = len(person["presentDates"])
         person["unrecordedDays"] = len(person["unrecordedDates"])
+        person["explicitAbsentDays"] = float(person["explicitAbsentDays"])
+        person["absenceLimit"] = person["unrecordedDays"] + person["explicitAbsentDays"]
+        completed = [item for item in person["dailyWorkLog"] if item["workMinutes"] > 0]
+        person["workDaysWithDuration"] = len(completed)
+        person["averageWorkMinutes"] = round(person["totalWorkMinutes"] / len(completed)) if completed else 0
         person["attendanceFingerprint"] = hashlib.sha256(json.dumps(
-            [month, person["personKey"], person["presentDates"]], separators=(",", ":"),
+            [month, person["personKey"], person["presentDates"], person["dailyWorkLog"]], separators=(",", ":"),
         ).encode()).hexdigest()
     return people
 
@@ -114,7 +152,7 @@ class PayrollSave(BaseModel):
     model_config = ConfigDict(extra="forbid")
     monthlySalary: Decimal = Field(ge=0, max_digits=14, decimal_places=2)
     advanceGiven: Decimal = Field(default=Decimal(0), ge=0, max_digits=14, decimal_places=2)
-    absentDays: int = Field(ge=0, le=31, strict=True)
+    absentDays: Decimal = Field(ge=0, le=31, max_digits=3, decimal_places=1)
     attendanceFingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
     version: int = Field(ge=0, strict=True)
     notes: str = Field(default="", max_length=1000)
@@ -130,7 +168,9 @@ def save_payroll(month: str, person_key: str, payload: PayrollSave, db: Session 
         raise HTTPException(404, "Staff attendance identity not found")
     if payload.attendanceFingerprint != person["attendanceFingerprint"]:
         raise HTTPException(409, "Attendance changed. Refresh payroll and review it before saving.")
-    if payload.absentDays > person["unrecordedDays"]:
+    if payload.absentDays * 2 != (payload.absentDays * 2).to_integral_value():
+        raise HTTPException(422, "Absent days must use whole or half days")
+    if payload.absentDays > Decimal(str(person["absenceLimit"])):
         raise HTTPException(422, "Absent days cannot include recorded present days, today or future days")
     if payload.finalize and (end >= datetime.now(INDIA_TZ).date() or not payload.attendanceConfirmed):
         raise HTTPException(422, "Finalize only after the month ends and the absence total has been confirmed")

@@ -21,6 +21,7 @@ from ..models import (
     Student,
     StudentAcademicProfile,
     StudentSubjectSelection,
+    StaffAttendanceWorkday,
     Subject,
     User,
 )
@@ -339,7 +340,7 @@ def list_staff_biometric_attendance(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*ROLES)),
 ):
-    query = (
+    punch_query = (
         db.query(BiometricAttendanceDay, User, DeviceAttendanceIdentity)
         .outerjoin(User, User.id == BiometricAttendanceDay.staff_user_id)
         .outerjoin(
@@ -352,9 +353,9 @@ def list_staff_biometric_attendance(
         .filter(BiometricAttendanceDay.student_id.is_(None))
     )
     if day:
-        query = query.filter(BiometricAttendanceDay.attendance_date == day)
-    rows = (
-        query.order_by(
+        punch_query = punch_query.filter(BiometricAttendanceDay.attendance_date == day)
+    punch_rows = (
+        punch_query.order_by(
             BiometricAttendanceDay.attendance_date.desc(),
             BiometricAttendanceDay.first_punch_at.desc(),
             User.full_name,
@@ -362,12 +363,40 @@ def list_staff_biometric_attendance(
         .limit(500)
         .all()
     )
-    records = []
-    for attendance, staff, identity in rows:
+
+    workday_query = (
+        db.query(StaffAttendanceWorkday, DeviceAttendanceIdentity)
+        .outerjoin(
+            DeviceAttendanceIdentity,
+            and_(
+                DeviceAttendanceIdentity.device_key == StaffAttendanceWorkday.device_key,
+                DeviceAttendanceIdentity.device_user_id == StaffAttendanceWorkday.device_user_id,
+            ),
+        )
+    )
+    if day:
+        workday_query = workday_query.filter(StaffAttendanceWorkday.attendance_date == day)
+    workday_rows = workday_query.order_by(
+        StaffAttendanceWorkday.attendance_date.desc(),
+        StaffAttendanceWorkday.first_punch_at.desc(),
+    ).limit(1000).all()
+    staff_ids = {
+        staff_id
+        for workday, identity in workday_rows
+        for staff_id in (workday.staff_user_id, identity.staff_user_id if identity else None)
+        if staff_id
+    }
+    staff_by_id = {
+        staff.id: staff
+        for staff in db.query(User).filter(User.id.in_(staff_ids)).all()
+    } if staff_ids else {}
+
+    records_by_key = {}
+    for attendance, staff, identity in punch_rows:
         full_name = staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff"
         designation = _staff_designation(full_name)
         attendance_group = "directors" if designation == "Director" or (staff and staff.role == "director") else "staff"
-        records.append({
+        records_by_key[(attendance.device_key, attendance.device_user_id, attendance.attendance_date)] = {
             "id": attendance.id,
             "staffUserId": staff.id if staff else None,
             "fullName": full_name,
@@ -378,9 +407,79 @@ def list_staff_biometric_attendance(
             "date": attendance.attendance_date.isoformat(),
             "arrivalAt": _aware(attendance.first_punch_at).isoformat(),
             "departureAt": _aware(attendance.last_punch_at).isoformat() if attendance.last_punch_at else None,
+            "attendanceStatus": "present",
+            "workDurationMinutes": (
+                max(0, round((_aware(attendance.last_punch_at) - _aware(attendance.first_punch_at)).total_seconds() / 60))
+                if attendance.last_punch_at else None
+            ),
+            "overtimeMinutes": 0,
+            "punchCount": 2 if attendance.last_punch_at else 1,
+            "source": "punches",
+        }
+
+    for workday, identity in workday_rows:
+        staff_id = workday.staff_user_id or (identity.staff_user_id if identity else None)
+        staff = staff_by_id.get(staff_id)
+        full_name = staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff"
+        designation = _staff_designation(full_name)
+        attendance_group = "directors" if designation == "Director" or (staff and staff.role == "director") else "staff"
+        key = (workday.device_key, workday.device_user_id, workday.attendance_date)
+        fallback = records_by_key.get(key, {})
+        records_by_key[key] = {
+            "id": workday.id,
+            "staffUserId": staff_id,
+            "fullName": full_name,
+            "role": staff.role if staff else "staff",
+            "designation": designation,
+            "attendanceGroup": attendance_group,
+            "deviceUserId": workday.device_user_id,
+            "date": workday.attendance_date.isoformat(),
+            "arrivalAt": _aware(workday.first_punch_at).isoformat() if workday.first_punch_at else fallback.get("arrivalAt"),
+            "departureAt": _aware(workday.last_punch_at).isoformat() if workday.last_punch_at else fallback.get("departureAt"),
+            "attendanceStatus": workday.attendance_status,
+            "workDurationMinutes": workday.work_duration_minutes,
+            "overtimeMinutes": workday.overtime_minutes,
+            "punchCount": workday.punch_count,
+            "source": "monthly_work_duration",
+        }
+
+    records = sorted(
+        records_by_key.values(),
+        key=lambda item: (item["date"], item.get("arrivalAt") or ""),
+        reverse=True,
+    )
+    monthly_totals = {}
+    for item in records:
+        person_key = item["staffUserId"] or f'device:{item["deviceUserId"]}'
+        month_key = item["date"][:7]
+        key = f"{person_key}:{month_key}"
+        summary = monthly_totals.setdefault(key, {
+            "personKey": person_key,
+            "month": month_key,
+            "fullName": item["fullName"],
+            "designation": item["designation"],
+            "attendanceGroup": item["attendanceGroup"],
+            "recordedDays": 0,
+            "absentDays": 0,
+            "halfDays": 0,
+            "weeklyOffDays": 0,
+            "totalWorkMinutes": 0,
+            "overtimeMinutes": 0,
         })
+        status = item["attendanceStatus"]
+        if status in {"present", "half_day", "weekly_off_present", "weekly_off_half_day"}:
+            summary["recordedDays"] += 1
+        if status == "absent":
+            summary["absentDays"] += 1
+        if status in {"half_day", "weekly_off_half_day"}:
+            summary["halfDays"] += 1
+        if status.startswith("weekly_off"):
+            summary["weeklyOffDays"] += 1
+        summary["totalWorkMinutes"] += int(item["workDurationMinutes"] or 0)
+        summary["overtimeMinutes"] += int(item["overtimeMinutes"] or 0)
     return {
         "records": records,
+        "monthlyTotals": list(monthly_totals.values()),
         "staffCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "staff"}),
         "directorCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "directors"}),
         "recordCount": len(records),

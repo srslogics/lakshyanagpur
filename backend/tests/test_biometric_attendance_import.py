@@ -12,10 +12,16 @@ from app.models import (
     Enrollment,
     Student,
     StudentAcademicProfile,
+    StaffAttendanceWorkday,
     User,
 )
 from app.security import create_token, hash_password
-from app.importers.biometric_attendance import SheetData, parse_essl_form_j_pdf, parse_essl_form_j_sheet
+from app.importers.biometric_attendance import (
+    SheetData,
+    parse_essl_form_j_pdf,
+    parse_essl_form_j_sheet,
+    parse_essl_work_duration_sheet,
+)
 from app.routers.portal import attendance_rows
 from app.routers.attendance import _staff_designation
 
@@ -628,6 +634,82 @@ def test_essl_form_j_sheet_parser_keeps_first_punches():
         (1, 4, 29),
         (3, 6, 2),
     ]
+
+
+def test_essl_monthly_work_duration_parser_keeps_daily_and_monthly_hours():
+    sheet = SheetData("WorkDurationReportFourPunch", [
+        [None, "Monthly Status Report (Detailed Work Duration(Four Punch))"],
+        [None, "Aug 01 2026  To  Aug 31 2026"],
+        ["Days", None, "1 St", "2 S", "3 M"],
+        ["Employee:", None, None, None, "7 : Sneha", None, None, None,
+         " Total Work Duration: 7:30 Hrs. Total OT: 8:30 Hrs. Present: 2 Absent: 1 WeeklyOff: 1 Holidays: 0 Leaves Taken: 0 Late By Hrs: 00:00 Late By Days: 0 Early By Hrs: 00:00 Early going By Days: 0 Total Duration(+OT): 16:00 Average Working Hrs: 8:00"],
+        ["Status", None, "WOP", "A", "P"],
+        ["InTime1", None, "10:00", None, "10:30"],
+        ["OutTime1", None, "18:30", None, "18:00"],
+        ["InTime2"],
+        ["OutTime2"],
+        ["Duration", None, "00:00", "00:00", "7:30"],
+        ["OT", None, "8:30", "00:00", "00:00"],
+    ])
+    punches, workdays, errors, report = parse_essl_work_duration_sheet(sheet)
+    assert errors == []
+    assert report["reportMonth"] == "2026-08"
+    assert report["identities"][0]["totalWorkMinutes"] == 960
+    assert len(punches) == 2
+    assert [item["attendanceStatus"] for item in workdays] == ["weekly_off_present", "absent", "present"]
+    assert [item["workDurationMinutes"] for item in workdays] == [510, 0, 450]
+
+
+def test_monthly_work_duration_upload_publishes_staff_daily_hours(client, database):
+    from openpyxl import Workbook
+
+    operator, _, _ = setup_students(database)
+    staff = User(
+        mobile="9000000399", full_name="Sneha", role="front_desk",
+        password_hash=hash_password("Password123!"),
+    )
+    database.add(staff)
+    database.commit()
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "WorkDurationReportFourPunch"
+    for row in [
+        [None, "Monthly Status Report (Detailed Work Duration(Four Punch))"],
+        [None, "Aug 01 2026  To  Aug 31 2026"],
+        ["Days", None, "1 St", "2 S", "3 M"],
+        ["Employee:", None, None, None, "7 : Sneha", None, None, None,
+         " Total Work Duration: 7:30 Hrs. Total OT: 8:30 Hrs. Present: 2 Absent: 1 WeeklyOff: 1 Holidays: 0 Leaves Taken: 0 Late By Hrs: 00:00 Late By Days: 0 Early By Hrs: 00:00 Early going By Days: 0 Total Duration(+OT): 16:00 Average Working Hrs: 8:00"],
+        ["Status", None, "WOP", "A", "P"],
+        ["InTime1", None, "10:00", None, "10:30"],
+        ["OutTime1", None, "18:30", None, "18:00"],
+        ["Duration", None, "00:00", "00:00", "7:30"],
+        ["OT", None, "8:30", "00:00", "00:00"],
+    ]:
+        sheet.append(row)
+    stream = BytesIO()
+    workbook.save(stream)
+    headers = {"Authorization": f"Bearer {create_token(operator)}"}
+    staged = preview(client, headers, stream.getvalue(), "staff-duration.xlsx")
+    assert staged["sourceFormat"] == "essl_work_duration"
+    selection = {
+        "previewToken": staged["previewToken"], "sheetName": sheet.title,
+        "deviceIdColumn": "Device Code", "nameColumn": "Staff Name",
+        "datetimeColumn": None, "dateColumn": "Date", "timeColumn": "Work Time",
+    }
+    analysis = client.post("/api/attendance/biometric-imports/analyze", headers=headers, json=selection)
+    assert analysis.status_code == 200, analysis.text
+    assert analysis.json()["deviceUsers"][0]["staffUserId"] == staff.id
+    committed = client.post("/api/attendance/biometric-imports", headers=headers, json={
+        **selection, "mappings": [{"deviceUserId": "7", "staffUserId": staff.id}],
+    })
+    assert committed.status_code == 200, committed.text
+    assert committed.json()["staffWorkdaysCreated"] == 3
+    assert database.query(StaffAttendanceWorkday).count() == 3
+    register = client.get("/api/attendance/staff-biometric", headers=headers).json()
+    assert len(register["records"]) == 3
+    absent = next(item for item in register["records"] if item["attendanceStatus"] == "absent")
+    assert absent["arrivalAt"] is None
+    assert register["monthlyTotals"][0]["totalWorkMinutes"] == 960
 
 
 def test_essl_detailed_form_j_without_month_uses_upload_month():

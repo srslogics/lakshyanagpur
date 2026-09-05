@@ -18,9 +18,11 @@ from ..importers.biometric_attendance import (
     INDIA_TZ,
     SheetData,
     is_essl_form_j_sheet,
+    is_essl_work_duration_sheet,
     normalize_device_id,
     parse_essl_form_j_pdf,
     parse_essl_form_j_sheets,
+    parse_essl_work_duration_sheet,
     parse_punches,
     read_workbook,
     sheet_preview,
@@ -34,6 +36,7 @@ from ..models import (
     Enrollment,
     Student,
     StudentAcademicProfile,
+    StaffAttendanceWorkday,
     User,
 )
 from ..security import require_roles
@@ -225,8 +228,35 @@ async def preview_biometric_import(
             source_report = report
         else:
             sheets = read_workbook(content, filename)
+            work_duration_sheets = [sheet for sheet in sheets if is_essl_work_duration_sheet(sheet)]
             form_j_sheets = [sheet for sheet in sheets if is_essl_form_j_sheet(sheet)]
-            if form_j_sheets:
+            if work_duration_sheets:
+                if len(work_duration_sheets) != 1:
+                    raise ValueError("Upload one monthly work-duration worksheet at a time")
+                source_sheet = work_duration_sheets[0]
+                punches, workdays, row_errors, report = parse_essl_work_duration_sheet(source_sheet)
+                if row_errors:
+                    raise ValueError(row_errors[0]["message"])
+                report_rows = [{
+                    "Device Code": item["deviceUserId"],
+                    "Staff Name": item["deviceName"],
+                    "Date": item["attendanceDate"].isoformat(),
+                    "Status": item["attendanceStatus"].replace("_", " ").title(),
+                    "Work Time": f'{item["workDurationMinutes"] // 60}h {item["workDurationMinutes"] % 60:02d}m',
+                } for item in workdays[:5]]
+                sheets_payload = [{
+                    "name": source_sheet.name,
+                    "headers": ["Device Code", "Staff Name", "Date", "Status", "Work Time"],
+                    "rows": report_rows,
+                    "rowCount": len(workdays),
+                    "detected": {
+                        "device_id": "Device Code", "name": "Staff Name",
+                        "date": "Date", "time": "Work Time", "datetime": None,
+                    },
+                }]
+                source_format = "essl_work_duration"
+                source_report = report
+            elif form_j_sheets:
                 punches, row_errors, report = parse_essl_form_j_sheets(form_j_sheets)
                 if row_errors:
                     raise ValueError(row_errors[0]["message"])
@@ -319,12 +349,22 @@ def _resolve_preview(token: str, actor: User) -> tuple[dict, list[SheetData]]:
 
 def _selected_punches(payload: BiometricImportSelection, actor: User):
     preview, sheets = _resolve_preview(payload.preview_token, actor)
+    workdays = []
     if preview.get("sourceFormat") == "essl_form_j":
         try:
             punches, row_errors, report = parse_essl_form_j_pdf(_decode(preview["content"]))
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
         sheet = SheetData(f"Form J · {report['reportMonth']}", [])
+    elif preview.get("sourceFormat") == "essl_work_duration":
+        source_report = preview.get("sourceReport") or {}
+        sheet = next((item for item in sheets if item.name == source_report.get("sourceSheet")), None)
+        if not sheet:
+            raise HTTPException(422, "Choose a valid monthly work-duration worksheet")
+        try:
+            punches, workdays, row_errors, _ = parse_essl_work_duration_sheet(sheet)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     elif preview.get("sourceFormat") == "essl_form_j_workbook":
         source_report = preview.get("sourceReport") or {}
         source_sheet_names = source_report.get("sourceSheets") or [
@@ -364,7 +404,7 @@ def _selected_punches(payload: BiometricImportSelection, actor: User):
         })
     if not punches:
         raise HTTPException(422, "No valid attendance punches were found")
-    return preview, sheet, punches
+    return preview, sheet, punches, workdays
 
 
 @router.post("/analyze")
@@ -373,11 +413,12 @@ def analyze_biometric_import(
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles("owner", "academic_coordinator", "attendance_operator")),
 ):
-    preview, _, punches = _selected_punches(payload, actor)
+    preview, _, punches, workdays = _selected_punches(payload, actor)
     staff_source_sheets = set((preview.get("sourceReport") or {}).get("staffSourceSheets") or [])
     mappings = _device_mappings(db)
     people = {}
-    for item in punches:
+    identity_rows = workdays or punches
+    for item in identity_rows:
         person = people.setdefault(item["deviceUserId"], {
             "deviceUserId": item["deviceUserId"],
             "deviceName": item["deviceName"],
@@ -455,10 +496,10 @@ def analyze_biometric_import(
             person["matchReason"] = "Exact staff name"
     return {
         "rowsSeen": punches[0].get("rowsSeen", len(punches)),
-        "uniqueAttendanceDays": len(punches),
-        "duplicateRows": max(0, punches[0].get("rowsSeen", len(punches)) - len(punches)),
-        "dateFrom": min(item["attendanceDate"] for item in punches),
-        "dateTo": max(item["attendanceDate"] for item in punches),
+        "uniqueAttendanceDays": len(identity_rows),
+        "duplicateRows": 0 if workdays else max(0, punches[0].get("rowsSeen", len(punches)) - len(punches)),
+        "dateFrom": min(item["attendanceDate"] for item in identity_rows),
+        "dateTo": max(item["attendanceDate"] for item in identity_rows),
         "deviceUsers": sorted(people.values(), key=lambda item: item["deviceUserId"]),
     }
 
@@ -545,7 +586,7 @@ def commit_biometric_import(
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles("owner", "academic_coordinator", "attendance_operator")),
 ):
-    preview, sheet, punches = _selected_punches(payload, actor)
+    preview, sheet, punches, workdays = _selected_punches(payload, actor)
 
     raw_content = _decode(preview["content"])
     source_hash = sha256(raw_content).hexdigest()
@@ -557,15 +598,16 @@ def commit_biometric_import(
     active_staff_ids = {item["id"] for item in active_staff}
     choices = {normalize_device_id(item.device_user_id): item for item in payload.mappings}
     mappings = _apply_mapping_choices(db, actor, choices, active_ids, active_staff_ids)
+    identity_rows = workdays or punches
     device_names = {
         item["deviceUserId"]: item.get("deviceName") or None
-        for item in punches
+        for item in identity_rows
     }
     for device_user_id, mapping in mappings.items():
         if device_user_id in device_names and device_names[device_user_id]:
             mapping.device_name = device_names[device_user_id]
     db.flush()
-    device_ids = {item["deviceUserId"] for item in punches}
+    device_ids = {item["deviceUserId"] for item in identity_rows}
     unresolved = sorted(
         device_id for device_id in device_ids
         if device_id not in mappings
@@ -587,6 +629,7 @@ def commit_biometric_import(
         if mappings[device_id].is_ignored and not mappings[device_id].is_staff_device
     }
     linked = [item for item in punches if item["deviceUserId"] not in ignored_ids]
+    linked_workdays = [item for item in workdays if item["deviceUserId"] not in ignored_ids]
     import_batch = duplicate_file
     if not import_batch:
         import_batch = BiometricImportBatch(
@@ -595,14 +638,14 @@ def commit_biometric_import(
             source_hash=source_hash,
             source_sheet=sheet.name[:255],
             rows_seen=punches[0].get("rowsSeen", len(punches)),
-            attendance_days=len({item["attendanceDate"] for item in linked}),
+            attendance_days=len({item["attendanceDate"] for item in (linked_workdays or linked)}),
             matched_students=len({
                 mappings[item["deviceUserId"]].student_id
                 for item in linked
                 if mappings[item["deviceUserId"]].student_id
             }),
             ignored_device_ids=len(ignored_ids),
-            duplicate_rows=max(0, punches[0].get("rowsSeen", len(punches)) - len(punches)),
+            duplicate_rows=0 if linked_workdays else max(0, punches[0].get("rowsSeen", len(punches)) - len(punches)),
             status="completed",
             actor_id=actor.id,
         )
@@ -629,6 +672,8 @@ def commit_biometric_import(
     updated_punches = 0
     staff_punches_created = 0
     staff_punches_updated = 0
+    staff_workdays_created = 0
+    staff_workdays_updated = 0
     register_student_rows: dict[tuple, dict[str, datetime]] = defaultdict(dict)
     existing_days = {}
     if linked:
@@ -704,6 +749,48 @@ def commit_biometric_import(
         batch_name = enrollment.batch if enrollment else None
         if batch_name in {"Tatva", "Essential"}:
             register_student_rows[(item["attendanceDate"], batch_name)][student_id] = first_punch
+
+    if linked_workdays:
+        workday_from = min(item["attendanceDate"] for item in linked_workdays)
+        workday_to = max(item["attendanceDate"] for item in linked_workdays)
+        existing_workdays = {
+            (item.device_user_id, item.attendance_date): item
+            for item in db.query(StaffAttendanceWorkday).filter(
+                StaffAttendanceWorkday.device_key == DEVICE_KEY,
+                StaffAttendanceWorkday.device_user_id.in_({item["deviceUserId"] for item in linked_workdays}),
+                StaffAttendanceWorkday.attendance_date.between(workday_from, workday_to),
+            ).all()
+        }
+        for item in linked_workdays:
+            mapping = mappings[item["deviceUserId"]]
+            values = {
+                "import_batch_id": import_batch.id,
+                "staff_user_id": mapping.staff_user_id,
+                "attendance_status": item["attendanceStatus"],
+                "first_punch_at": item.get("firstPunchAt"),
+                "last_punch_at": item.get("lastPunchAt"),
+                "work_duration_minutes": item["workDurationMinutes"],
+                "overtime_minutes": item["overtimeMinutes"],
+                "punch_count": item["punchCount"],
+            }
+            key = (item["deviceUserId"], item["attendanceDate"])
+            existing = existing_workdays.get(key)
+            if existing:
+                changed = any(getattr(existing, field) != value for field, value in values.items())
+                if changed:
+                    for field, value in values.items():
+                        setattr(existing, field, value)
+                    staff_workdays_updated += 1
+            else:
+                workday = StaffAttendanceWorkday(
+                    device_key=DEVICE_KEY,
+                    device_user_id=item["deviceUserId"],
+                    attendance_date=item["attendanceDate"],
+                    **values,
+                )
+                db.add(workday)
+                existing_workdays[key] = workday
+                staff_workdays_created += 1
 
     batch_rosters: dict[str, set[str]] = defaultdict(set)
     for student in active_students:
@@ -785,6 +872,8 @@ def commit_biometric_import(
             "punchesUpdated": updated_punches,
             "staffPunchesCreated": staff_punches_created,
             "staffPunchesUpdated": staff_punches_updated,
+            "staffWorkdaysCreated": staff_workdays_created,
+            "staffWorkdaysUpdated": staff_workdays_updated,
             "ignoredDeviceIds": sorted(ignored_ids),
             "registers": registers,
         },
@@ -792,10 +881,12 @@ def commit_biometric_import(
     db.commit()
     with _PREVIEW_LOCK:
         _PREVIEWS.pop(payload.preview_token, None)
-    if duplicate_file and not any((created_punches, updated_punches, staff_punches_created, staff_punches_updated)):
+    if duplicate_file and not any((created_punches, updated_punches, staff_punches_created, staff_punches_updated, staff_workdays_created, staff_workdays_updated)):
         result_message = "Attendance was already imported; no duplicate records were created"
     elif duplicate_file:
         result_message = "Existing attendance import updated with the reviewed student and staff mappings"
+    elif linked_workdays:
+        result_message = "Staff attendance imported; daily hours and monthly work time are ready in Operations"
     else:
         result_message = "Student attendance published and staff punches recorded separately"
     return {
@@ -808,13 +899,15 @@ def commit_biometric_import(
         "punchesUpdated": updated_punches,
         "staffPunchesCreated": staff_punches_created,
         "staffPunchesUpdated": staff_punches_updated,
+        "staffWorkdaysCreated": staff_workdays_created,
+        "staffWorkdaysUpdated": staff_workdays_updated,
         "matchedStaff": len({
             mappings[item["deviceUserId"]].staff_user_id
-            for item in linked
+            for item in (linked_workdays or linked)
             if mappings[item["deviceUserId"]].staff_user_id
         }),
         "unassignedStaffDeviceIds": sorted({
-            item["deviceUserId"] for item in linked
+            item["deviceUserId"] for item in (linked_workdays or linked)
             if mappings[item["deviceUserId"]].is_staff_device and not mappings[item["deviceUserId"]].staff_user_id
         }),
         "registers": registers,
