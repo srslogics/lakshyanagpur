@@ -213,6 +213,8 @@ def test_faculty_sees_only_assigned_examinations(
     }
     assert len(client.get("/api/examinations", headers=faculty_headers).json()) == 1
     assert client.get("/api/examinations", headers=other_headers).json() == []
+    assert client.get("/api/workspace/bootstrap", headers=faculty_headers).json()["navigationCounts"]["examinations"] == 1
+    assert client.get("/api/workspace/bootstrap", headers=other_headers).json()["navigationCounts"]["examinations"] == 0
     assert len(client.get("/api/faculty/bootstrap", headers=faculty_headers).json()["examinations"]) == 1
     assert client.get("/api/faculty/bootstrap", headers=other_headers).json()["examinations"] == []
     assert client.get(

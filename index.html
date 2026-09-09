@@ -156,11 +156,11 @@
 
         <p class="nav-label nav-label-spaced">Academics</p>
         <button class="nav-item" type="button" data-view="academics"><span data-icon="book"></span><span>Academics</span></button>
-        <button class="nav-item" type="button" data-view="examinations"><span data-icon="exam"></span><span>Examinations</span><em id="nav-examinations-count">0</em></button>
+        <button class="nav-item" type="button" data-view="examinations"><span data-icon="exam"></span><span>Examinations</span><em id="nav-examinations-count" hidden></em></button>
         <button class="nav-item" type="button" data-view="timetable"><span data-icon="clock"></span><span>Faculty &amp; timetable</span></button>
 
         <p class="nav-label nav-label-spaced">Administration</p>
-        <button class="nav-item" type="button" data-view="inventory"><span data-icon="inventory"></span><span>Inventory</span><em id="nav-inventory-count">0</em></button>
+        <button class="nav-item" type="button" data-view="inventory"><span data-icon="inventory"></span><span>Inventory</span><em id="nav-inventory-count" hidden></em></button>
         <button class="nav-item" type="button" data-view="reports"><span data-icon="chart"></span><span>Reports</span></button>
         <button class="nav-item" type="button" data-view="settings"><span data-icon="settings"></span><span>Settings &amp; audit</span></button>
       </nav>
@@ -192,6 +192,7 @@
         <section class="app-view active" id="dashboard" aria-labelledby="dashboard-heading">
           <div class="welcome-row">
             <div><p class="overline" id="dashboard-date"></p><h2 id="dashboard-heading">Overview</h2></div>
+            <div><small id="dashboard-sync" role="status" aria-live="polite"></small> <button class="button button-secondary" id="refresh-dashboard" type="button"><span data-icon="refresh"></span>Refresh</button></div>
           </div>
 
           <section class="dashboard-quick-actions" id="dashboard-quick-actions" aria-labelledby="quick-actions-heading">
@@ -212,7 +213,7 @@
 
           <div class="dashboard-grid">
             <article class="surface surface-wide">
-              <div class="surface-head"><h3>Program distribution</h3><button class="button button-quiet" type="button" data-view-target="students">View all<span data-icon="arrow-right"></span></button></div>
+              <div class="surface-head"><h3>Active students by program</h3><button class="button button-quiet" type="button" data-view-target="students">View all<span data-icon="arrow-right"></span></button></div>
               <div class="program-chart" id="program-chart"><div class="skeleton-line"></div></div>
             </article>
             <article class="surface attention-panel">
@@ -437,6 +438,6 @@
   <script src="/runtime-config.js?v=2" defer></script>
   <script src="/push-client.js?v=2" defer></script>
   <script src="/payroll-ui.js?v=3" defer></script>
-  <script src="/app.js?v=89" defer></script>
+  <script src="/app.js?v=90" defer></script>
 </body>
 </html>

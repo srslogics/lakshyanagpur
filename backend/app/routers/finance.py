@@ -57,6 +57,7 @@ def _transaction_effect(row: PaymentTransaction) -> int:
 def _payment_payload(row: PaymentTransaction, student: Student):
     return {
         "id": row.id,
+        "feeAgreementId": row.fee_agreement_id,
         "studentId": student.id,
         "studentName": student.full_name,
         "admissionNumber": student.admission_number,

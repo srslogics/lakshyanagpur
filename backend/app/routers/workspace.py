@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import (
     Batch,
     Enrollment,
+    Examination,
     FeeAgreement,
     FeeInstallment,
     Lead,
+    InventoryItem,
     PaymentTransaction,
     Room,
     Student,
@@ -221,6 +223,18 @@ def _finance(db: Session):
     return agreements, payments, installments
 
 
+def _navigation_counts(db: Session, actor: User, permissions: dict):
+    exams = select(func.count(Examination.id))
+    if actor.role == "faculty":
+        exams = exams.where(Examination.faculty_id == actor.id)
+    # One small query; no need to download both modules just to show badges.
+    counts = db.execute(select(
+        (exams.scalar_subquery() if permissions["examinations"]["read"] else literal(None)).label("examinations"),
+        (select(func.count(InventoryItem.id)).scalar_subquery() if permissions["inventory"]["read"] else literal(None)).label("inventory"),
+    )).mappings().one()
+    return dict(counts)
+
+
 @router.get("/bootstrap")
 def bootstrap(
     db: Session = Depends(get_db),
@@ -254,6 +268,7 @@ def bootstrap(
         "payments": payments,
         "installments": installments,
         "leads": leads,
+        "navigationCounts": _navigation_counts(db, actor, permissions),
         "admissionsMeta": {
             "stageOrder": list(LEAD_STAGES),
             "sources": list(LEAD_SOURCES),

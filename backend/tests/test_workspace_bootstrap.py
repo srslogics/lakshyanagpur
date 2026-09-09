@@ -6,6 +6,7 @@ from app.models import (
     Enrollment,
     FeeAgreement,
     FeeInstallment,
+    InventoryItem,
     Lead,
     PaymentTransaction,
     Student,
@@ -103,10 +104,29 @@ def test_owner_workspace_bootstrap_replaces_separate_initial_requests(
     assert body["agreements"][0]["agreedAmount"] == 80000
     assert body["agreements"][0]["studentStatus"] == "active"
     assert body["payments"][0]["signedAmount"] == 5000
+    assert body["payments"][0]["feeAgreementId"] == agreement.id
     assert body["installments"][0]["amount"] == 10000
     assert body["leads"][0]["student"] == "Future Student"
     assert body["admissionsMeta"]["stageOrder"][0] == "New Enquiry"
-    assert len(statements) <= 7
+    assert body["navigationCounts"] == {"inventory": 0, "examinations": 0}
+    assert len(statements) <= 8
 
     denied = client.get("/api/workspace/bootstrap", headers=parent_headers)
     assert denied.status_code == 403
+
+
+def test_sidebar_counts_are_loaded_without_opening_modules_and_respect_permissions(client, database, owner_headers):
+    from app.security import create_token
+
+    database.add_all([
+        InventoryItem(sku="COUNTS-1", name="Bag", category="Bag", quantity_on_hand=4),
+        InventoryItem(sku="COUNTS-2", name="Old bag", category="Bag", quantity_on_hand=0, is_active=False),
+    ])
+    counsellor = User(full_name="Counsellor", role="counsellor", password_hash="unused")
+    database.add(counsellor)
+    database.commit()
+    counts = client.get("/api/workspace/bootstrap", headers=owner_headers).json()["navigationCounts"]
+    inventory = client.get("/api/inventory/bootstrap", headers=owner_headers).json()
+    assert counts["inventory"] == len(inventory["items"]) == 2
+    restricted = client.get("/api/workspace/bootstrap", headers={"Authorization": f"Bearer {create_token(counsellor)}"}).json()
+    assert restricted["navigationCounts"] == {"inventory": None, "examinations": None}

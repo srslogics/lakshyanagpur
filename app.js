@@ -41,6 +41,9 @@ const cachedUser = (() => {
 const state = { token: sessionStorage.getItem("lakshya_token"), user: cachedUser, setupRequired: false, view: "dashboard", students: [], agreements: [], payments: [], installments: [], leads: [], stages: [], sessions: [], timetable: { batches: [], subjects: [], rooms: [], faculty: [], teachingAssignments: [] }, assignments: [], examinations: [], attendanceSessions: [], staffAttendance: { records: [], staffCount: 0, recordCount: 0 }, notices: [], conversations: { threads: [], subjects: [], canCreate: false, canAnnounce: true }, inventory: { items: [], summary: {} }, report: null, masters: { users: [], batches: [], subjects: [], rooms: [], studentAccess: [], parentAccess: [] }, audit: [] };
 const loadedResources = new Set();
 const resourceLoads = new Map();
+let workspaceUpdatedAt = 0;
+let workspaceRefresh = null;
+let navigationCounts = {};
 const ROLE_VIEWS = {
   owner: Object.keys({dashboard:1,admissions:1,students:1,finance:1,attendance:1,academics:1,examinations:1,timetable:1,communication:1,inventory:1,reports:1,settings:1}),
   demo: ["dashboard", "admissions", "students", "finance", "attendance", "academics", "examinations", "timetable", "communication", "inventory", "reports"],
@@ -328,6 +331,9 @@ function showBootError(title, message) {
 }
 
 function clearSession() {
+  workspaceUpdatedAt = 0;
+  workspaceRefresh = null;
+  navigationCounts = {};
   payrollData = null;
   payrollMonth = "";
   payrollLoadSequence += 1;
@@ -505,7 +511,9 @@ async function optional(load, fallback) {
 }
 
 async function loadInitialWorkspace(initialWorkspace = null) {
+  const token = state.token;
   const workspace = initialWorkspace || await api("/api/workspace/bootstrap");
+  if (state.token !== token) return;
   Object.assign(state, {
     students: workspace.students || [],
     agreements: workspace.agreements || [],
@@ -514,7 +522,38 @@ async function loadInitialWorkspace(initialWorkspace = null) {
     leads: workspace.leads || [],
     stages: workspace.admissionsMeta?.stageOrder || [],
   });
+  navigationCounts = workspace.navigationCounts || {};
+  workspaceUpdatedAt = Date.now();
+  renderNavigationCounts();
+  $("#dashboard-sync").textContent = `Updated ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(new Date(workspaceUpdatedAt))}`;
   renderCore();
+}
+
+function renderNavigationCounts() {
+  for (const resource of ["examinations", "inventory"]) {
+    const badge = document.getElementById(`nav-${resource}-count`);
+    const count = navigationCounts[resource];
+    badge.hidden = count == null;
+    badge.textContent = count == null ? "" : String(count);
+  }
+}
+
+async function refreshOverview(force = false) {
+  if (!state.token || state.user?.role === "demo") return;
+  if (workspaceRefresh) return workspaceRefresh;
+  if (!force && Date.now() - workspaceUpdatedAt < 30000) return;
+  const button = $("#refresh-dashboard");
+  button.disabled = true;
+  $("#dashboard-sync").textContent = "Updating…";
+  const request = loadInitialWorkspace().catch(error => {
+    $("#dashboard-sync").textContent = "Could not refresh. Showing previously loaded figures.";
+    throw error;
+  }).finally(() => {
+    if (workspaceRefresh === request) workspaceRefresh = null;
+    button.disabled = false;
+  });
+  workspaceRefresh = request;
+  return request;
 }
 
 async function loadResource(resource) {
@@ -596,12 +635,14 @@ function renderResource(resource) {
   if (resource === "timetable") renderTimetable();
   else if (resource === "assignments") renderAcademics();
   else if (resource === "examinations") {
-    $("#nav-examinations-count").textContent = state.examinations.length;
+    navigationCounts.examinations = state.examinations.length;
+    renderNavigationCounts();
     renderExaminations();
   } else if (resource === "attendance") renderAttendance();
   else if (resource === "notices" || resource === "conversations") renderCommunication();
   else if (resource === "inventory") {
-    $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
+    navigationCounts.inventory = state.inventory.items?.length || 0;
+    renderNavigationCounts();
     renderInventory();
   } else if (resource === "reports") renderReports();
   else if (resource === "masters" || resource === "audit") renderSettings();
@@ -613,8 +654,9 @@ function renderAll() {
   renderPayroll();
   renderCore();
   renderTimetable(); renderAcademics(); renderExaminations(); renderAttendance(); renderCommunication(); renderInventory(); renderReports(); renderSettings();
-  $("#nav-examinations-count").textContent = state.examinations.length;
-  $("#nav-inventory-count").textContent = state.inventory.items?.length || 0;
+  if (loadedResources.has("examinations")) navigationCounts.examinations = state.examinations.length;
+  if (loadedResources.has("inventory")) navigationCounts.inventory = state.inventory.items?.length || 0;
+  renderNavigationCounts();
   injectIcons(); applyRoleUI();
 }
 
@@ -624,17 +666,23 @@ function metricCard(label, value, iconName, featured = false) {
 
 function renderDashboard() {
   const activeStudents = state.students.filter(student => student.status === "active");
-  const openAgreements = state.agreements.filter(item => !["inactive", "forfeited"].includes(item.studentStatus) && item.status !== "inactive");
-  const agreed = openAgreements.reduce((sum, item) => sum + Number(item.agreedAmount || 0), 0);
-  const registration = openAgreements.reduce((sum, item) => sum + Number(item.legacyRegistrationTotal || 0), 0);
+  const totals = financeTotals();
+  const canSeeStudents = canAccess("students");
+  const canSeeFinance = canAccess("finance");
   $("#dashboard-metrics").innerHTML = [
-    metricCard("Active students", String(activeStudents.length), "users", true),
-    metricCard("Agreed fees", shortMoney(agreed), "wallet"),
-    metricCard("Workbook control", shortMoney(registration), "receipt"),
-    metricCard("Enquiries", String(state.leads.length), "spark")
+    canSeeStudents ? metricCard("Active students", String(activeStudents.length), "users", true) : "",
+    canSeeFinance ? metricCard("Agreed fees · open accounts", money(totals.agreed), "wallet") : "",
+    canSeeFinance ? metricCard("Collected · all time", money(totals.collected), "receipt") : "",
+    canSeeFinance ? metricCard("Outstanding · open accounts", money(totals.outstanding), "wallet") : "",
+    !canSeeFinance && canAccess("admissions") ? metricCard("Enquiries · all stages", String(state.leads.length), "spark") : "",
   ].join("");
+  $("#program-chart").closest("article").hidden = !canSeeStudents;
+  $("#recent-students").closest("article").hidden = !canSeeStudents;
+  $("#finance-pulse-body").closest("article").hidden = !canSeeFinance;
+  $("#attention-list").closest("article").hidden = !canSeeStudents && !canSeeFinance;
+  $("#dashboard-date").textContent = new Intl.DateTimeFormat("en-IN", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
-  const programs = activeStudents.reduce((map, item) => map.set(item.program || "Unassigned", (map.get(item.program || "Unassigned") || 0) + 1), new Map());
+  const programs = activeStudents.reduce((map, item) => { const program = studentProgramKey(item.program); return map.set(program, (map.get(program) || 0) + 1); }, new Map());
   const sortedPrograms = [...programs.entries()].sort((a, b) => b[1] - a[1]);
   const max = Math.max(...sortedPrograms.map(([, count]) => count), 1);
   $("#program-chart").innerHTML = sortedPrograms.length ? sortedPrograms.map(([program, count]) => `<div class="program-row"><span title="${esc(program)}">${esc(program)}</span><div class="program-track"><div class="program-fill" style="width:${Math.round(count / max * 100)}%"></div></div><strong>${count}</strong></div>`).join("") : emptyState("users", "No enrollments");
@@ -648,14 +696,7 @@ function renderDashboard() {
   const recent = [...activeStudents].sort((a, b) => String(b.enrollmentDate).localeCompare(String(a.enrollmentDate))).slice(0, 5);
   $("#recent-students").innerHTML = recent.length ? recent.map(student => `<button class="record-item" type="button" data-student-id="${esc(student.id)}"><span class="record-avatar">${initials(student.fullName)}</span><span><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span><span class="record-program">${esc(student.program)}</span><span class="record-date">${formatDate(student.enrollmentDate)}</span>${status(student.dataQualityStatus)}</button>`).join("") : emptyState("users", "No admissions");
 
-  const stagedRows = state.payments.filter(item => item.status === "staged");
-  const stagedTotal = state.payments.reduce((sum, item) => sum + Number(item.receivedAmount ?? 0), 0);
-  const readyPayments = stagedRows.filter(item => item.reconciliationStatus === "ready").length;
-  const actionPayments = stagedRows.filter(needsPaymentReview).length;
-  const excludedNotes = stagedRows.filter(item => item.reconciliationStatus === "do_not_import").length;
-  const classifiedPayments = readyPayments + actionPayments;
-  const readyPercent = classifiedPayments ? Math.round(readyPayments / classifiedPayments * 100) : 100;
-  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(stagedTotal)}<small>${state.payments.length} ledger entries${excludedNotes ? ` · ${excludedNotes} excluded source notes` : ""}</small></div><div class="reconcile-bar"><div class="reconcile-track"><span style="width:${readyPercent}%"></span><span style="width:${100 - readyPercent}%"></span></div><div class="reconcile-labels"><span>${readyPayments} imported ready</span><span>${actionPayments} need client input</span></div></div><button class="button button-secondary" type="button" data-view-target="finance">Open receivables ${icon("arrow-right")}</button></div>`;
+  $("#finance-pulse-body").innerHTML = `<div class="finance-pulse-body"><div class="finance-total">${money(totals.outstanding)}<small>Outstanding across ${totals.dueAccounts} accounts</small></div><p>Collections include verified payments less refunds and reversals. Balance adjustments affect dues, not collections.</p><p>${paymentReview} payments need review.</p><button class="button button-secondary" type="button" data-view-target="finance">Open receivables ${icon("arrow-right")}</button></div>`;
 }
 
 function compactMetrics(items) { return items.map(item => `<div class="compact-metric"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></div>`).join(""); }
@@ -710,7 +751,7 @@ function renderStudentDirectoryRow(student) {
     <span class="student-directory-identity"><strong>${esc(student.fullName)}</strong><small>${esc(student.admissionNumber)}</small></span>
     <span class="student-directory-context"><strong>${esc(studentProgramKey(student.program))}</strong><small>${esc(school)}</small></span>
     <span class="student-directory-contact"><strong>${esc(contact)}</strong><small>${esc(student.batch || "Batch not assigned")}</small></span>
-    <span class="student-directory-status">${["inactive", "forfeited"].includes(student.status) ? `<span class="status status-inactive">Opted out</span>` : status(student.dataQualityStatus)}</span>
+    <span class="student-directory-status">${["inactive", "forfeited"].includes(student.status) ? `<span class="status status-inactive">Opted out</span>` : status(student.status === "active" ? student.dataQualityStatus : "draft")}</span>
     <span class="student-directory-open" aria-hidden="true">${icon("chevron-right")}</span>
   </button>`;
 }
@@ -722,18 +763,13 @@ function renderStudentRows() {
     (!search || [item.fullName, item.mobile, item.admissionNumber, item.previousSchool, item.batch, item.program].some(value => String(value || "").toLowerCase().includes(search)))
     && (!quality || item.dataQualityStatus === quality)
   );
-  const batchNames = [...STUDENT_BATCH_ORDER, "Records for review", "Opted out"].filter(batch =>
-    batch === "Opted out"
-      ? baseRows.some(item => ["inactive", "forfeited"].includes(item.status))
-      : batch !== "Records for review" || baseRows.some(item => studentBatchKey(item.batch) === batch && !["inactive", "forfeited"].includes(item.status))
-  );
+  const batchNames = [...STUDENT_BATCH_ORDER, "Records for review", "Drafts", "Opted out"].filter(batch =>
+    STUDENT_BATCH_ORDER.includes(batch) || baseRows.some(item => studentDirectoryGroup(item) === batch));
   if (!batchNames.includes(studentHierarchyState.batch)) {
     studentHierarchyState.batch = batchNames[0] || "Essential";
     studentHierarchyState.program = "";
   }
-  const batchRows = baseRows.filter(item => studentHierarchyState.batch === "Opted out"
-    ? ["inactive", "forfeited"].includes(item.status)
-    : studentBatchKey(item.batch) === studentHierarchyState.batch && !["inactive", "forfeited"].includes(item.status));
+  const batchRows = baseRows.filter(item => studentDirectoryGroup(item) === studentHierarchyState.batch);
   const programCounts = new Map(STUDENT_PROGRAM_ORDER.map(program => [program, batchRows.filter(item => studentProgramKey(item.program) === program).length]));
   if (studentHierarchyState.batch === "Records for review") {
     batchRows.forEach(item => {
@@ -746,7 +782,7 @@ function renderStudentRows() {
     .filter(item => !studentHierarchyState.program || studentProgramKey(item.program) === studentHierarchyState.program)
     .sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
   const batchTabs = batchNames.map(batch => {
-    const count = baseRows.filter(item => batch === "Opted out" ? ["inactive", "forfeited"].includes(item.status) : studentBatchKey(item.batch) === batch && !["inactive", "forfeited"].includes(item.status)).length;
+    const count = baseRows.filter(item => studentDirectoryGroup(item) === batch).length;
     const label = batch === "Records for review" ? "Needs assignment" : batch;
     const active = studentHierarchyState.batch === batch;
     return `<button type="button" role="tab" aria-selected="${active}" class="student-batch-tab${active ? " active" : ""}${batch === "Records for review" ? " review" : ""}${batch === "Opted out" ? " inactive" : ""}" data-student-batch="${esc(batch)}"><span>${esc(label)}</span><strong>${count}</strong></button>`;
@@ -769,8 +805,26 @@ function studentPayments(studentId) {
 
 const needsPaymentReview = item => item.status === "staged" && RECONCILIATION_ACTION_STATES.has(item.reconciliationStatus);
 
+function studentDirectoryGroup(student) {
+  if (["inactive", "forfeited"].includes(student.status)) return "Opted out";
+  if (student.status !== "active") return "Drafts";
+  return studentBatchKey(student.batch);
+}
+
+function financeTotals() {
+  const openAccounts = state.agreements.map(studentAccount).filter(item => !item.accountClosed);
+  return {
+    openAccounts,
+    agreed: openAccounts.reduce((sum, item) => sum + item.agreed, 0),
+    // Count each ledger transaction once, even for students with historical agreements.
+    collected: state.payments.reduce((sum, item) => sum + Number(item.receivedAmount ?? 0), 0),
+    outstanding: openAccounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0),
+    dueAccounts: openAccounts.filter(item => item.balance > 0).length,
+  };
+}
+
 function studentAccount(agreement) {
-  const payments = studentPayments(agreement.studentId);
+  const payments = studentPayments(agreement.studentId).filter(item => !item.feeAgreementId || item.feeAgreementId === agreement.id);
   const ledgerEffect = payments.reduce((sum, item) => sum + Number(item.signedAmount ?? item.amount ?? 0), 0);
   const paid = payments.reduce((sum, item) => sum + Number(item.receivedAmount ?? item.signedAmount ?? item.amount ?? 0), 0);
   const agreed = Number(agreement.agreedAmount || 0);
@@ -811,17 +865,13 @@ function reconciliationBadge(account) {
 }
 
 function renderFinance() {
-  const accounts = state.agreements.map(studentAccount);
-  const openAccounts = accounts.filter(item => !item.accountClosed);
-  const paymentTotal = accounts.reduce((sum, item) => sum + item.paid, 0);
-  const outstanding = openAccounts.reduce((sum, item) => sum + Math.max(item.balance, 0), 0);
-  const dueAccounts = openAccounts.filter(item => item.balance > 0).length;
+  const { openAccounts, collected: paymentTotal, outstanding, dueAccounts } = financeTotals();
   const review = state.payments.filter(needsPaymentReview).length;
   const registerCount = state.payments.filter(item => item.type === "payment").length + state.installments.length;
   $("#new-future-payment").classList.toggle("hidden", !canAccess("finance", "create"));
   $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
   $("#new-payment").classList.toggle("hidden", !canManageFinance());
-  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Outstanding", value: shortMoney(outstanding) }, { label: "Collected", value: shortMoney(paymentTotal) }, { label: "Accounts due", value: String(dueAccounts) }]);
+  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Outstanding", value: money(outstanding) }, { label: "Collected", value: money(paymentTotal) }, { label: "Accounts due", value: String(dueAccounts) }]);
   $("#fee-agreement-count").textContent = openAccounts.length;
   $("#payment-total-count").textContent = registerCount;
   $("#payment-review-count").textContent = review ? `${review} review` : "";
@@ -3022,6 +3072,9 @@ function showView(view, updateRoute = true) {
   loadViewResources(view).catch(error => {
     if (state.token && error.status !== 401) toast(error.message || "This module could not be loaded.", "error");
   });
+  if (view === "dashboard") refreshOverview().catch(error => {
+    if (state.token && error.status !== 401) toast(error.message || "Overview could not be refreshed.", "error");
+  });
 }
 
 function renderCommandResults(query = "") {
@@ -3169,6 +3222,12 @@ function exportStudents() {
 }
 
 function bindEvents() {
+  $("#refresh-dashboard").addEventListener("click", () => refreshOverview(true).catch(error => {
+    if (state.token && error.status !== 401) toast(error.message || "Overview could not be refreshed.", "error");
+  }));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && state.view === "dashboard") refreshOverview().catch(() => {});
+  });
   bindPayrollEvents();
   $("#boot-retry").addEventListener("click", () => window.location.reload());
   $("#auth-form").addEventListener("submit", handleAuth);
