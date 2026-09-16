@@ -1407,7 +1407,7 @@ async function downloadReport(reportName, button) {
       toast("Demo report downloaded.");
       return;
     }
-    const response = await fetch(apiUrl(`/api/reports/export/${encodeURIComponent(reportName)}`), {
+    const response = await fetch(apiUrl(`/api/reports/export/${encodeURIComponent(reportName)}?format=xlsx`), {
       headers: { Authorization: `Bearer ${state.token}` },
       cache: "no-store",
     });
@@ -1417,11 +1417,18 @@ async function downloadReport(reportName, button) {
         const body = await response.json();
         message = typeof body.detail === "string" ? body.detail : body.detail?.message || message;
       } catch {}
+      if (response.status === 401) {
+        expireSession();
+        message = "Your session expired. Please sign in again before downloading.";
+      }
       throw new Error(message);
+    }
+    if (!(response.headers.get("content-type") || "").includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+      throw new Error("The server did not return an Excel report. Please refresh and try again.");
     }
     const blob = await response.blob();
     const disposition = response.headers.get("content-disposition") || "";
-    const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `lakshya-${reportName}.csv`;
+    const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `lakshya-${reportName}.xlsx`;
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

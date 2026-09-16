@@ -1,6 +1,7 @@
 import csv
 from datetime import date, datetime, timedelta, timezone
 from io import StringIO
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -14,6 +15,7 @@ from ..models import (
     AttendancePeriodSummary,
     AttendanceRegister,
     AuditLog,
+    Batch,
     ClassSession,
     DailyAttendanceEntry,
     Enrollment,
@@ -22,10 +24,12 @@ from ..models import (
     Notice,
     PaymentTransaction,
     Student,
+    Subject,
     User,
 )
 from ..security import require_roles
 from ..services import payment_effect, received_effect
+from ..report_downloads import IST, excel_download, local_datetime
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 REPORT_ROLES = ("owner", "accounts", "academic_coordinator")
@@ -36,7 +40,7 @@ def _safe_csv_cell(value):
     if value is None:
         return ""
     text = str(value)
-    if text.startswith(("=", "+", "-", "@")):
+    if isinstance(value, str) and text.lstrip().startswith(("=", "+", "-", "@")):
         return f"'{text}"
     return text
 
@@ -56,7 +60,14 @@ def _csv_download(filename: str, headings: list[str], rows):
         f'attachment; filename="{filename}"'
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "no-store"
     return response
+
+
+def _report_download(filename, headings, rows, export_format, title, scope, sheets=None):
+    if export_format == "xlsx":
+        return excel_download(filename.removesuffix(".csv") + ".xlsx", sheets or [(title, headings, rows, scope)])
+    return _csv_download(filename, headings, rows)
 
 
 @router.get("/overview")
@@ -175,12 +186,15 @@ def export_report(
     report_name: str,
     date_from: date | None = Query(default=None, alias="from"),
     date_to: date | None = Query(default=None, alias="to"),
+    export_format: Literal["csv", "xlsx"] = Query(default="csv", alias="format"),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REPORT_ROLES)),
 ):
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, "'from' date must be on or before 'to' date")
-    stamp = datetime.now(timezone.utc).date().isoformat()
+    stamp = datetime.now(IST).date().isoformat()
+    if report_name in {"students", "fees"} and (date_from or date_to):
+        raise HTTPException(422, "Date filters apply only to attendance and audit reports. Students and fees are current snapshots.")
     if report_name == "students":
         enrollment_rows = {}
         for row in (
@@ -194,7 +208,7 @@ def export_report(
         ):
             enrollment_rows.setdefault(row.student_id, row)
         students = db.query(Student).filter(Student.is_test_account.is_(False)).order_by(Student.full_name).all()
-        return _csv_download(
+        return _report_download(
             f"lakshya-students-{stamp}.csv",
             [
                 "Admission number",
@@ -229,6 +243,8 @@ def export_report(
                 )
                 for student in students
             ),
+            export_format, "Student register",
+            "All non-test students, including drafts and opted-out records. Filter Status to view active students only. Latest active enrolment is shown.",
         )
     if report_name == "fees":
         agreements = (
@@ -249,9 +265,7 @@ def export_report(
                 receipts.get(transaction.fee_agreement_id, 0)
                 + received_effect(transaction)
             )
-        return _csv_download(
-            f"lakshya-fee-balances-{stamp}.csv",
-            [
+        headings = [
                 "Admission number",
                 "Student",
                 "Agreed fee",
@@ -259,23 +273,41 @@ def export_report(
                 "Outstanding",
                 "Currency",
                 "Agreement status",
-            ],
-            (
-                (
+                "Student status",
+                "Account scope",
+                "Balance adjustments",
+                "Credit balance",
+                "Agreement ID",
+            ]
+        rows = []
+        for agreement, student in agreements:
+            closed = student.status in {"inactive", "forfeited"} or agreement.status == "inactive"
+            balance = agreement.agreed_amount - effects.get(agreement.id, 0)
+            rows.append((
                     student.admission_number,
                     student.full_name,
                     agreement.agreed_amount,
-                    max(0, receipts.get(agreement.id, 0)),
-                    max(
-                        0,
-                        agreement.agreed_amount
-                        - effects.get(agreement.id, 0),
-                    ),
+                    receipts.get(agreement.id, 0),
+                    0 if closed else max(0, balance),
                     agreement.currency,
                     agreement.status,
-                )
-                for agreement, student in agreements
-            ),
+                    student.status,
+                    "Closed" if closed else "Open",
+                    effects.get(agreement.id, 0) - receipts.get(agreement.id, 0),
+                    max(0, -balance),
+                    agreement.id,
+            ))
+        scope = "Current balances in INR. Received is net cash after refunds/reversals. Balance adjustments change dues, not cash. Closed accounts are excluded from outstanding."
+        # Keep the reader-facing workbook compact; CSV retains technical reconciliation fields.
+        display_columns = (0, 1, 2, 3, 4, 9, 10, 7)
+        display_headings = [headings[index] for index in display_columns]
+        return _report_download(
+            f"lakshya-fee-balances-{stamp}.csv", headings, rows,
+            export_format, "Fee balances", scope,
+            sheets=[
+                ("Open accounts", display_headings, [tuple(row[index] for index in display_columns) for row in rows if row[8] == "Open"], scope),
+                ("Closed accounts", display_headings, [tuple(row[index] for index in display_columns) for row in rows if row[8] == "Closed"], "Historical accounts in INR. Excluded from current agreed fees and outstanding. Add received totals from both sheets for all-time collections."),
+            ],
         )
     if report_name == "attendance":
         submitted = (
@@ -284,6 +316,8 @@ def export_report(
                 AttendanceRegister,
                 ClassSession,
                 Student,
+                Batch,
+                Subject,
             )
             .join(
                 AttendanceRegister,
@@ -294,34 +328,46 @@ def export_report(
                 ClassSession.id == AttendanceRegister.class_session_id,
             )
             .join(Student, Student.id == AttendanceEntry.student_id)
-            .filter(AttendanceRegister.status == "submitted")
+            .outerjoin(Batch, Batch.id == ClassSession.batch_id)
+            .outerjoin(Subject, Subject.id == ClassSession.subject_id)
+            .filter(AttendanceRegister.status == "submitted", Student.is_test_account.is_(False))
+            .order_by(AttendanceEntry.updated_at.desc(), AttendanceRegister.id.desc())
             .all()
         )
         rows = []
-        for entry, register, session, student in submitted:
+        daily_rows = {}
+        class_rows = []
+        for entry, register, session, student, batch, subject in submitted:
             attendance_date = register.attendance_date or (
-                session.starts_at.date() if session else None
+                local_datetime(session.starts_at).date() if session else None
             )
-            if date_from and attendance_date and attendance_date < date_from:
+            if date_from and (not attendance_date or attendance_date < date_from):
                 continue
-            if date_to and attendance_date and attendance_date > date_to:
+            if date_to and (not attendance_date or attendance_date > date_to):
                 continue
-            rows.append(
-                (
+            record = (
                     attendance_date,
                     student.admission_number,
                     student.full_name,
-                    register.batch_name,
-                    register.stream_name,
-                    register.subject_name,
+                    register.batch_name or (batch.name if batch else ""),
+                    "All programs" if register.stream_name == "__all__" else register.stream_name or (batch.program if batch else ""),
+                    register.subject_name or (subject.name if subject else ""),
                     entry.status,
                     entry.reason,
-                    register.register_kind,
+                    "class" if session else register.register_kind,
                 )
-            )
+            if session:
+                class_rows.append(record + (session.starts_at,))
+            else:
+                key = (student.id, attendance_date or register.id)
+                priority = 3 if register.register_kind == "manual" else 2
+                if key not in daily_rows or priority > daily_rows[key][0]:
+                    daily_rows[key] = (priority, record)
         daily_query = (
             db.query(DailyAttendanceEntry, Student)
             .join(Student, Student.id == DailyAttendanceEntry.student_id)
+            .filter(Student.is_test_account.is_(False))
+            .order_by(DailyAttendanceEntry.updated_at.desc(), DailyAttendanceEntry.id.desc())
         )
         if date_from:
             daily_query = daily_query.filter(
@@ -331,8 +377,9 @@ def export_report(
             daily_query = daily_query.filter(
                 DailyAttendanceEntry.attendance_date <= date_to
             )
-        rows.extend(
-            (
+        for entry, student in daily_query.all():
+            key = (student.id, entry.attendance_date or entry.source_date_label)
+            record = (
                 entry.attendance_date or entry.source_date_label,
                 student.admission_number,
                 student.full_name,
@@ -343,12 +390,16 @@ def export_report(
                 entry.raw_status,
                 "imported",
             )
-            for entry, student in daily_query.all()
-        )
+            daily_rows.setdefault(key, (1, record))
+        daily_records = sorted((value[1] for value in daily_rows.values()), key=lambda row: (str(row[0]), row[2]), reverse=True)
+        class_rows.sort(key=lambda row: (str(row[0]), row[2]), reverse=True)
+        rows.extend(daily_records)
+        rows.extend(row[:9] for row in class_rows)
         summary_query = (
             db.query(AttendancePeriodSummary, Student)
             .join(Student, Student.id == AttendancePeriodSummary.student_id)
-            .filter(AttendancePeriodSummary.status == "confirmed")
+            .filter(AttendancePeriodSummary.status == "confirmed", Student.is_test_account.is_(False))
+            .order_by(AttendancePeriodSummary.period_end.desc(), Student.full_name)
         )
         if date_from:
             summary_query = summary_query.filter(
@@ -358,6 +409,7 @@ def export_report(
             summary_query = summary_query.filter(
                 AttendancePeriodSummary.period_start <= date_to,
             )
+        summaries = summary_query.all()
         rows.extend(
             (
                 f"{summary.period_start.isoformat()} to {summary.period_end.isoformat()}",
@@ -370,12 +422,10 @@ def export_report(
                 f"{summary.present_days} present / {summary.working_days} working days",
                 "client-confirmed summary",
             )
-            for summary, student in summary_query.all()
+            for summary, student in summaries
         )
         rows.sort(key=lambda item: (str(item[0]), item[2]), reverse=True)
-        return _csv_download(
-            f"lakshya-attendance-{stamp}.csv",
-            [
+        headings = [
                 "Date",
                 "Admission number",
                 "Student",
@@ -385,34 +435,46 @@ def export_report(
                 "Status",
                 "Reason / source value",
                 "Source",
+            ]
+        period = f"Dates: {date_from or 'earliest'} to {date_to or 'latest'}. "
+        scope = period + "One daily record per student/date. Signed manual entries take precedence over biometric and older imports. Missing days are not absences."
+        summary_headings = ["Period start", "Period end", "Admission number", "Student", "Batch", "Present days", "Absent days", "Working days", "Attendance rate", "Source"]
+        summary_records = [(summary.period_start, summary.period_end, student.admission_number, student.full_name, summary.batch_name, summary.present_days, summary.absent_days, summary.working_days, float(summary.attendance_rate) / 100, summary.source_name) for summary, student in summaries]
+        return _report_download(
+            f"lakshya-attendance-{stamp}.csv", headings, rows,
+            export_format, "Daily attendance", scope,
+            sheets=[
+                ("Daily attendance", headings, daily_records, scope),
+                ("Class attendance", headings + ["Class starts (IST)"], class_rows, period + "Submitted class-level entries. These can overlap daily attendance and must not be added to daily totals."),
+                ("Period summaries", summary_headings, summary_records, period + "Historical confirmed totals, not individual days. Overlapping periods are shown in full, not prorated. Do not add these to overlapping daily entries."),
             ],
-            rows,
         )
     if report_name == "audit":
         query = (
             db.query(AuditLog, User)
             .outerjoin(User, User.id == AuditLog.actor_id)
+            .filter((User.id.is_(None)) | (User.is_test_account.is_(False)))
             .order_by(AuditLog.created_at.desc())
         )
         if date_from:
             query = query.filter(
                 AuditLog.created_at
                 >= datetime.combine(date_from, datetime.min.time()).replace(
-                    tzinfo=timezone.utc,
-                )
+                    tzinfo=IST,
+                ).astimezone(timezone.utc)
             )
         if date_to:
             query = query.filter(
                 AuditLog.created_at
                 < datetime.combine(date_to, datetime.min.time()).replace(
-                    tzinfo=timezone.utc,
-                )
+                    tzinfo=IST,
+                ).astimezone(timezone.utc)
                 + timedelta(days=1)
             )
-        return _csv_download(
+        return _report_download(
             f"lakshya-audit-{stamp}.csv",
             [
-                "Timestamp",
+                "Timestamp (IST)",
                 "Actor",
                 "Role",
                 "Action",
@@ -421,7 +483,7 @@ def export_report(
             ],
             (
                 (
-                    log.created_at,
+                    local_datetime(log.created_at).replace(tzinfo=IST),
                     actor.full_name if actor else "System",
                     actor.role if actor else "",
                     log.action,
@@ -430,5 +492,7 @@ def export_report(
                 )
                 for log, actor in query.all()
             ),
+            export_format, "Audit trail",
+            f"Dates: {date_from or 'earliest'} to {date_to or 'latest'}. All timestamps and date filters use India Standard Time. Test-account activity is excluded.",
         )
     raise HTTPException(404, "Report export not found")
