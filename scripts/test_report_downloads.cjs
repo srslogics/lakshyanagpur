@@ -10,7 +10,9 @@ const messages = [];
 let requests = [];
 let expired = false;
 let response;
+const fields = {'#report-from':{value:''}, '#report-to':{value:''}, '#report-month':{value:'2026-08'}};
 const context = vm.createContext({
+  $: selector => fields[selector],
   state: { token: 'synthetic-token', user: {role: 'owner'} },
   apiUrl: path => path,
   fetch: async (path, options) => { requests.push({path, options}); return response; },
@@ -42,6 +44,12 @@ vm.runInContext(implementation, context);
   assert.equal(expired, true);
   assert.equal(button.disabled, false);
   assert.match(messages.at(-1).message, /session expired/);
+  fields['#report-from'].value = '2026-08-31';
+  fields['#report-to'].value = '2026-08-01';
+  requests = [];
+  await context.downloadReport('payments', {disabled:false, dataset:{reportPeriod:'range'}});
+  assert.equal(requests.length, 0, 'invalid date range must not request a report');
+  assert.match(messages.at(-1).message, /From date/);
   context.state.user.role = 'demo';
   requests = [];
   await context.downloadReport('students', button);

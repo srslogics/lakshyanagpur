@@ -340,6 +340,11 @@ def list_staff_biometric_attendance(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*ROLES)),
 ):
+    return staff_attendance_report(db, day=day, limited=True)
+
+
+def staff_attendance_report(db, day=None, date_from=None, date_to=None, limited=False):
+    """Shared reconciliation; downloads must not inherit the screen's row caps."""
     punch_query = (
         db.query(BiometricAttendanceDay, User, DeviceAttendanceIdentity)
         .outerjoin(User, User.id == BiometricAttendanceDay.staff_user_id)
@@ -354,15 +359,18 @@ def list_staff_biometric_attendance(
     )
     if day:
         punch_query = punch_query.filter(BiometricAttendanceDay.attendance_date == day)
-    punch_rows = (
+    if date_from:
+        punch_query = punch_query.filter(BiometricAttendanceDay.attendance_date >= date_from)
+    if date_to:
+        punch_query = punch_query.filter(BiometricAttendanceDay.attendance_date <= date_to)
+    punch_query = (
         punch_query.order_by(
             BiometricAttendanceDay.attendance_date.desc(),
             BiometricAttendanceDay.first_punch_at.desc(),
             User.full_name,
         )
-        .limit(500)
-        .all()
     )
+    punch_rows = (punch_query.limit(500) if limited else punch_query).all()
 
     workday_query = (
         db.query(StaffAttendanceWorkday, DeviceAttendanceIdentity)
@@ -376,10 +384,15 @@ def list_staff_biometric_attendance(
     )
     if day:
         workday_query = workday_query.filter(StaffAttendanceWorkday.attendance_date == day)
+    if date_from:
+        workday_query = workday_query.filter(StaffAttendanceWorkday.attendance_date >= date_from)
+    if date_to:
+        workday_query = workday_query.filter(StaffAttendanceWorkday.attendance_date <= date_to)
     workday_rows = workday_query.order_by(
         StaffAttendanceWorkday.attendance_date.desc(),
         StaffAttendanceWorkday.first_punch_at.desc(),
-    ).limit(1000).all()
+    )
+    workday_rows = (workday_rows.limit(1000) if limited else workday_rows).all()
     staff_ids = {
         staff_id
         for workday, identity in workday_rows
@@ -393,6 +406,11 @@ def list_staff_biometric_attendance(
 
     records_by_key = {}
     for attendance, staff, identity in punch_rows:
+        staff = staff or (db.get(User, identity.staff_user_id) if identity and identity.staff_user_id else None)
+        if (staff and staff.is_test_account) or (identity and (identity.is_ignored or identity.student_id)):
+            continue
+        if not staff and not (identity and identity.is_staff_device):
+            continue
         full_name = staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff"
         designation = _staff_designation(full_name)
         attendance_group = "directors" if designation == "Director" or (staff and staff.role == "director") else "staff"
@@ -404,6 +422,7 @@ def list_staff_biometric_attendance(
             "designation": designation,
             "attendanceGroup": attendance_group,
             "deviceUserId": attendance.device_user_id,
+            "deviceKey": attendance.device_key,
             "date": attendance.attendance_date.isoformat(),
             "arrivalAt": _aware(attendance.first_punch_at).isoformat(),
             "departureAt": _aware(attendance.last_punch_at).isoformat() if attendance.last_punch_at else None,
@@ -420,6 +439,8 @@ def list_staff_biometric_attendance(
     for workday, identity in workday_rows:
         staff_id = workday.staff_user_id or (identity.staff_user_id if identity else None)
         staff = staff_by_id.get(staff_id)
+        if (staff and staff.is_test_account) or (identity and (identity.is_ignored or identity.student_id)):
+            continue
         full_name = staff.full_name if staff else identity.device_name if identity and identity.device_name else "Unassigned staff"
         designation = _staff_designation(full_name)
         attendance_group = "directors" if designation == "Director" or (staff and staff.role == "director") else "staff"
@@ -433,6 +454,7 @@ def list_staff_biometric_attendance(
             "designation": designation,
             "attendanceGroup": attendance_group,
             "deviceUserId": workday.device_user_id,
+            "deviceKey": workday.device_key,
             "date": workday.attendance_date.isoformat(),
             "arrivalAt": _aware(workday.first_punch_at).isoformat() if workday.first_punch_at else fallback.get("arrivalAt"),
             "departureAt": _aware(workday.last_punch_at).isoformat() if workday.last_punch_at else fallback.get("departureAt"),
@@ -450,7 +472,7 @@ def list_staff_biometric_attendance(
     )
     monthly_totals = {}
     for item in records:
-        person_key = item["staffUserId"] or f'device:{item["deviceUserId"]}'
+        person_key = item["staffUserId"] or f'device:{item["deviceKey"]}:{item["deviceUserId"]}'
         month_key = item["date"][:7]
         key = f"{person_key}:{month_key}"
         summary = monthly_totals.setdefault(key, {
@@ -463,6 +485,8 @@ def list_staff_biometric_attendance(
             "absentDays": 0,
             "halfDays": 0,
             "weeklyOffDays": 0,
+            "durationRecordedDays": 0,
+            "durationMissingDays": 0,
             "totalWorkMinutes": 0,
             "overtimeMinutes": 0,
         })
@@ -475,13 +499,14 @@ def list_staff_biometric_attendance(
             summary["halfDays"] += 1
         if status.startswith("weekly_off"):
             summary["weeklyOffDays"] += 1
+        summary["durationMissingDays" if item["workDurationMinutes"] is None else "durationRecordedDays"] += 1
         summary["totalWorkMinutes"] += int(item["workDurationMinutes"] or 0)
         summary["overtimeMinutes"] += int(item["overtimeMinutes"] or 0)
     return {
         "records": records,
         "monthlyTotals": list(monthly_totals.values()),
-        "staffCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "staff"}),
-        "directorCount": len({item["staffUserId"] or f"device:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "directors"}),
+        "staffCount": len({item["staffUserId"] or f"device:{item['deviceKey']}:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "staff"}),
+        "directorCount": len({item["staffUserId"] or f"device:{item['deviceKey']}:{item['deviceUserId']}" for item in records if item["attendanceGroup"] == "directors"}),
         "recordCount": len(records),
     }
 

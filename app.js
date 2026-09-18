@@ -564,6 +564,7 @@ async function loadResource(resource) {
       if (resource === "payroll") payrollData = payrollDemoData();
       if (resource === "reports") {
         state.report = {
+          exports: ["students", "fees", "attendance", "audit"].map(id => ({ id, label: `${id[0].toUpperCase()}${id.slice(1)} sample`, description: "Demonstration metadata only. No client records are included.", period: "snapshot", sheets: ["Demo sample (CSV)"] })),
           metrics: { students: state.students.length, attendanceRate: 92, recordedPayments: 90000, scheduledClasses: 4 },
           leadFunnel: [{ stage: "New", count: 3 }, { stage: "Counselling", count: 2 }, { stage: "Confirmed", count: 1 }],
           attendance: [{ status: "Present", count: 44 }, { status: "Absent", count: 4 }],
@@ -1379,9 +1380,28 @@ function renderInventory() {
 
 function renderReports() {
   const report = state.report;
+  const catalog = Array.isArray(report?.exports) ? report.exports : [];
+  const selectedModule = $("#report-module").value;
+  const modules = [...new Set(catalog.map(item => item.module).filter(Boolean))];
+  $("#report-module").innerHTML = `<option value="">All modules</option>${modules.map(module => `<option value="${esc(module)}">${esc(PERMISSION_MODULE_LABELS[module] || module)}</option>`).join("")}`;
+  $("#report-module").value = modules.includes(selectedModule) ? selectedModule : "";
+  const query = $("#report-search").value.trim().toLowerCase();
+  const filtered = catalog.filter(item => (!$("#report-module").value || item.module === $("#report-module").value) && `${item.label} ${item.description} ${item.sheets.join(" ")}`.toLowerCase().includes(query));
+  $("#report-result-count").textContent = `${filtered.length} of ${catalog.length} reports`;
+  $("#report-catalog").innerHTML = filtered.length ? filtered.map(item => `<article class="report-card"><div><h4>${esc(item.label)}</h4><p>${esc(item.description)}</p><details><summary>${item.sheets.length} ${item.sheets.length === 1 ? "sheet" : "sheets"} · ${item.period === "month" ? "Selected month" : item.period === "snapshot" ? "Current snapshot" : "Selected dates"}</summary><ul>${item.sheets.map(sheet => `<li>${esc(sheet)}</li>`).join("")}</ul></details></div><button class="button button-secondary button-small" type="button" data-report-export="${esc(item.id)}" data-report-period="${esc(item.period)}" aria-label="Download ${esc(item.label)}">${icon("download")}Download Excel</button></article>`).join("") : emptyState("download", catalog.length ? "No matching reports" : "No downloads available", catalog.length ? "Clear the search or choose another module." : "Refresh reports, or ask the owner to check your module access.");
+  $("#report-month-field").hidden = !catalog.some(item => item.period === "month");
+  if (!$("#report-month").value) {
+    const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+    $("#report-month").value = `${parts.find(part => part.type === "year").value}-${parts.find(part => part.type === "month").value}`;
+  }
   if (!report) { $("#report-metrics").innerHTML = metricCard("Access", "Owner only", "shield", true); $("#report-leads").innerHTML = emptyState("shield", "Reports are restricted"); $("#report-attendance").innerHTML = ""; $("#report-audit").innerHTML = ""; return; }
   const metrics = report.metrics || {};
-  $("#report-metrics").innerHTML = [metricCard("Students", String(metrics.students || 0), "users", true), metricCard("Attendance", metrics.attendanceRate == null ? "—" : `${metrics.attendanceRate}%`, "calendar-check"), metricCard("Payments", shortMoney(metrics.recordedPayments), "wallet"), metricCard("Upcoming classes", String(metrics.scheduledClasses || 0), "clock")].join("");
+  $("#report-metrics").innerHTML = [
+    "students" in metrics ? metricCard("Students", String(metrics.students), "users", true) : "",
+    "attendanceRate" in metrics ? metricCard("Attendance", metrics.attendanceRate == null ? "—" : `${metrics.attendanceRate}%`, "calendar-check") : "",
+    "recordedPayments" in metrics ? metricCard("Payments", shortMoney(metrics.recordedPayments), "wallet") : "",
+    "scheduledClasses" in metrics ? metricCard("Upcoming classes", String(metrics.scheduledClasses), "clock") : "",
+  ].join("");
   renderBars("#report-leads", report.leadFunnel || [], "stage"); renderBars("#report-attendance", report.attendance || [], "status");
   $("#report-audit").innerHTML = auditRows(report.recentAudit || []);
 }
@@ -1407,7 +1427,19 @@ async function downloadReport(reportName, button) {
       toast("Demo report downloaded.");
       return;
     }
-    const response = await fetch(apiUrl(`/api/reports/export/${encodeURIComponent(reportName)}?format=xlsx`), {
+    let query = "format=xlsx";
+    if (button.dataset?.reportPeriod === "range") {
+      const from = $("#report-from").value;
+      const to = $("#report-to").value;
+      if (from && to && from > to) throw new Error("From date must be on or before To date.");
+      if (from) query += `&from=${encodeURIComponent(from)}`;
+      if (to) query += `&to=${encodeURIComponent(to)}`;
+    } else if (button.dataset?.reportPeriod === "month") {
+      const month = $("#report-month").value;
+      if (!month) throw new Error("Select a payroll month before downloading.");
+      query += `&month=${encodeURIComponent(month)}`;
+    }
+    const response = await fetch(apiUrl(`/api/reports/export/${encodeURIComponent(reportName)}?${query}`), {
       headers: { Authorization: `Bearer ${state.token}` },
       cache: "no-store",
     });
@@ -3416,7 +3448,13 @@ function bindEvents() {
     activateAttendanceTab(buttons[next].dataset.attendanceTab, true);
   });
   $("#refresh-reports").addEventListener("click", async () => { try { if (state.user?.role === "demo") { loadedResources.delete("reports"); await loadResource("reports"); } else { state.report = await api("/api/reports/overview"); renderReports(); } toast("Reports refreshed."); } catch (error) { toast(error.message, "error"); } });
-  $$("[data-report-export]").forEach(button => button.addEventListener("click", () => downloadReport(button.dataset.reportExport, button)));
+  $("#report-catalog").addEventListener("click", event => {
+    const button = event.target.closest("[data-report-export]");
+    if (button && !button.disabled) downloadReport(button.dataset.reportExport, button);
+  });
+  $("#report-clear-dates").addEventListener("click", () => { $("#report-from").value = ""; $("#report-to").value = ""; toast("History downloads include all dates."); });
+  $("#report-search").addEventListener("input", renderReports);
+  $("#report-module").addEventListener("change", renderReports);
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));
   $("#finance-view-tabs").addEventListener("keydown", event => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

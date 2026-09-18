@@ -32,8 +32,8 @@ def _workbook(client, owner_headers, report, suffix=""):
 
 
 @pytest.mark.parametrize("report,sheets", [
-    ("students", ["Student register"]),
-    ("fees", ["Open accounts", "Closed accounts"]),
+    ("students", ["Student register", "Guardian contacts", "Enrolment history"]),
+    ("fees", ["Open accounts", "Closed accounts", "Agreement details"]),
     ("attendance", ["Daily attendance", "Class attendance", "Period summaries"]),
     ("audit", ["Audit trail"]),
 ])

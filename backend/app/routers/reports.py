@@ -30,9 +30,17 @@ from ..models import (
 from ..security import require_roles
 from ..services import payment_effect, received_effect
 from ..report_downloads import IST, excel_download, local_datetime
+from ..report_catalog import REPORTS, REPORT_BY_ID, detailed_sheets, student_supporting_sheets
+from ..permissions import effective_permissions, has_permission
+from ..payroll import month_bounds
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 REPORT_ROLES = ("owner", "accounts", "academic_coordinator")
+
+
+def _available_reports(db, user):
+    permissions = effective_permissions(db, user)
+    return [item for item in REPORTS if permissions.get(item["module"], {}).get("read")]
 
 
 def _safe_csv_cell(value):
@@ -64,9 +72,9 @@ def _csv_download(filename: str, headings: list[str], rows):
     return response
 
 
-def _report_download(filename, headings, rows, export_format, title, scope, sheets=None):
+def _report_download(filename, headings, rows, export_format, title, scope, sheets=None, additional_sheets=None):
     if export_format == "xlsx":
-        return excel_download(filename.removesuffix(".csv") + ".xlsx", sheets or [(title, headings, rows, scope)])
+        return excel_download(filename.removesuffix(".csv") + ".xlsx", (sheets or [(title, headings, rows, scope)]) + (additional_sheets or []))
     return _csv_download(filename, headings, rows)
 
 
@@ -133,7 +141,8 @@ def overview(
         .all()
     )
     recent = db.query(AuditLog, User).outerjoin(User, User.id == AuditLog.actor_id).filter((User.id.is_(None)) | (User.is_test_account.is_(False))).order_by(AuditLog.created_at.desc()).limit(10).all()
-    return {
+    result = {
+        "exports": _available_reports(db, user),
         "metrics": {
             "students": db.query(Student).filter(
                 Student.is_test_account.is_(False),
@@ -151,34 +160,26 @@ def overview(
         "attendance": [{"status": status, "count": count} for status, count in sorted(attendance.items())],
         "recentAudit": [{"id": log.id, "action": log.action, "entityType": log.entity_type, "actor": actor.full_name if actor else "System", "createdAt": log.created_at} for log, actor in recent],
     }
+    permissions = effective_permissions(db, user)
+    metric_modules = {
+        "students": "students", "activeUsers": "reports", "scheduledClasses": "timetable",
+        "publishedNotices": "communication", "assignments": "academics",
+        "overdueAssignments": "academics", "recordedPayments": "finance", "attendanceRate": "attendance",
+    }
+    result["metrics"] = {key: value for key, value in result["metrics"].items() if permissions.get(metric_modules[key], {}).get("read")}
+    if not permissions.get("admissions", {}).get("read"):
+        result["leadFunnel"] = []
+    if not permissions.get("attendance", {}).get("read"):
+        result["attendance"] = []
+    return result
 
 
 @router.get("/exports")
 def available_exports(
+    db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REPORT_ROLES)),
 ):
-    return [
-        {
-            "id": "students",
-            "label": "Student register",
-            "description": "Admissions, enrolment, contact and status records.",
-        },
-        {
-            "id": "fees",
-            "label": "Fee balances",
-            "description": "Agreed, received and outstanding amounts by student.",
-        },
-        {
-            "id": "attendance",
-            "label": "Attendance entries",
-            "description": "Submitted class, manual and imported attendance.",
-        },
-        {
-            "id": "audit",
-            "label": "Audit trail",
-            "description": "Who changed which ERP record and when.",
-        },
-    ]
+    return _available_reports(db, user)
 
 
 @router.get("/export/{report_name}")
@@ -187,14 +188,37 @@ def export_report(
     date_from: date | None = Query(default=None, alias="from"),
     date_to: date | None = Query(default=None, alias="to"),
     export_format: Literal["csv", "xlsx"] = Query(default="csv", alias="format"),
+    month: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REPORT_ROLES)),
 ):
+    definition = REPORT_BY_ID.get(report_name)
+    if not definition:
+        raise HTTPException(404, "Unknown report")
+    if not has_permission(db, user, definition["module"]):
+        raise HTTPException(403, "You do not have access to this report's module")
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, "'from' date must be on or before 'to' date")
     stamp = datetime.now(IST).date().isoformat()
-    if report_name in {"students", "fees"} and (date_from or date_to):
-        raise HTTPException(422, "Date filters apply only to attendance and audit reports. Students and fees are current snapshots.")
+    if definition["period"] != "range" and (date_from or date_to):
+        raise HTTPException(422, "Use a month for payroll. Snapshot reports do not accept date filters.")
+    if report_name == "payroll":
+        month = month or stamp[:7]
+        try:
+            month_bounds(month)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+    elif month:
+        raise HTTPException(422, "Month selection applies only to payroll")
+    sheets = detailed_sheets(db, report_name, date_from, date_to, month)
+    if sheets:
+        if export_format != "xlsx" and len(sheets) > 1:
+            raise HTTPException(422, "This report contains multiple sheets. Choose Excel (.xlsx) to download all details.")
+        filename = f"lakshya-{report_name}-{month if report_name == 'payroll' else stamp}.csv"
+        title, headings, rows, scope = sheets[0]
+        if export_format == "csv":
+            rows = [tuple(local_datetime(value) if isinstance(value, datetime) else value for value in row) for row in rows]
+        return _report_download(filename, headings, rows, export_format, title, scope, sheets)
     if report_name == "students":
         enrollment_rows = {}
         for row in (
@@ -245,6 +269,7 @@ def export_report(
             ),
             export_format, "Student register",
             "All non-test students, including drafts and opted-out records. Filter Status to view active students only. Latest active enrolment is shown.",
+            additional_sheets=student_supporting_sheets(db) if export_format == "xlsx" else None,
         )
     if report_name == "fees":
         agreements = (
@@ -298,7 +323,7 @@ def export_report(
                     agreement.id,
             ))
         scope = "Current balances in INR. Received is net cash after refunds/reversals. Balance adjustments change dues, not cash. Closed accounts are excluded from outstanding."
-        # Keep the reader-facing workbook compact; CSV retains technical reconciliation fields.
+        # Keep the reader-facing summaries compact, with reconciliation fields separate.
         display_columns = (0, 1, 2, 3, 4, 9, 10, 7)
         display_headings = [headings[index] for index in display_columns]
         return _report_download(
@@ -307,6 +332,7 @@ def export_report(
             sheets=[
                 ("Open accounts", display_headings, [tuple(row[index] for index in display_columns) for row in rows if row[8] == "Open"], scope),
                 ("Closed accounts", display_headings, [tuple(row[index] for index in display_columns) for row in rows if row[8] == "Closed"], "Historical accounts in INR. Excluded from current agreed fees and outstanding. Add received totals from both sheets for all-time collections."),
+                ("Agreement details", headings, rows, "Same accounts as the first two sheets, with agreement IDs, currency and statuses for reconciliation. Do not add these totals to the first two sheets."),
             ],
         )
     if report_name == "attendance":

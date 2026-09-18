@@ -13,6 +13,8 @@ from openpyxl.utils import get_column_letter
 
 IST = timezone(timedelta(hours=5, minutes=30))
 MONEY_COLUMNS = {"Agreed fee", "Received", "Outstanding", "Balance adjustments", "Credit balance"}
+MONEY_COLUMNS |= {"Net received", "Balance effect", "Scheduled amount", "Monthly salary", "Payable amount", "Advance", "Net payable"}
+MONEY_FORMAT = '"₹" #,##0.00;[Red]("₹" #,##0.00);"₹" 0.00'
 
 
 def local_datetime(value):
@@ -70,8 +72,11 @@ def excel_download(filename, sheets):
                     cell.number_format = "dd mmm yyyy hh:mm"
                 elif isinstance(value, date):
                     cell.number_format = "dd mmm yyyy"
+                elif isinstance(value, timedelta):
+                    cell.number_format = "[h]:mm"
                 elif isinstance(value, (int, float, Decimal)):
-                    cell.number_format = '"₹" #,##0;[Red]("₹" #,##0);"₹" 0' if headings[column - 1] in MONEY_COLUMNS else "0.0%" if headings[column - 1] == "Attendance rate" else "#,##0"
+                    heading = headings[column - 1]
+                    cell.number_format = MONEY_FORMAT if heading in MONEY_COLUMNS or heading == "Transaction amount" else '"₹" 0.000000' if heading == "Per-day rate" else "0.0%" if heading == "Attendance rate" else "#,##0" if value == int(value) else "#,##0.0#"
                 cell.font = Font(name="Arial", size=11, color="20212B")
                 cell.alignment = Alignment(vertical="top", wrap_text=True, indent=1, horizontal="right" if isinstance(value, (int, float, Decimal)) else "left")
                 if row_number % 2:
@@ -92,7 +97,7 @@ def excel_download(filename, sheets):
                 cell = sheet.cell(last_row, column)
                 if heading in MONEY_COLUMNS:
                     cell.value = sum(row[column - 1] or 0 for row in rows)
-                    cell.number_format = '"₹" #,##0;[Red]("₹" #,##0);"₹" 0'
+                    cell.number_format = MONEY_FORMAT
                 cell.font = Font(name="Arial", size=11, bold=True, color="25265E")
                 cell.border = Border(top=Side(style="thin", color="25265E"))
             sheet.row_dimensions[last_row].height = 28

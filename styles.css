@@ -1270,3 +1270,20 @@ p, li, td, th, label, input, select, textarea, button { line-height: 1.45; }
   .attendance-register-toolbar select { width: 100%; min-width: 0; }
   .attendance-register-toolbar p { padding-left: 2px; }
 }
+.report-downloads { margin-bottom: 24px; padding: 20px; }
+.report-downloads > .surface-head { margin-bottom: 16px; padding: 0; }
+.report-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.report-filters .field { margin: 0; flex: 1; min-width: 150px; }
+.report-filters [hidden] { display: none; }
+.report-scope-help { color: var(--ink-500); font-size: .76rem; line-height: 1.6; margin: 12px 0 20px; }
+.report-result-count { margin: 12px 0; color: var(--ink-500); font-size: .76rem; }
+.report-search .field:first-child { flex: 2; }
+.report-card summary:focus-visible { outline: 2px solid var(--primary, #34357b); outline-offset: 3px; border-radius: 4px; }
+.report-catalog { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.report-card { display: flex; flex-direction: column; justify-content: space-between; gap: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.report-card h4 { font-size: .9rem; margin: 0 0 7px; }
+.report-card p { font-size: .76rem; line-height: 1.6; color: var(--ink-500); margin: 0 0 10px; }
+.report-card summary { cursor: pointer; font-size: .72rem; min-height: 44px; padding-block: 10px; }
+.report-card ul { margin: 0 0 8px; padding-left: 20px; font-size: .74rem; line-height: 1.7; }
+.report-card > button { align-self: start; min-height: 44px; }
+@media (max-width: 640px) { .report-catalog { grid-template-columns: 1fr; } .report-downloads { padding: 14px; } .report-filters .field { min-width: min(100%, 180px); } .report-card > button { width: 100%; } }
