@@ -1092,11 +1092,15 @@ function renderTimetable() {
   $("#teaching-assignment-count").textContent = String(activeAssignments.length);
   $("#timetable-faculty-tab").setAttribute("aria-label", `Faculty setup, ${activeAssignments.length} active assignments`);
   const scheduledRows = [...state.sessions].filter(item => item.status === "scheduled").sort((a, b) => asInstant(a.startsAt) - asInstant(b.startsAt));
-  const sessionDates = [...new Map(scheduledRows.map(item => [indiaDateKey(item.startsAt), item.startsAt])).entries()];
   const todayKey = indiaDateKey(new Date());
-  const futureDates = sessionDates.filter(([key]) => key >= todayKey);
-  const availableDates = (futureDates.length ? futureDates : sessionDates.slice(-6)).slice(0, 6);
-  if (!availableDates.some(([key]) => key === timetableSelectedDate)) timetableSelectedDate = availableDates[0]?.[0] || "";
+  if (!timetableSelectedDate) timetableSelectedDate = todayKey;
+  $("#timetable-date-picker").value = timetableSelectedDate;
+  const selectedNoon = new Date(`${timetableSelectedDate}T12:00:00+05:30`);
+  const weekStart = selectedNoon.getTime() - ((selectedNoon.getUTCDay() + 6) % 7) * 86400000;
+  const availableDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart + index * 86400000);
+    return [indiaDateKey(date), date.toISOString()];
+  });
   $("#timetable-date-tabs").innerHTML = availableDates.length ? availableDates.map(([key, value]) => {
     const selected = key === timetableSelectedDate;
     const label = timetableDateLabel(value).split(", ");
@@ -1186,6 +1190,10 @@ function isDirectorAttendance(item) {
   return item.attendanceGroup === "directors" || [item.role, item.designation].some(value => String(value || "").trim().toLowerCase() === "director");
 }
 
+function isFacultyAttendance(item) {
+  return !isDirectorAttendance(item) && (item.attendanceGroup === "faculty" || String(item.role || "").toLowerCase() === "faculty" || String(item.designation || "").toLowerCase() === "faculty");
+}
+
 function renderAttendance() {
   const now = Date.now(), day = 86400000;
   const todayKey = indiaDateKey(new Date(now));
@@ -1203,7 +1211,8 @@ function renderAttendance() {
   if (!staffAttendanceDate) staffAttendanceDate = staffDates.at(-1) || todayKey;
   const dailyRecords = allStaffRecords.filter(item => item.date === staffAttendanceDate).sort((a, b) => String(a.fullName).localeCompare(String(b.fullName)));
   const directorRecords = dailyRecords.filter(isDirectorAttendance);
-  const staffRecords = dailyRecords.filter(item => !isDirectorAttendance(item));
+  const facultyRecords = dailyRecords.filter(isFacultyAttendance);
+  const staffRecords = dailyRecords.filter(item => !isDirectorAttendance(item) && !isFacultyAttendance(item));
   const completedShifts = staffRecords.filter(item => item.departureAt || Number(item.workDurationMinutes) > 0).length;
   const absentStaff = staffRecords.filter(item => item.attendanceStatus === "absent").length;
   const totalDayMinutes = staffRecords.reduce((sum, item) => sum + Number(item.workDurationMinutes || 0), 0);
@@ -1269,6 +1278,7 @@ function renderAttendance() {
   };
   $("#director-attendance-surface").hidden = !allStaffRecords.some(isDirectorAttendance);
   renderPeople("director", directorRecords, "director", "directors");
+  renderPeople("faculty", facultyRecords, "faculty member", "faculty members");
   renderPeople("staff", staffRecords, "staff member", "staff members");
 }
 
@@ -3425,6 +3435,8 @@ function bindEvents() {
   });
   $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/registers"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#attendance-register-filter").addEventListener("change", event => { attendanceRegisterFilter = event.target.value; resetCollection("attendance"); renderAttendance(); });
+  $("#timetable-date-picker").addEventListener("change", event => { timetableSelectedDate = event.target.value || indiaDateKey(new Date()); renderTimetable(); });
+  $("#timetable-today").addEventListener("click", () => { timetableSelectedDate = indiaDateKey(new Date()); renderTimetable(); });
   $("#staff-attendance-date").addEventListener("change", event => { staffAttendanceDate = event.target.value || indiaDateKey(new Date()); renderAttendance(); });
   $("#staff-attendance-today").addEventListener("click", () => { staffAttendanceDate = indiaDateKey(new Date()); renderAttendance(); });
   $("#staff-attendance-previous").addEventListener("click", () => {
