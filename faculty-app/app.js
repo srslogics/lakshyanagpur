@@ -1161,7 +1161,7 @@ function renderExaminationResults() {
     return `<div class="exam-entry-row" data-exam-student="${esc(item.studentId)}">
       <span class="exam-student"><strong>${esc(item.fullName)}</strong><small>${esc(item.admissionNumber)}</small></span>
       <label><span>Result</span><select data-result-status><option value="pending"${item.resultStatus === "pending" ? " selected" : ""}>Pending</option><option value="graded"${item.resultStatus === "graded" ? " selected" : ""}>Graded</option><option value="absent"${item.resultStatus === "absent" ? " selected" : ""}>Absent</option><option value="withheld"${item.resultStatus === "withheld" ? " selected" : ""}>Withheld</option></select></label>
-      <label><span>Marks</span><input data-result-marks type="number" min="0" max="${esc(exam.maxMarks)}" step="0.01" value="${esc(item.marksObtained ?? "")}" ${item.resultStatus === "graded" ? "" : "disabled"}></label>
+      <label><span>Marks (negative scores allowed)</span><input data-result-marks type="number" max="${esc(exam.maxMarks)}" step="0.01" value="${esc(item.marksObtained ?? "")}" ${item.resultStatus === "graded" ? "" : "disabled"}></label>
       <label><span>Remarks</span><input data-result-remarks type="text" maxlength="500" value="${esc(item.remarks || "")}" placeholder="Optional"></label>
     </div>`;
   }).join("") : empty("users", "No active students in this batch");
@@ -1174,7 +1174,8 @@ function examinationResultsPayload() {
     const marksField = $("[data-result-marks]", row);
     const marksObtained = resultStatus === "graded" && marksField.value !== "" ? Number(marksField.value) : null;
     if (resultStatus === "graded" && marksObtained === null) throw new Error("Enter marks for every graded student.");
-    if (marksObtained !== null && (marksObtained < 0 || marksObtained > Number(exam.maxMarks))) throw new Error(`Marks must be between 0 and ${exam.maxMarks}.`);
+    if (marksObtained !== null && !Number.isFinite(marksObtained)) throw new Error("Enter a valid numeric score.");
+    if (marksObtained !== null && marksObtained > Number(exam.maxMarks)) throw new Error(`Marks cannot exceed ${exam.maxMarks}.`);
     return {
       studentId:row.dataset.examStudent,
       resultStatus,

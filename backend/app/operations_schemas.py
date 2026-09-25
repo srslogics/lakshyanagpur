@@ -439,7 +439,7 @@ class ExaminationMark(BaseModel):
     marks_obtained: Decimal | None = Field(
         default=None,
         alias="marksObtained",
-        ge=0,
+        ge=-999999.99,
         le=10000,
         decimal_places=2,
     )

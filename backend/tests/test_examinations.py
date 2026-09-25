@@ -15,6 +15,27 @@ from app.models import (
 from app.security import create_token, hash_password
 
 
+def test_faculty_can_publish_negative_marks(client, database, owner_headers):
+    faculty, _, student_user, batch, subject, first, second = examination_setup(database)
+    created = client.post('/api/examinations', json=exam_payload(faculty, batch, subject), headers=owner_headers)
+    assert created.status_code == 201
+    exam_id = created.json()['id']
+    headers = {'Authorization': f'Bearer {create_token(faculty)}'}
+    saved = client.put(f'/api/examinations/{exam_id}/marks', headers=headers, json={'entries': [
+        {'studentId': first.id, 'resultStatus': 'graded', 'marksObtained': -4.25},
+        {'studentId': second.id, 'resultStatus': 'absent', 'marksObtained': None},
+    ]})
+    assert saved.status_code == 200, saved.text
+    published = client.post(f'/api/examinations/{exam_id}/publish', headers=headers)
+    assert published.status_code == 200, published.text
+    assert published.json()['averageMarks'] == -4.25
+    portal = client.get('/api/portal/bootstrap', headers={'Authorization': f'Bearer {create_token(student_user)}'})
+    result = portal.json()['examinations'][0]
+    assert result['marksObtained'] == -4.25
+    assert result['percentage'] == -4.2  # Student portal rounds percentages to one decimal.
+    assert result['qualified'] is False
+
+
 def examination_setup(db):
     faculty = User(
         email="physics.faculty@example.com",
