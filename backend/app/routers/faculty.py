@@ -69,7 +69,7 @@ def activate_mobile(
         raise HTTPException(403, "You do not have permission to perform this action")
     if faculty_user.mobile:
         raise HTTPException(409, "A mobile number is already registered for this account")
-    if db.query(User).filter(User.mobile == payload.mobile, User.id != faculty_user.id).first():
+    if db.query(User).filter(User.mobile == payload.mobile, User.role != "parent", User.id != faculty_user.id).first():
         raise HTTPException(409, "This mobile number is already assigned to another account")
     if verify_password(payload.new_password, faculty_user.password_hash):
         raise HTTPException(400, "Choose a personal password different from the temporary password")

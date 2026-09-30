@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, event, inspect
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, event, inspect, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -26,9 +26,13 @@ class TimestampMixin:
 
 class User(TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index("uq_users_parent_mobile", "mobile", unique=True, postgresql_where=text("role = 'parent'"), sqlite_where=text("role = 'parent'")),
+        Index("uq_users_nonparent_mobile", "mobile", unique=True, postgresql_where=text("role <> 'parent'"), sqlite_where=text("role <> 'parent'")),
+    )
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: new_id("usr"))
     username: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
-    mobile: Mapped[str | None] = mapped_column(String(10), unique=True, index=True)
+    mobile: Mapped[str | None] = mapped_column(String(10), index=True)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255))
     password_hash: Mapped[str] = mapped_column(String(255))
@@ -131,7 +135,7 @@ class StudentAccount(TimestampMixin, Base):
 class ParentAccount(TimestampMixin, Base):
     __tablename__ = "parent_accounts"
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True, index=True)
     contact_type: Mapped[str] = mapped_column(String(24), default="primary_contact", index=True)
 
 

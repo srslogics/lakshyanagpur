@@ -68,8 +68,14 @@ def _set_portal_access(db: Session, student_id: str, is_active: bool) -> int:
         return 0
     users = db.query(User).filter(User.id.in_(user_ids)).all()
     for linked_user in users:
-        if linked_user.is_active != is_active:
-            linked_user.is_active = is_active
+        desired_active = is_active
+        if linked_user.role == "parent" and not is_active:
+            desired_active = db.query(ParentAccount).join(Student, Student.id == ParentAccount.student_id).filter(
+                ParentAccount.user_id == linked_user.id, Student.id != student_id,
+                Student.status == "active", Student.is_test_account.is_(False),
+            ).first() is not None
+        if linked_user.is_active != desired_active:
+            linked_user.is_active = desired_active
             linked_user.token_version += 1
     return len(users)
 

@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="../apple-touch-icon.png?v=20260804-no-tm">
   <link rel="icon" href="../pwa-icon-192.png?v=20260804-no-tm">
   <link rel="stylesheet" href="../portal-shared.css?v=6">
-  <link rel="stylesheet" href="./styles.css?v=6">
+  <link rel="stylesheet" href="./styles.css?v=7">
   <link rel="stylesheet" href="../auth-shared.css?v=14">
   <link rel="stylesheet" href="../push-shared.css?v=1">
 </head>
@@ -123,6 +123,7 @@
     </header>
 
     <main id="parent-main" tabindex="-1">
+      <label class="child-picker hidden" id="child-picker-field" for="child-picker"><span>Viewing child</span><select id="child-picker" aria-label="Choose child"></select><small id="child-picker-status" role="status" aria-live="polite"></small></label>
       <section class="app-view active" id="overview" aria-labelledby="overview-heading">
         <article class="child-hero">
           <div class="child-identity"><span class="child-avatar" id="child-avatar">ST</span><div><p id="student-context">Student progress</p><h1 id="overview-heading"><span id="child-name">Student</span></h1><span id="child-program">Program pending</span></div></div>
@@ -185,6 +186,6 @@
   <div class="toast-region" id="toast-region" aria-live="polite"></div>
   <script src="../runtime-config.js?v=2" defer></script>
   <script src="../push-client.js?v=2" defer></script>
-  <script src="./app.js?v=20" defer></script>
+  <script src="./app.js?v=21" defer></script>
 </body>
 </html>

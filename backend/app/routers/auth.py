@@ -174,7 +174,14 @@ def _authenticate(payload: LoginRequest, request: Request, db: Session) -> User:
     if payload.username:
         user = db.query(User).filter(User.username == payload.username).first()
     elif payload.mobile:
-        user = db.query(User).filter(User.mobile == normalize_mobile(payload.mobile)).first()
+        candidates = db.query(User).filter(User.mobile == normalize_mobile(payload.mobile))
+        if payload.portal == "parent":
+            candidates = candidates.filter(User.role == "parent")
+        elif payload.portal:
+            candidates = candidates.filter(User.role != "parent")
+        matches = candidates.limit(2).all()
+        # Never pick an arbitrary identity or try passwords across accounts.
+        user = matches[0] if len(matches) == 1 else None
     elif payload.email:
         candidate = db.query(User).filter(User.email == str(payload.email).lower()).first()
         faculty_first_login = bool(

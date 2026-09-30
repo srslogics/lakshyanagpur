@@ -60,12 +60,14 @@ def _validate_delivery(channel: str, status: str):
         )
 
 
-def _linked_student(db: Session, user: User) -> Student:
+def _linked_student(db: Session, user: User, student_id: str | None = None) -> Student:
     model = ParentAccount if user.role == "parent" else StudentAccount
     student = (
         db.query(Student)
         .join(model, model.student_id == Student.id)
-        .filter(model.user_id == user.id, Student.is_test_account.is_(False))
+        .filter(model.user_id == user.id, Student.is_test_account.is_(False), Student.status == "active",
+                *([Student.id == student_id] if student_id else []))
+        .order_by(Student.full_name, Student.id)
         .first()
     )
     if not student:
@@ -157,7 +159,10 @@ def _can_access_thread(db: Session, user: User, thread: CommunicationThread) -> 
     if user.role in ROLES or has_permission(db, user, "communication", "read"):
         return True
     if user.role in PORTAL_CREATOR_ROLES:
-        return _linked_student(db, user).id == thread.student_id
+        try:
+            return _linked_student(db, user, thread.student_id).id == thread.student_id
+        except HTTPException:
+            return False
     if user.role == "faculty":
         return _faculty_can_access(db, user.id, thread)
     return False
@@ -170,7 +175,7 @@ def _thread_or_404(db: Session, user: User, thread_id: str) -> CommunicationThre
     return thread
 
 
-def _thread_rows(db: Session, user: User):
+def _thread_rows(db: Session, user: User, student_id: str | None = None):
     query = (
         db.query(CommunicationThread, Student, Subject, User)
         .join(Student, Student.id == CommunicationThread.student_id)
@@ -179,7 +184,7 @@ def _thread_rows(db: Session, user: User):
         .filter(Student.is_test_account.is_(False))
     )
     if user.role in PORTAL_CREATOR_ROLES:
-        query = query.filter(CommunicationThread.student_id == _linked_student(db, user).id)
+        query = query.filter(CommunicationThread.student_id == _linked_student(db, user, student_id).id)
     elif user.role == "faculty":
         assignments = _faculty_assignments(db, user.id)
         conditions = [
@@ -265,12 +270,13 @@ def _serialize_messages(db: Session, thread_id: str):
 def communication_inbox(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*CONVERSATION_ROLES)),
+    student_id: str | None = None,
 ):
-    rows = _thread_rows(db, user)
+    rows = _thread_rows(db, user, student_id)
     latest = _last_messages(db, [thread.id for thread, *_ in rows])
     subjects = []
     if user.role in PORTAL_CREATOR_ROLES:
-        subjects = _student_subjects(db, _linked_student(db, user).id)
+        subjects = _student_subjects(db, _linked_student(db, user, student_id).id)
     elif user.role == "faculty":
         seen = set()
         for _, _, subject in _faculty_assignments(db, user.id):
@@ -298,7 +304,7 @@ def create_thread(
     body = payload.body.strip()
     if len(topic) < 2 or not body:
         raise HTTPException(422, "Topic and message are required")
-    student = _linked_student(db, actor)
+    student = _linked_student(db, actor, payload.student_id)
     if payload.subject_id:
         allowed_subjects = {
             item["id"] for item in _student_subjects(db, student.id)

@@ -274,6 +274,7 @@ class StudentAccessCreate(MobileIdentityMixin):
 
 
 class ParentAccessCreate(MobileIdentityMixin):
+    link_existing_parent: bool = Field(default=False, alias="linkExistingParent")
     student_id: str = Field(alias="studentId")
     full_name: str = Field(alias="fullName", min_length=2, max_length=255)
     email: EmailStr | None = None
@@ -510,6 +511,7 @@ class NoticeUpdate(NoticeCreate):
 
 
 class CommunicationThreadCreate(BaseModel):
+    student_id: str | None = Field(default=None, alias="studentId")
     subject_id: str | None = Field(default=None, alias="subjectId")
     topic: str = Field(min_length=2, max_length=255)
     body: str = Field(min_length=1, max_length=3000)

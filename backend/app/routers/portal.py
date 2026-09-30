@@ -55,7 +55,7 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
-def _student_for_account(db: Session, model, user: User):
+def _student_for_account(db: Session, model, user: User, student_id: str | None = None):
     latest_enrollment_id = (
         select(Enrollment.id)
         .where(Enrollment.student_id == Student.id)
@@ -76,7 +76,9 @@ def _student_for_account(db: Session, model, user: User):
             model.user_id == user.id,
             Student.is_test_account.is_(False),
             Student.status == "active",
+            *([Student.id == student_id] if student_id else []),
         )
+        .order_by(Student.full_name, Student.id)
         .first()
     )
     if not row:
@@ -777,8 +779,9 @@ def update_student_assignment_status(
 def parent_bootstrap(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles("parent")),
+    student_id: str | None = None,
 ):
-    account, student, enrollment = _student_for_account(db, ParentAccount, user)
+    account, student, enrollment = _student_for_account(db, ParentAccount, user, student_id)
     payload = _portal_payload(
         db,
         student,
@@ -793,4 +796,10 @@ def parent_bootstrap(
         "email": user.email,
         "contactType": account.contact_type,
     }
+    payload["children"] = [{"id": child.id, "fullName": child.full_name,
+                            "admissionNumber": child.admission_number}
+                           for child in db.query(Student).join(ParentAccount, ParentAccount.student_id == Student.id)
+                           .filter(ParentAccount.user_id == user.id, Student.status == "active",
+                                   Student.is_test_account.is_(False)).order_by(Student.full_name, Student.id).all()]
+    payload["selectedStudentId"] = student.id
     return payload

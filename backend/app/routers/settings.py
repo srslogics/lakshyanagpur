@@ -118,6 +118,8 @@ def bootstrap(db: Session = Depends(get_db), user: User = Depends(require_roles(
         } for account, student, account_user in db.query(ParentAccount, Student, User).join(
             Student, Student.id == ParentAccount.student_id
         ).join(User, User.id == ParentAccount.user_id).filter(Student.is_test_account.is_(False), User.is_test_account.is_(False)).order_by(Student.full_name, User.full_name).all()],
+        "parentSiblingSupport": True,
+        "parentScopedMobileSupport": True,
     }
 
 
@@ -150,7 +152,8 @@ def import_revised_admission_register(
 
 @router.post("/users", status_code=201)
 def create_user(payload: UserCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner"))):
-    if db.query(User).filter(User.mobile == payload.mobile).first():
+    namespace = User.role == "parent" if payload.role == "parent" else User.role != "parent"
+    if db.query(User).filter(User.mobile == payload.mobile, namespace).first():
         raise HTTPException(409, "This mobile number is already assigned to another account")
     email = str(payload.email).lower() if payload.email else None
     if email and db.query(User).filter(User.email == email).first():
@@ -191,6 +194,9 @@ def update_user(user_id: str, payload: UserUpdate, db: Session = Depends(get_db)
     row = db.get(User, user_id)
     if not row:
         raise HTTPException(404, "User not found")
+    namespace = User.role == "parent" if payload.role == "parent" else User.role != "parent"
+    if db.query(User).filter(User.mobile == payload.mobile, User.id != row.id, namespace).first():
+        raise HTTPException(409, "This mobile number is already assigned to another account in this portal")
     if row.role == "owner" and (payload.role != "owner" or not payload.is_active):
         active_owners = db.query(User).filter(User.role == "owner", User.is_active.is_(True)).count()
         if active_owners <= 1:
@@ -309,7 +315,7 @@ def create_student_access(payload: StudentAccessCreate, db: Session = Depends(ge
         raise HTTPException(409, "This student already has portal access")
     if db.query(StudentAccount).join(User, User.id == StudentAccount.user_id).filter(User.is_test_account.is_(False)).count() >= 100:
         raise HTTPException(409, "The student portal is configured for a maximum of 100 accounts")
-    if db.query(User).filter(User.mobile == payload.mobile).first():
+    if db.query(User).filter(User.mobile == payload.mobile, User.role != "parent").first():
         raise HTTPException(409, "This mobile number is already assigned to another account")
     email = str(payload.email).lower() if payload.email else None
     if email and db.query(User).filter(User.email == email).first():
@@ -334,8 +340,23 @@ def create_parent_access(payload: ParentAccessCreate, db: Session = Depends(get_
     student = db.get(Student, payload.student_id)
     if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
-    if db.query(User).filter(User.mobile == payload.mobile).first():
-        raise HTTPException(409, "This mobile number is already assigned to another account")
+    existing = db.query(User).filter(User.mobile == payload.mobile, User.role == "parent").first()
+    incompatible = db.query(User).filter(User.mobile == payload.mobile, User.role.notin_(["parent", "student", "parent_student"])).first()
+    if incompatible:
+        raise HTTPException(409, "This number belongs to a staff account; select a parent contact number")
+    if existing:
+        if not payload.link_existing_parent or existing.role != "parent" or not existing.is_active or existing.is_test_account:
+            raise HTTPException(409, "This mobile number is already assigned to another account")
+        if db.query(ParentAccount).filter_by(user_id=existing.id, student_id=student.id).first():
+            raise HTTPException(409, "This parent is already linked to this student")
+        db.add(ParentAccount(user_id=existing.id, student_id=student.id, contact_type=payload.contact_type))
+        audit(db, actor, "settings.parent_access.link", "student", student.id,
+              after={"user_id": existing.id, "contact_type": payload.contact_type})
+        db.commit()
+        return {"userId": existing.id, "studentId": student.id,
+                "admissionNumber": student.admission_number, "studentName": student.full_name,
+                "fullName": existing.full_name, "mobile": existing.mobile, "email": existing.email,
+                "contactType": payload.contact_type, "isActive": True, "passwordUnchanged": True}
     email = str(payload.email).lower() if payload.email else None
     if email and db.query(User).filter(User.email == email).first():
         raise HTTPException(409, "A user with this email already exists")
