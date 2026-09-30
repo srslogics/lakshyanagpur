@@ -1400,10 +1400,15 @@ function renderReports() {
   $("#report-result-count").textContent = `${filtered.length} of ${catalog.length} reports`;
   $("#report-catalog").innerHTML = filtered.length ? filtered.map(item => `<article class="report-card"><div><h4>${esc(item.label)}</h4><p>${esc(item.description)}</p><details><summary>${item.sheets.length} ${item.sheets.length === 1 ? "sheet" : "sheets"} · ${item.period === "month" ? "Selected month" : item.period === "snapshot" ? "Current snapshot" : "Selected dates"}</summary><ul>${item.sheets.map(sheet => `<li>${esc(sheet)}</li>`).join("")}</ul></details></div><button class="button button-secondary button-small" type="button" data-report-export="${esc(item.id)}" data-report-period="${esc(item.period)}" aria-label="Download ${esc(item.label)}">${icon("download")}Download Excel</button></article>`).join("") : emptyState("download", catalog.length ? "No matching reports" : "No downloads available", catalog.length ? "Clear the search or choose another module." : "Refresh reports, or ask the owner to check your module access.");
   $("#report-month-field").hidden = !catalog.some(item => item.period === "month");
+  const hasSummary = catalog.some(item => ["attendance-summary", "exam-summary"].includes(item.id));
+  $("#report-summary-controls").hidden = !hasSummary;
+  $("#report-summary-help").hidden = !hasSummary;
+  $("#report-absence-policy-field").hidden = !catalog.some(item => item.id === "exam-summary");
   if (!$("#report-month").value) {
     const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit" }).formatToParts(new Date());
     $("#report-month").value = `${parts.find(part => part.type === "year").value}-${parts.find(part => part.type === "month").value}`;
   }
+  if (!$("#report-summary-month").value) $("#report-summary-month").value = $("#report-month").value;
   if (!report) { $("#report-metrics").innerHTML = metricCard("Access", "Owner only", "shield", true); $("#report-leads").innerHTML = emptyState("shield", "Reports are restricted"); $("#report-attendance").innerHTML = ""; $("#report-audit").innerHTML = ""; return; }
   const metrics = report.metrics || {};
   $("#report-metrics").innerHTML = [
@@ -1438,7 +1443,12 @@ async function downloadReport(reportName, button) {
       return;
     }
     let query = "format=xlsx";
-    if (button.dataset?.reportPeriod === "range") {
+    const isSummary = ["attendance-summary", "exam-summary"].includes(reportName);
+    if (isSummary && $("#report-summary-period").value === "month") {
+      const month = $("#report-summary-month").value;
+      if (!month) throw new Error("Select a summary month before downloading.");
+      query += `&month=${encodeURIComponent(month)}`;
+    } else if (button.dataset?.reportPeriod === "range") {
       const from = $("#report-from").value;
       const to = $("#report-to").value;
       if (from && to && from > to) throw new Error("From date must be on or before To date.");
@@ -1449,6 +1459,7 @@ async function downloadReport(reportName, button) {
       if (!month) throw new Error("Select a payroll month before downloading.");
       query += `&month=${encodeURIComponent(month)}`;
     }
+    if (reportName === "exam-summary") query += `&absencePolicy=${encodeURIComponent($("#report-absence-policy").value)}`;
     const response = await fetch(apiUrl(`/api/reports/export/${encodeURIComponent(reportName)}?${query}`), {
       headers: { Authorization: `Bearer ${state.token}` },
       cache: "no-store",
@@ -3465,8 +3476,11 @@ function bindEvents() {
     const button = event.target.closest("[data-report-export]");
     if (button && !button.disabled) downloadReport(button.dataset.reportExport, button);
   });
-  $("#report-clear-dates").addEventListener("click", () => { $("#report-from").value = ""; $("#report-to").value = ""; toast("History downloads include all dates."); });
+  $("#report-clear-dates").addEventListener("click", () => { $("#report-from").value = ""; $("#report-to").value = ""; $("#report-summary-period").value = "range"; $("#report-summary-month-field").hidden = true; toast("History downloads include all dates."); });
   $("#report-search").addEventListener("input", renderReports);
+  $("#report-summary-period").addEventListener("change", () => {
+    $("#report-summary-month-field").hidden = $("#report-summary-period").value !== "month";
+  });
   $("#report-module").addEventListener("change", renderReports);
   $$("[data-finance-tab]").forEach(button => button.addEventListener("click", () => activateFinanceTab(button.dataset.financeTab)));
   $("#finance-view-tabs").addEventListener("keydown", event => {

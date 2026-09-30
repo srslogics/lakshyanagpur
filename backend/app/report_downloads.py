@@ -76,8 +76,10 @@ def excel_download(filename, sheets):
                     cell.number_format = "[h]:mm"
                 elif isinstance(value, (int, float, Decimal)):
                     heading = headings[column - 1]
-                    cell.number_format = MONEY_FORMAT if heading in MONEY_COLUMNS or heading == "Transaction amount" else '"₹" 0.000000' if heading == "Per-day rate" else "0.0%" if heading == "Attendance rate" else "#,##0" if value == int(value) else "#,##0.0#"
+                    cell.number_format = MONEY_FORMAT if heading in MONEY_COLUMNS or heading == "Transaction amount" else '"₹" 0.000000' if heading == "Per-day rate" else "0.0%" if heading in {"Attendance rate", "Attendance %", "Marks %"} else "#,##0" if value == int(value) else "#,##0.0#"
                 cell.font = Font(name="Arial", size=11, color="20212B")
+                if headings[column - 1] in {"Attendance %", "Marks %"}:
+                    cell.number_format = "0.0%"
                 cell.alignment = Alignment(vertical="top", wrap_text=True, indent=1, horizontal="right" if isinstance(value, (int, float, Decimal)) else "left")
                 if row_number % 2:
                     cell.fill = PatternFill("solid", fgColor="F3F4FA")

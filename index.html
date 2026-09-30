@@ -404,6 +404,12 @@
             <div class="surface-head"><div><h3>Download centre</h3><p>Only reports allowed by your access are shown. Expand a report to see its sheets.</p></div></div>
             <div class="report-filters"><label class="field">From date<input id="report-from" type="date"></label><label class="field">To date<input id="report-to" type="date"></label><label class="field" id="report-month-field">Payroll month<input id="report-month" type="month" min="2000-01" max="2100-12"></label><button class="button button-secondary" id="report-clear-dates" type="button">All dates</button></div>
             <p class="report-scope-help">Blank dates include all history. Student details, academic profiles, fee balances, stock levels and faculty allocations are current snapshots. Payroll uses the selected month.</p>
+            <div class="report-filters" id="report-summary-controls">
+              <label class="field">Summary period<select id="report-summary-period"><option value="range">Use From–To dates above</option><option value="month">Choose a month</option></select></label>
+              <label class="field" id="report-summary-month-field" hidden>Summary month<input id="report-summary-month" type="month" min="2000-01" max="2100-12"></label>
+              <label class="field" id="report-absence-policy-field">Exam absence policy<select id="report-absence-policy" aria-describedby="report-summary-help"><option value="unconfirmed">Unconfirmed — leave affected % blank</option><option value="zero">Count absent as zero marks</option><option value="exclude">Exclude absent exams from %</option></select></label>
+            </div>
+            <p class="report-scope-help" id="report-summary-help">These settings apply only to the two batch summaries. Both include Tatva and Essential sheets. Daily attendance is not P/C/M class attendance. Exam totals use published scores; incomplete results are labelled Partial. Confirm the absence policy with the institute before selecting zero or exclude.</p>
             <div class="report-filters report-search"><label class="field">Find a report<input id="report-search" type="search" placeholder="Search by name or details"></label><label class="field">Module<select id="report-module"><option value="">All modules</option></select></label></div>
             <p class="report-result-count" id="report-result-count" role="status"></p>
             <div class="report-catalog" id="report-catalog" aria-live="polite"></div>
@@ -452,6 +458,6 @@
   <script src="/runtime-config.js?v=2" defer></script>
   <script src="/push-client.js?v=2" defer></script>
   <script src="/payroll-ui.js?v=3" defer></script>
-  <script src="/app.js?v=94" defer></script>
+  <script src="/app.js?v=95" defer></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ const messages = [];
 let requests = [];
 let expired = false;
 let response;
-const fields = {'#report-from':{value:''}, '#report-to':{value:''}, '#report-month':{value:'2026-08'}};
+const fields = {'#report-from':{value:''}, '#report-to':{value:''}, '#report-month':{value:'2026-08'}, '#report-summary-period':{value:'range'}, '#report-summary-month':{value:'2026-09'}, '#report-absence-policy':{value:'unconfirmed'}};
 const context = vm.createContext({
   $: selector => fields[selector],
   state: { token: 'synthetic-token', user: {role: 'owner'} },
@@ -50,9 +50,21 @@ vm.runInContext(implementation, context);
   await context.downloadReport('payments', {disabled:false, dataset:{reportPeriod:'range'}});
   assert.equal(requests.length, 0, 'invalid date range must not request a report');
   assert.match(messages.at(-1).message, /From date/);
+  response = {ok: true, headers: {get: header => header === 'content-type' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'attachment; filename="summary.xlsx"'}, blob: async () => new Blob(['synthetic'])};
+  fields['#report-summary-period'].value = 'month';
+  await context.downloadReport('attendance-summary', {disabled:false, dataset:{reportPeriod:'range'}});
+  assert.equal(requests.at(-1).path, '/api/reports/export/attendance-summary?format=xlsx&month=2026-09');
+  fields['#report-absence-policy'].value = 'exclude';
+  await context.downloadReport('exam-summary', {disabled:false, dataset:{reportPeriod:'range'}});
+  assert.equal(requests.at(-1).path, '/api/reports/export/exam-summary?format=xlsx&month=2026-09&absencePolicy=exclude');
+  fields['#report-summary-period'].value = 'range';
+  fields['#report-from'].value = '2026-09-10';
+  fields['#report-to'].value = '2026-09-10';
+  await context.downloadReport('exam-summary', {disabled:false, dataset:{reportPeriod:'range'}});
+  assert.match(requests.at(-1).path, /from=2026-09-10&to=2026-09-10&absencePolicy=exclude/);
   context.state.user.role = 'demo';
   requests = [];
   await context.downloadReport('students', button);
   assert.equal(requests.length, 0, 'demo exports must never request real records');
-  console.log('All four report download handlers, error handling and demo isolation passed.');
+  console.log('Report downloads, summary dates/months, absence policy, error handling and demo isolation passed.');
 })().catch(error => {console.error(error); process.exitCode = 1;});

@@ -189,6 +189,7 @@ def export_report(
     date_to: date | None = Query(default=None, alias="to"),
     export_format: Literal["csv", "xlsx"] = Query(default="csv", alias="format"),
     month: str | None = None,
+    absence_policy: Literal["unconfirmed", "zero", "exclude"] = Query(default="unconfirmed", alias="absencePolicy"),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*REPORT_ROLES)),
 ):
@@ -208,9 +209,22 @@ def export_report(
             month_bounds(month)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
+    elif month and report_name in {"attendance-summary", "exam-summary"}:
+        if date_from or date_to:
+            raise HTTPException(422, "Choose either a month or From–To dates, not both")
+        try:
+            date_from, date_to, _ = month_bounds(month)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     elif month:
         raise HTTPException(422, "Month selection applies only to payroll")
-    sheets = detailed_sheets(db, report_name, date_from, date_to, month)
+    if report_name in {"attendance-summary", "exam-summary"}:
+        from ..report_summaries import attendance_summary, examination_summary
+        if date_from and date_to and (date_to - date_from).days > 3660:
+            raise HTTPException(422, "Choose a summary range of ten years or less")
+        sheets = attendance_summary(db, date_from, date_to) if report_name == "attendance-summary" else examination_summary(db, date_from, date_to, absence_policy)
+    else:
+        sheets = detailed_sheets(db, report_name, date_from, date_to, month)
     if sheets:
         if export_format != "xlsx" and len(sheets) > 1:
             raise HTTPException(422, "This report contains multiple sheets. Choose Excel (.xlsx) to download all details.")

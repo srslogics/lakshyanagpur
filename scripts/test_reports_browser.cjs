@@ -13,7 +13,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const report = catalog.find(item => url.pathname === `/api/reports/export/${item.id}`)?.id;
   if (report) {
-    exported.push({report, format:url.searchParams.get('format'), from:url.searchParams.get('from'), to:url.searchParams.get('to'), month:url.searchParams.get('month'), authorized:req.headers.authorization === 'Bearer synthetic-test'});
+    exported.push({report, format:url.searchParams.get('format'), from:url.searchParams.get('from'), to:url.searchParams.get('to'), month:url.searchParams.get('month'), absencePolicy:url.searchParams.get('absencePolicy'), authorized:req.headers.authorization === 'Bearer synthetic-test'});
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="lakshya-${report}.xlsx"`);
     res.end(fs.readFileSync(path.join(fixtures, `${report}.xlsx`)));
@@ -91,6 +91,21 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, `No horizontal overflow at ${width}px`);
       await page.screenshot({path:path.join(fixtures, `reports-${width}.png`), fullPage:true});
     }
+    await page.locator('#report-summary-period').selectOption('month');
+    await page.locator('#report-summary-month').fill('2026-09');
+    await page.locator('#report-absence-policy').selectOption('zero');
+    for (const report of ['attendance-summary', 'exam-summary']) {
+      const pending = page.waitForEvent('download');
+      await page.locator(`[data-report-export="${report}"]`).click();
+      await pending;
+      await page.locator(`[data-report-export="${report}"]:enabled`).waitFor();
+      assert.equal(exported.at(-1).month, '2026-09');
+      assert.equal(exported.at(-1).from, null);
+      if (report === 'exam-summary') assert.equal(exported.at(-1).absencePolicy, 'zero');
+    }
+    await page.locator('#report-clear-dates').click();
+    assert.equal(await page.locator('#report-summary-period').inputValue(), 'range');
+    assert.equal(await page.locator('#report-summary-month-field').isVisible(), false);
     assert.deepEqual(errors, []);
     console.log(`Browser downloaded all ${catalog.length} Excel reports, verified date/month filters and mobile layouts.`);
   } finally { await browser.close(); }

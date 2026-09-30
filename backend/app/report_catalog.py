@@ -19,6 +19,8 @@ def report(id, label, module, description, sheets, period="range"):
 
 
 REPORTS = [
+    report("attendance-summary", "Batch attendance summary", "attendance", "Tatva and Essential daily totals, deduplicated dates, attendance percentages and missing-date coverage. Not subject-wise class attendance.", ["Tatva", "Essential", "Date coverage", "Daily evidence"]),
+    report("exam-summary", "Consolidated exam results", "examinations", "Tatva and Essential subject-wise marks and totals, with pending, absent, withheld and Partial results clearly identified.", ["Tatva", "Essential", "Exam detail"]),
     report("students", "Student register", "students", "Contacts, current enrolment, guardian contacts and enrolment history, including inactive students.", ["Student register", "Guardian contacts", "Enrolment history"], "snapshot"),
     report("fees", "Fee balances", "finance", "Agreed fees, receipts, adjustments, outstanding amounts, credits and agreement-level details.", ["Open accounts", "Closed accounts", "Agreement details"], "snapshot"),
     report("payments", "Payment ledger", "finance", "Every transaction, receipt, refund and adjustment, with posting and reconciliation status.", ["Payment ledger"]),
