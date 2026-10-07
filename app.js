@@ -3397,7 +3397,8 @@ function bindEvents() {
       const item = state.leads.find(row => row.id === leadConvert.dataset.leadConvert);
       if (item) openLeadConversionForm(item);
     }
-    const student = event.target.closest("[data-student-id]")?.dataset.studentId; if (student) openStudent(student);
+    // Forms also carry a student ID; only explicit navigation buttons open records.
+    const student = event.target.closest('button[type="button"][data-student-id]')?.dataset.studentId; if (student) openStudent(student);
     const commandView = event.target.closest("[data-command-view]")?.dataset.commandView; if (commandView) showView(commandView);
     const commandStudent = event.target.closest("[data-command-student]")?.dataset.commandStudent; if (commandStudent) { closeCommand(); openStudent(commandStudent); }
     const attendance = event.target.closest("[data-attendance-id]")?.dataset.attendanceId; if (attendance) openAttendance(attendance);
