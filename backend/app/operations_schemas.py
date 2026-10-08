@@ -132,6 +132,7 @@ class FeeAgreementCreate(BaseModel):
 
 
 class PaymentReviewUpdate(BaseModel):
+    amount: int | None = Field(default=None, gt=0)
     reconciliation_status: Literal[
         "ready",
         "needs_date",

@@ -375,6 +375,7 @@ def payment_transaction_updates_are_restricted(mapper, connection, target):
     if changed <= {"reconciliation_status"}:
         return
     if target.status == "staged" and changed <= {
+        "amount",
         "reconciliation_status",
         "transaction_date",
         "method",

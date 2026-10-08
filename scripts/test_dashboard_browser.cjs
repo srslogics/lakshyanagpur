@@ -60,6 +60,12 @@ const server = http.createServer((req, res) => {
     if (process.env.DASHBOARD_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.DASHBOARD_SCREENSHOT_DIR, 'fees-desktop.png'), fullPage:true});
     await page.locator('#agreements-table-body [data-open-ledger]').click();
     assert.equal(await page.locator('#student-ledger-view details.finance-admin-details').getAttribute('open'), null);
+    await page.locator('#ledger-table-body [data-owner-edit="agreement"]').click();
+    assert.ok(await page.locator('#owner-edit-form [name="agreedAmount"]').isVisible());
+    await page.evaluate(() => closeDetail());
+    await page.locator('#ledger-table-body [data-payment-reverse]').click();
+    assert.ok(await page.locator('#payment-reversal-form').isVisible());
+    await page.evaluate(() => closeDetail());
     await page.locator('#ledger-back').click();
     await page.setViewportSize({width:390,height:844});
     await page.waitForTimeout(400);

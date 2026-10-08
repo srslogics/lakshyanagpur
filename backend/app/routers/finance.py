@@ -575,12 +575,17 @@ def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Ses
     if not row or row.status != "staged":
         raise HTTPException(404, "Staged payment not found")
     before = {
+        "amount": row.amount,
         "reconciliationStatus": row.reconciliation_status,
         "transactionDate": row.transaction_date,
         "method": row.method,
         "reference": row.reference,
         "notes": row.notes,
     }
+    if payload.amount is not None:
+        if row.transaction_type != "payment":
+            raise HTTPException(422, "Only imported payments support amount corrections")
+        row.amount = payload.amount
     if payload.transaction_date is not None:
         row.transaction_date = payload.transaction_date
     if payload.method is not None:
@@ -607,6 +612,7 @@ def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Ses
         db.flush()
         balance_correction = _sync_balance_offset(db, row, agreement, actor)
     after = {
+        "amount": row.amount,
         "reconciliationStatus": row.reconciliation_status,
         "transactionDate": row.transaction_date,
         "method": row.method,

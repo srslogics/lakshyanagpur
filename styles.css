@@ -1302,3 +1302,7 @@ p, li, td, th, label, input, select, textarea, button { line-height: 1.45; }
 .report-card ul { margin: 0 0 8px; padding-left: 20px; font-size: .74rem; line-height: 1.7; }
 .report-card > button { align-self: start; min-height: 44px; }
 @media (max-width: 640px) { .report-catalog { grid-template-columns: 1fr; } .report-downloads { padding: 14px; } .report-filters .field { min-width: min(100%, 180px); } .report-card > button { width: 100%; } }
+/* Keep corrections beside their entry and out of printed statements. */
+.ledger-entry-action { margin-top: 10px; }
+.ledger-entry-action .button { min-height: 44px; white-space: normal; }
+@media print { .ledger-entry-action { display: none !important; } }

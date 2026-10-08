@@ -55,9 +55,14 @@ def test_review_exclusion_and_reapproval_rebalance(client, database, owner_heade
         assert response.status_code == 200
         assert sum(map(payment_effect, database.query(PaymentTransaction).all())) == 5000
     response = client.patch(url, headers=owner_headers,
+        json={"reconciliationStatus": "ready", "amount": 1500})
+    assert response.status_code == 200
+    assert response.json()["amount"] == 1500
+    assert sum(map(payment_effect, database.query(PaymentTransaction).all())) == 5000
+    response = client.patch(url, headers=owner_headers,
         json={"reconciliationStatus": "ready", "transactionDate": "2026-08-05"})
     assert response.status_code == 200
-    assert sum(map(payment_effect, database.query(PaymentTransaction).all())) == 6000
+    assert sum(map(payment_effect, database.query(PaymentTransaction).all())) == 6500
 
 
 def test_portal_refund_sign_and_credit(client, database, owner_headers):
