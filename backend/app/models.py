@@ -321,6 +321,15 @@ class FeeAgreement(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(32), default="active")
 
 
+class FinanceRequest(Base):
+    """Replay a committed financial command without posting it twice."""
+    __tablename__ = "finance_requests"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    response: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+
+
 class PaymentTransaction(Base):
     __tablename__ = "payment_transactions"
     __table_args__ = (UniqueConstraint("legacy_import_id", "legacy_line_number", name="uq_legacy_payment_line"),)

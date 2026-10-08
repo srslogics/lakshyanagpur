@@ -61,7 +61,7 @@ function renderPayroll() {
   const rows = (data?.rows || []).filter(row => row.fullName.toLowerCase().includes(query));
   $("#payroll-summary").textContent = data ? `${rows.length} staff · ${data.canFinalizeMonth ? "Ready to finalise" : "Draft estimates"}` : "Payroll is not loaded. Refresh attendance to retry.";
   const action = row => {
-    const label = !canAccess("payroll", "edit") ? "View" : row.attendanceChanged ? "Review changes" : row.status === "finalized" ? "View final" : row.calculation ? "Review draft" : "Prepare";
+    const label = row.archived ? "View history" : row.attendanceConflicts?.length ? "Review conflict" : !canAccess("payroll", "edit") ? "View" : row.attendanceChanged ? "Review changes" : row.status === "finalized" ? "View final" : row.calculation ? "Review draft" : "Prepare";
     return `<button type="button" class="button button-secondary button-small payroll-row-action" data-payroll-person="${esc(row.personKey)}">${label}</button>`;
   };
   const attendance = row => `${row.presentDays} recorded · ${row.explicitAbsentDays || 0} absent · ${payrollDuration(row.totalWorkMinutes)} worked`;
@@ -87,22 +87,24 @@ function payrollPreview(salary, absent, advance, days) {
   if (!/^\d+(\.5)?$/.test(absent) || Number(absent) > days) throw new Error("Enter absent days in whole or half days");
   const amount = cents(salary), deduction = cents(advance), count = BigInt(days);
   const paid = days - Number(absent);
-  const gross = (amount * BigInt(paid) * 2n + count) / (2n * count);
+  const gross = (amount * BigInt(paid * 2) + count) / (2n * count);
   return {payableDays:paid, perDayRate:Number(amount) / 100 / days, payableAmount:Number(gross) / 100, netPayable:Number(gross - deduction) / 100};
 }
 
 function openPayrollEntry(row) {
   const month = payrollData.month, days = payrollData.daysInMonth;
-  const editable = canAccess("payroll", "edit") && state.user?.role !== "demo";
+  const editable = canAccess("payroll", "edit") && state.user?.role !== "demo" && !row.archived && !row.attendanceConflicts?.length;
   const locked = row.status === "finalized" || !editable;
   const c = row.calculation;
   const saved = row.status === "finalized" ? row.savedAttendance : null;
   const dates = saved || row;
-  const dateList = values => values.length ? values.map(value => esc(formatDate(value))).join(", ") : "None";
+  const dateList = (values = []) => values.length ? values.map(value => esc(formatDate(value))).join(", ") : "None";
   const workLog = dates.dailyWorkLog || [];
   const workStatus = value => ({present:"Present", absent:"Absent", half_day:"Half day", weekly_off:"Weekly off", weekly_off_present:"Worked weekly off", weekly_off_half_day:"Half day on weekly off", holiday:"Holiday", leave:"Leave"})[value] || String(value || "Unrecorded").replaceAll("_", " ");
   openDrawer(`Payroll · ${row.fullName}`, `<form class="auth-form" id="payroll-entry-form">
     <p>${esc(month)} · ${days} calendar days · ${esc(row.designation)}</p>
+    ${row.archived ? '<div class="inline-notice">Historical payroll retained for reference. Restore the staff mapping before editing this record.</div>' : ""}
+    ${row.attendanceConflicts?.length ? `<div class="inline-notice">Conflicting attendance on ${dateList(row.attendanceConflicts)}. Correct the source attendance before preparing payroll.</div>` : ""}
     ${row.attendanceChanged ? '<div class="inline-notice">Biometric attendance changed since this calculation was saved. Review deductions; finalised amounts stay unchanged until explicitly reopened.</div>' : ""}
     <details class="payroll-evidence" open><summary>${payrollDuration(dates.totalWorkMinutes)} recorded work time · ${dates.explicitAbsentDays || 0} device-marked absent</summary><div class="payroll-work-summary"><span><small>Days with duration</small><strong>${dates.workDaysWithDuration || 0}</strong></span><span><small>Average work time</small><strong>${payrollDuration(dates.averageWorkMinutes)}</strong></span><span><small>Overtime recorded</small><strong>${payrollDuration(dates.overtimeMinutes)}</strong></span></div>${workLog.length ? `<div class="payroll-work-log">${workLog.map(item => `<div><time>${esc(formatDate(item.date))}</time><span>${esc(workStatus(item.status))}</span><strong>${payrollDuration(item.workMinutes)}</strong>${item.overtimeMinutes ? `<small>${payrollDuration(item.overtimeMinutes)} OT</small>` : ""}</div>`).join("")}</div>` : `<p><strong>Recorded:</strong> ${dateList(dates.presentDates)}</p>`}<p><strong>No device record on completed dates:</strong> ${dateList(dates.unrecordedDates)}</p><p>Device-marked absences are suggested below. Missing punches still need review and are never deducted automatically.</p></details>
     <fieldset ${locked ? "disabled" : ""} class="payroll-fields">

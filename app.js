@@ -71,6 +71,7 @@ const allowedViews = () => new Set([
 ]);
 let financeStudentFilter = "";
 let ledgerCurrentStudentId = "";
+let ledgerCurrentAgreementId = "";
 let ledgerReturnFocus = null;
 let detailReturnFocus = null;
 let detailRouteStudentId = "";
@@ -81,6 +82,34 @@ let timetableSelectedDate = "";
 let timetableView = "schedule";
 let attendanceRegisterFilter = "current";
 let staffAttendanceDate = "";
+let staffAttendanceRequest = 0;
+function staffAttendanceUrl() {
+  const selected = staffAttendanceDate || indiaDateKey(new Date());
+  const [year, month] = selected.split("-").map(Number);
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `/api/attendance/staff-biometric?date_from=${selected.slice(0,7)}-01&date_to=${selected.slice(0,7)}-${last}`;
+}
+async function selectStaffAttendanceDate(day) {
+  const request = ++staffAttendanceRequest;
+  const previous = staffAttendanceDate;
+  staffAttendanceDate = day || indiaDateKey(new Date());
+  try {
+    const data = await api(staffAttendanceUrl());
+    if (request !== staffAttendanceRequest) return;
+    state.staffAttendance = data;
+    renderAttendance();
+  } catch (error) {
+    if (request !== staffAttendanceRequest) return;
+    staffAttendanceDate = previous;
+    renderAttendance();
+    toast(error.message, "error");
+  }
+}
+function shiftStaffAttendanceDate(offset) {
+  const day = new Date(`${staffAttendanceDate || indiaDateKey(new Date())}T12:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + offset);
+  return selectStaffAttendanceDate(day.toISOString().slice(0,10));
+}
 let payrollMonth = "";
 let payrollData = null;
 let payrollLoadSequence = 0;
@@ -584,7 +613,7 @@ async function loadResource(resource) {
     else if (resource === "attendance") {
       [state.attendanceSessions, state.staffAttendance] = await Promise.all([
         api("/api/attendance/registers"),
-        api("/api/attendance/staff-biometric"),
+        api(staffAttendanceUrl()),
       ]);
     }
     else if (resource === "notices") state.notices = await api("/api/communication/notices");
@@ -833,7 +862,7 @@ function studentAccount(agreement) {
   const balance = agreed - ledgerEffect;
   const difference = paid - workbookControl;
   const reviewCount = state.payments.filter(item => item.studentId === agreement.studentId && needsPaymentReview(item)).length;
-  const clientBalanceEntry = payments.find(item => ["balance_credit", "balance_debit"].includes(item.type));
+  const clientBalanceEntry = payments.find(item => ["balance_credit", "balance_debit"].includes(item.type) && item.method === "client_statement" && !item.relatedTransactionId && item.status === "posted" && item.reconciliationStatus === "ready");
   const accountClosed = ["inactive", "forfeited"].includes(agreement.studentStatus) || agreement.status === "inactive";
   return {
     ...agreement,
@@ -848,7 +877,7 @@ function studentAccount(agreement) {
     clientBalanceEntry,
     accountClosed,
     balanceState: balance > 0 ? "due" : balance < 0 ? "credit" : "settled",
-    needsReconciliation: reviewCount > 0 || (!clientBalanceEntry && difference !== 0)
+    needsReconciliation: reviewCount > 0 || (!clientBalanceEntry && (agreement.hasWorkbookControl ?? workbookControl !== 0) && difference !== 0)
   };
 }
 
@@ -894,7 +923,7 @@ function renderAgreementRows() {
   const page = collectionWindow("agreements", rows);
   const visibleOutstanding = rows.reduce((sum, item) => sum + (item.accountClosed ? 0 : Math.max(item.balance, 0)), 0);
   $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
-  const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}Ledger</button>`;
+  const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" data-agreement-id="${esc(item.id)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}Ledger</button>`;
   const editAccountButton = item => canAccess("finance", "edit") ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
   const balanceBadge = item => item.accountClosed ? `<span class="ledger-balance-state ledger-balance-settled">Closed</span>` : `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
   $("#agreements-table-body").innerHTML = rows.length ? page.rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="receivable-fee-summary"><strong class="currency">${money(item.agreed)}</strong><small>${money(item.paid)} paid</small></td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="5">${collectionMoreButton("agreements", page.shown, page.total, "accounts")}</td></tr>` : "") : `<tr><td colspan="5">${emptyState("search", "No matching balances", "Clear a filter to see every student balance.")}</td></tr>`;
@@ -993,23 +1022,24 @@ function showStudentPayments(studentId) {
 }
 
 function renderStudentLedger(studentId) {
-  const agreement = state.agreements.find(item => item.studentId === studentId);
+  const agreement = state.agreements.find(item => item.studentId === studentId && item.id === ledgerCurrentAgreementId) || state.agreements.find(item => item.studentId === studentId && item.isCurrent) || state.agreements.find(item => item.studentId === studentId);
   if (!agreement) { closeStudentLedger(false); return; }
   const account = studentAccount(agreement);
   const student = state.students.find(item => item.id === studentId);
-  const payments = [...account.payments].sort((a, b) => String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31")) || Number(a.line || 0) - Number(b.line || 0));
-  let runningBalance = account.agreed;
+  const payments = [...account.payments].sort((a, b) => String(a.date || "9999-12-31").localeCompare(String(b.date || "9999-12-31")) || String(a.createdAt || "").localeCompare(String(b.createdAt || "")) || Number(a.line || 0) - Number(b.line || 0) || String(a.id).localeCompare(String(b.id)));
+  const originalFee = account.agreed - payments.reduce((sum, item) => sum + Number(item.chargeAmount || 0), 0);
+  let runningBalance = originalFee;
   const transactions = [{
     date: student?.enrollmentDate || null,
     particulars: `${student?.program || "Course"} fee charged`,
     reference: agreement.admissionNumber,
     mode: "—",
-    debit: account.agreed,
+    debit: originalFee,
     credit: null,
     balance: runningBalance,
     note: "Fee agreement"
   }, ...payments.map(item => {
-    const effect = Number(item.signedAmount ?? item.amount ?? 0);
+    const effect = Number(item.signedAmount ?? item.amount ?? 0) - Number(item.chargeAmount || 0);
     runningBalance -= effect;
     return {
       date: item.date,
@@ -1034,19 +1064,20 @@ function renderStudentLedger(studentId) {
     { label: "Agreed fee", value: money(account.agreed), detail: "Account debit" },
     { label: "Paid", value: money(account.paid), detail: `${account.payments.length} ${account.payments.length === 1 ? "payment" : "payments"}` },
     { label: balanceLabel, value: accountBalance(account.balance), detail: accountStatus === "due" ? "Amount receivable" : accountStatus === "credit" ? "Student credit" : "No amount due", featured: true },
-    { label: "Account status", value: account.accountClosed ? "Opted out" : accountStatus === "due" ? "Payment due" : accountStatus === "credit" ? "Credit" : "Settled", detail: account.accountClosed ? "Future liability closed" : account.needsReconciliation ? "Control needs review" : "Control matched" }
+    { label: "Account status", value: account.accountClosed ? "Account closed" : accountStatus === "due" ? "Payment due" : accountStatus === "credit" ? "Credit" : "Settled", detail: account.accountClosed ? "Closed to new collections" : account.needsReconciliation ? "Control needs review" : "Control matched" }
   ].map(item => `<article class="ledger-summary-card ${item.featured ? "ledger-summary-featured" : ""}"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong><small>${esc(item.detail)}</small></article>`).join("");
   $("#ledger-table-body").innerHTML = transactions.map(item => `<tr><td>${item.date ? formatDate(item.date) : `<span class="unknown-date">Date unknown</span>`}</td><td><strong>${esc(item.particulars)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ""}</td><td>${esc(item.reference)}</td><td class="payment-mode">${esc(item.mode)}</td><td class="currency ledger-number">${item.debit == null ? "—" : money(item.debit)}</td><td class="currency ledger-number">${item.credit == null ? "—" : money(item.credit)}</td><td class="currency ledger-number ledger-running-balance">${accountBalance(item.balance)}</td></tr>`).join("");
   $("#ledger-mobile-list").innerHTML = transactions.map(item => `<article class="mobile-record-card ledger-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.particulars)}</h3><p>${item.date ? formatDate(item.date) : "Date unknown"} · ${esc(item.reference)}</p></div><strong class="ledger-mobile-balance">${accountBalance(item.balance)}</strong></div>${item.note ? `<p class="ledger-mobile-note">${esc(item.note)}</p>` : ""}<div class="mobile-record-meta"><div><span>Debit</span><strong>${item.debit == null ? "—" : money(item.debit)}</strong></div><div><span>Credit</span><strong>${item.credit == null ? "—" : money(item.credit)}</strong></div><div><span>Mode</span><strong class="payment-mode">${esc(item.mode)}</strong></div><div><span>Balance</span><strong>${accountBalance(item.balance)}</strong></div></div></article>`).join("");
   const controlDifference = account.difference;
   $("#ledger-control-values").innerHTML = account.clientBalanceEntry
-    ? `<div><span>Client-confirmed balance</span><strong>${accountBalance(account.balance)}</strong></div><div><span>Confirmed on</span><strong>${formatDate(account.clientBalanceEntry.date)}</strong></div><div><span>Recorded payments</span><strong>${money(account.paid)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`
-    : `<div><span>Workbook control</span><strong>${money(account.workbookControl)}</strong></div><div><span>Posted payments</span><strong>${money(account.paid)}</strong></div><div><span>Difference</span><strong class="${controlDifference ? "control-difference" : ""}">${controlDifference ? `${money(Math.abs(controlDifference))} ${controlDifference < 0 ? "below" : "above"}` : money(0)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`;
+    ? `<div><span>Current ledger balance</span><strong>${accountBalance(account.balance)}</strong></div><div><span>Snapshot reference date</span><strong>${formatDate(account.clientBalanceEntry.date)}</strong></div><div><span>Recorded payments</span><strong>${money(account.paid)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`
+    : !(agreement.hasWorkbookControl ?? account.workbookControl !== 0) ? `<div><span>Recorded payments</span><strong>${money(account.paid)}</strong></div><div><span>Import control</span><strong>Not applicable</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>` : `<div><span>Workbook control</span><strong>${money(account.workbookControl)}</strong></div><div><span>Posted payments</span><strong>${money(account.paid)}</strong></div><div><span>Difference</span><strong class="${controlDifference ? "control-difference" : ""}">${controlDifference ? `${money(Math.abs(controlDifference))} ${controlDifference < 0 ? "below" : "above"}` : money(0)}</strong></div><div><span>Review items</span><strong>${account.reviewCount}</strong></div>`;
   injectIcons($("#student-ledger-view"));
 }
 
 function openStudentLedger(studentId, trigger = null, updateRoute = true) {
   ledgerCurrentStudentId = studentId;
+  ledgerCurrentAgreementId = trigger?.dataset.agreementId || "";
   ledgerReturnFocus = trigger;
   if (updateRoute) writeOperationsRoute("finance", { kind: "ledger", studentId });
   renderStudentLedger(studentId);
@@ -1060,6 +1091,7 @@ function closeStudentLedger(restoreFocus = true, updateRoute = true) {
   if (!ledgerCurrentStudentId && $("#student-ledger-view").classList.contains("hidden")) return;
   const hadLedgerRoute = Boolean(ledgerCurrentStudentId);
   ledgerCurrentStudentId = "";
+  ledgerCurrentAgreementId = "";
   $("#student-ledger-view").classList.add("hidden");
   $("#finance-workspace").classList.remove("hidden");
   if (restoreFocus && ledgerReturnFocus?.isConnected) ledgerReturnFocus.focus();
@@ -1141,13 +1173,33 @@ function teachingAssignmentEditButton(item) {
   return canAccess("timetable", "edit") ? `<button class="button button-secondary button-small owner-edit-button" type="button" data-teaching-assignment-edit="${esc(item.id)}">${icon("edit")}Edit</button>` : "";
 }
 
+function assignmentMaterialLink(item) {
+  if (item.material?.available) return `<button type="button" class="button button-secondary button-small" data-assignment-pdf="${esc(item.id)}">Download PDF</button>`;
+  return item.externalUrl ? `<a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a>` : '<span>Material unavailable</span>';
+}
+
+document.addEventListener("click", async event => {
+  const button = event.target.closest("[data-assignment-pdf]");
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  try {
+    const response = await fetch(apiUrl(`/api/academics/assignments/${encodeURIComponent(button.dataset.assignmentPdf)}/material`), {headers: {Authorization: `Bearer ${state.token}`}, cache: "no-store"});
+    if (!response.ok) throw new Error("PDF unavailable or access denied. Refresh assignments and try again.");
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url; link.download = "assignment.pdf"; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) { toast(error.message, "error"); }
+  finally { button.disabled = false; }
+});
+
 function renderAcademics() {
   const now = Date.now();
   const assignments = [...state.assignments].sort((a, b) => asInstant(b.dueAt) - asInstant(a.dueAt));
   const page = collectionWindow("assignments", assignments);
   $("#academics-metrics").innerHTML = compactMetrics([{ label: "Assignments", value: String(state.assignments.length) }, { label: "Published", value: String(state.assignments.filter(item => item.status === "published").length) }, { label: "Due", value: String(state.assignments.filter(item => asInstant(item.dueAt).getTime() >= now).length) }, { label: "Recipients", value: String(state.assignments.reduce((sum, item) => sum + Number(item.recipientCount || 0), 0)) }]);
-  $("#assignments-table-body").innerHTML = assignments.length ? page.rows.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small><a href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a></small></td><td>${esc(item.batch)}<br><small>${esc(item.program || "")}</small></td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("assignment", item.id)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("assignments", page.shown, page.total, "assignments")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
-  $("#assignments-mobile-list").innerHTML = assignments.length ? page.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}${item.program ? ` · ${esc(item.program)}` : ""}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><div class="mobile-card-actions"><a class="button button-secondary" href="${esc(item.externalUrl)}" target="_blank" rel="noopener">Open material</a>${ownerEditButton("assignment", item.id)}</div></article>`).join("") + collectionMoreButton("assignments", page.shown, page.total, "assignments") : emptyState("book", "No assignments");
+  $("#assignments-table-body").innerHTML = assignments.length ? page.rows.map(item => `<tr><td><strong>${esc(item.title)}</strong><br><small>${assignmentMaterialLink(item)}</small></td><td>${esc(item.batch)}<br><small>${esc(item.program || "")}</small></td><td>${esc(item.subject)}</td><td>${formatDateTime(item.dueAt)}</td><td>${item.recipientCount}</td><td><div class="cell-actions">${status(item.status)}${ownerEditButton("assignment", item.id)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="6">${collectionMoreButton("assignments", page.shown, page.total, "assignments")}</td></tr>` : "") : `<tr><td colspan="6">${emptyState("book", "No assignments")}</td></tr>`;
+  $("#assignments-mobile-list").innerHTML = assignments.length ? page.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div><h3>${esc(item.title)}</h3><p>${esc(item.subject)} · ${esc(item.batch)}${item.program ? ` · ${esc(item.program)}` : ""}</p></div>${status(item.status)}</div><div class="mobile-record-meta"><div><span>Due</span><strong>${formatDateTime(item.dueAt)}</strong></div><div><span>Students</span><strong>${item.recipientCount}</strong></div></div><div class="mobile-card-actions">${assignmentMaterialLink(item)}${ownerEditButton("assignment", item.id)}</div></article>`).join("") + collectionMoreButton("assignments", page.shown, page.total, "assignments") : emptyState("book", "No assignments");
 }
 
 function filteredExaminations() {
@@ -1220,8 +1272,8 @@ function renderAttendance() {
   staffDateInput.value = staffAttendanceDate;
   staffDateInput.max = todayKey;
   $("#staff-attendance-date-label").textContent = staffAttendanceDate === todayKey ? `Today · ${formatDate(staffAttendanceDate)}` : formatDate(staffAttendanceDate);
-  $("#staff-attendance-previous").disabled = !staffDates.some(day => day < staffAttendanceDate);
-  $("#staff-attendance-next").disabled = staffAttendanceDate >= todayKey || !staffDates.some(day => day > staffAttendanceDate);
+  $("#staff-attendance-previous").disabled = false;
+  $("#staff-attendance-next").disabled = staffAttendanceDate >= todayKey;
   $("#staff-attendance-today").disabled = staffAttendanceDate === todayKey;
   $("#staff-attendance-metrics").innerHTML = compactMetrics([
     { label: "Staff in register", value: String(staffRecords.length) },
@@ -2469,12 +2521,14 @@ function openInventoryMovementForm(item) {
       reason: String(data.get("reason") || "").trim(),
     };
     try {
-      await api(`/api/inventory/items/${encodeURIComponent(form.dataset.itemId)}/movements`, { method: "POST", body: JSON.stringify(payload) });
-      state.inventory = await api("/api/inventory/bootstrap");
+      await api(`/api/inventory/items/${encodeURIComponent(form.dataset.itemId)}/movements`, { method: "POST", headers: financeRequestHeaders(form), body: JSON.stringify(payload) });
       closeDetail();
-      renderInventory();
-      injectIcons($("#inventory"));
       toast("Stock movement recorded.");
+      try {
+        state.inventory = await api("/api/inventory/bootstrap");
+        renderInventory();
+        injectIcons($("#inventory"));
+      } catch { toast("Movement saved. Refresh inventory to see the updated balance.", "error"); }
     } catch (error) {
       showFormError("#inventory-movement-error", error);
       button.disabled = false;
@@ -2545,6 +2599,21 @@ function openPaymentForm() {
   paymentForm.addEventListener("submit", submitPayment);
 }
 
+function financeRequestHeaders(form) {
+  form.dataset.requestKey ||= crypto.randomUUID();
+  return { "Idempotency-Key": form.dataset.requestKey };
+}
+
+async function refreshSavedFinance(resource, path) {
+  loadedResources.delete("reports");
+  loadedResources.delete("finance");
+  try {
+    state[resource] = await fetchAll(path);
+  } catch {
+    toast("Saved successfully. The list could not refresh; reload to see the latest entries. Do not enter it again.", "error");
+  }
+}
+
 async function submitPayment(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -2560,8 +2629,8 @@ async function submitPayment(event) {
     notes: String(data.get("notes") || "").trim(),
   };
   try {
-    const payment = await api("/api/finance/payments", { method: "POST", body: JSON.stringify(payload) });
-    state.payments = await fetchAll("/api/finance/transactions");
+    const payment = await api("/api/finance/payments", { method: "POST", headers: financeRequestHeaders(form), body: JSON.stringify(payload) });
+    await refreshSavedFinance("payments", "/api/finance/transactions");
     closeDetail();
     renderAll();
     activateFinanceTab("payments");
@@ -2597,6 +2666,7 @@ async function submitPaymentReversal(event) {
     const kind = data.get("kind");
     await api(`/api/finance/payments/${encodeURIComponent(form.dataset.paymentId)}/reverse`, {
       method: "POST",
+      headers: financeRequestHeaders(form),
       body: JSON.stringify({
         transactionDate: data.get("transactionDate"),
         kind,
@@ -2605,7 +2675,7 @@ async function submitPaymentReversal(event) {
         reference: String(data.get("reference") || "").trim() || null,
       }),
     });
-    state.payments = await fetchAll("/api/finance/transactions");
+    await refreshSavedFinance("payments", "/api/finance/transactions");
     closeDetail();
     renderAll();
     activateFinanceTab("payments");
@@ -2671,9 +2741,10 @@ async function submitFuturePayment(event) {
   try {
     await api(installmentId ? `/api/finance/installments/${encodeURIComponent(installmentId)}` : "/api/finance/installments", {
       method: installmentId ? "PATCH" : "POST",
+      headers: financeRequestHeaders(form),
       body: JSON.stringify(payload),
     });
-    state.installments = await fetchAll("/api/finance/installments");
+    await refreshSavedFinance("installments", "/api/finance/installments");
     closeDetail();
     renderAll();
     activateFinanceTab("payments");
@@ -3032,7 +3103,7 @@ async function openOwnerEdit(kind, id) {
     fields = `<label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label><div class="form-pair"><label class="field"><span>Faculty</span><select name="facultyId">${state.timetable.faculty.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.facultyId)}>${esc(row.fullName)}</option>`).join("")}</select></label><label class="field"><span>Room</span><select name="roomId">${state.timetable.rooms.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.roomId)}>${esc(row.name)}</option>`).join("")}</select></label></div><div class="form-pair"><label class="field"><span>Starts</span><input name="startsAt" type="datetime-local" value="${localInputValue(item.startsAt)}" required></label><label class="field"><span>Ends</span><input name="endsAt" type="datetime-local" value="${localInputValue(item.endsAt)}" required></label></div><div class="form-pair"><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["scheduled","completed","cancelled"], item.status)}</select></label><label class="check-field"><input name="allowOverride" type="checkbox"><span>Allow schedule override</span></label></div><label class="field"><span>Notes</span><textarea name="notes">${esc(item.notes || "")}</textarea></label><label class="field"><span>Override reason</span><textarea name="overrideReason">${esc(item.overrideReason || "")}</textarea></label>`;
   } else if (kind === "assignment") {
     title = "Edit assignment";
-    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><div class="form-pair"><label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label></div><label class="field"><span>Due</span><input name="dueAt" type="datetime-local" value="${localInputValue(item.dueAt)}" required></label><label class="field"><span>Material link</span><input name="externalUrl" type="url" value="${esc(item.externalUrl)}" required></label><label class="field"><span>Instructions</span><textarea name="instructions">${esc(item.instructions || "")}</textarea></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
+    fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" required></label><div class="form-pair"><label class="field"><span>Batch</span><select name="batchId">${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId">${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label></div><label class="field"><span>Due</span><input name="dueAt" type="datetime-local" value="${localInputValue(item.dueAt)}" required></label><label class="field"><span>Material link</span><input name="externalUrl" type="url" value="${esc(item.externalUrl)}"></label><label class="field"><span>Instructions</span><textarea name="instructions">${esc(item.instructions || "")}</textarea></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
   } else if (kind === "notice") {
     title = "Edit notice";
     fields = `<label class="field"><span>Title</span><input name="title" value="${esc(item.title)}" minlength="2" maxlength="255" required></label><label class="field"><span>Message</span><textarea name="body" minlength="2" maxlength="5000" required>${esc(item.body)}</textarea></label><div class="form-pair"><label class="field"><span>Audience</span><select name="audience">${ownerStatusOptions(["all","parents","students","faculty","batch","subject"], item.audience)}</select></label><label class="field"><span>Channel</span><select name="channel">${ownerStatusOptions(["in_app","email","sms","whatsapp"], item.channel)}</select></label></div><label class="field"><span>Batch</span><select name="batchId"><option value="">Not selected</option>${state.timetable.batches.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.batchId)}>${esc(row.name)} · ${esc(row.program)}</option>`).join("")}</select></label><label class="field"><span>Subject</span><select name="subjectId"><option value="">Not selected</option>${state.timetable.subjects.map(row => `<option value="${esc(row.id)}"${selected(row.id,item.subjectId)}>${esc(row.name)}</option>`).join("")}</select></label><label class="field"><span>Status</span><select name="status">${ownerStatusOptions(["draft","published"], item.status)}</select></label>`;
@@ -3060,7 +3131,7 @@ async function submitOwnerEdit(event) {
   else if (kind === "agreement") { endpoint = `/api/finance/agreements/${id}`; payload.agreedAmount = Number(payload.agreedAmount); payload.legacyRegistrationTotal = Number(payload.legacyRegistrationTotal); }
   else if (kind === "payment") { endpoint = `/api/finance/staged-payments/${id}/review`; payload.transactionDate ||= null; payload.method ||= null; payload.reference ||= null; }
   else if (kind === "session") { endpoint = `/api/timetable/sessions/${id}`; payload.startsAt = indiaInputToISOString(payload.startsAt); payload.endsAt = indiaInputToISOString(payload.endsAt); payload.allowOverride = form.elements.allowOverride.checked; }
-  else if (kind === "assignment") { endpoint = `/api/academics/assignments/${id}`; payload.dueAt = indiaInputToISOString(payload.dueAt); }
+  else if (kind === "assignment") { endpoint = `/api/academics/assignments/${id}`; payload.dueAt = indiaInputToISOString(payload.dueAt); payload.externalUrl ||= null; }
   else if (kind === "notice") { endpoint = `/api/communication/notices/${id}`; payload.batchId ||= null; payload.subjectId ||= null; }
   else if (kind === "user" || kind === "access-user") { endpoint = `/api/settings/users/${id}`; payload.isActive = form.elements.isActive.checked; payload.password ||= null; }
   else { endpoint = `/api/settings/${{ batch: "batches", subject: "subjects", room: "rooms" }[kind]}/${id}`; payload.isActive = form.elements.isActive.checked; if (kind === "room") payload.capacity = Number(payload.capacity); }
@@ -3068,8 +3139,12 @@ async function submitOwnerEdit(event) {
     await api(endpoint, { method: "PATCH", body: JSON.stringify(payload) });
     if (kind === "student") await refreshStudentAndFinanceState();
     else if (kind === "lead") state.leads = await fetchAll("/api/admissions/leads");
-    else if (kind === "agreement") state.agreements = await fetchAll("/api/finance/agreements");
-    else if (kind === "payment") state.payments = await fetchAll("/api/finance/transactions");
+    else if (kind === "agreement") {
+      await refreshSavedFinance("agreements", "/api/finance/agreements");
+      await refreshSavedFinance("payments", "/api/finance/transactions");
+      await refreshSavedFinance("installments", "/api/finance/installments");
+    }
+    else if (kind === "payment") await refreshSavedFinance("payments", "/api/finance/transactions");
     else if (kind === "session") { state.timetable = await api("/api/timetable/bootstrap"); state.sessions = state.timetable.sessions; }
     else if (kind === "assignment") state.assignments = await api("/api/academics/assignments");
     else if (kind === "notice") state.notices = await api("/api/communication/notices");
@@ -3446,21 +3521,17 @@ function bindEvents() {
     showSettingsSection(tabs[next].dataset.settingsSection);
     tabs[next].focus();
   });
-  $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/registers"), api("/api/attendance/staff-biometric")]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
+  $("#refresh-attendance").addEventListener("click", async () => { try { [state.attendanceSessions, state.staffAttendance] = await Promise.all([api("/api/attendance/registers"), api(staffAttendanceUrl())]); renderAttendance(); toast("Attendance refreshed."); } catch (error) { toast(error.message, "error"); } });
   $("#attendance-register-filter").addEventListener("change", event => { attendanceRegisterFilter = event.target.value; resetCollection("attendance"); renderAttendance(); });
   $("#timetable-date-picker").addEventListener("change", event => { timetableSelectedDate = event.target.value || indiaDateKey(new Date()); renderTimetable(); });
   $("#timetable-today").addEventListener("click", () => { timetableSelectedDate = indiaDateKey(new Date()); renderTimetable(); });
-  $("#staff-attendance-date").addEventListener("change", event => { staffAttendanceDate = event.target.value || indiaDateKey(new Date()); renderAttendance(); });
-  $("#staff-attendance-today").addEventListener("click", () => { staffAttendanceDate = indiaDateKey(new Date()); renderAttendance(); });
+  $("#staff-attendance-date").addEventListener("change", event => selectStaffAttendanceDate(event.target.value));
+  $("#staff-attendance-today").addEventListener("click", () => selectStaffAttendanceDate(indiaDateKey(new Date())));
   $("#staff-attendance-previous").addEventListener("click", () => {
-    const dates = [...new Set((state.staffAttendance?.records || []).map(item => item.date).filter(day => day < staffAttendanceDate))].sort();
-    staffAttendanceDate = dates.at(-1) || staffAttendanceDate;
-    renderAttendance();
+    shiftStaffAttendanceDate(-1);
   });
   $("#staff-attendance-next").addEventListener("click", () => {
-    const dates = [...new Set((state.staffAttendance?.records || []).map(item => item.date).filter(day => day > staffAttendanceDate))].sort();
-    staffAttendanceDate = dates[0] || staffAttendanceDate;
-    renderAttendance();
+    shiftStaffAttendanceDate(1);
   });
   $$('[data-attendance-tab]').forEach(button => button.addEventListener("click", () => activateAttendanceTab(button.dataset.attendanceTab)));
   $("#attendance-view-tabs").addEventListener("keydown", event => {

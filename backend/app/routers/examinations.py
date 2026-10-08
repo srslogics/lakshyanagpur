@@ -24,8 +24,10 @@ router = APIRouter(prefix="/api/examinations", tags=["examinations"])
 ROLES = ("owner", "academic_coordinator", "faculty")
 
 
-def _can_manage(actor: User, exam: Examination) -> bool:
-    return actor.role in ("owner", "academic_coordinator") or exam.faculty_id == actor.id
+def _can_manage(actor: User, exam: Examination, db=None) -> bool:
+    from ..permissions import explicit_permission
+    override = explicit_permission(db, actor.id, "examinations", "edit") if db is not None else None
+    return override is True or actor.role in ("owner", "academic_coordinator") or exam.faculty_id == actor.id
 
 
 def _active_roster(db: Session, batch: Batch, subject: Subject):
@@ -150,6 +152,8 @@ def _serialize_many(db: Session, rows):
 
 
 def _get_exam_row(db: Session, exam_id: str):
+    from ..concurrency import transaction_lock
+    transaction_lock(db, f"examination:{exam_id}")
     row = (
         db.query(Examination, Batch, Subject, User)
         .join(Batch, Batch.id == Examination.batch_id)
@@ -251,7 +255,7 @@ def examination_detail(
     actor: User = Depends(require_roles(*ROLES)),
 ):
     exam, batch, subject, faculty = _get_exam_row(db, exam_id)
-    if not _can_manage(actor, exam):
+    if not _can_manage(actor, exam, db):
         raise HTTPException(403, "You do not have access to this examination")
     roster = _exam_roster(db, exam)
     results = {
@@ -283,7 +287,7 @@ def update_examination(
     actor: User = Depends(require_roles(*ROLES)),
 ):
     exam, old_batch, old_subject, old_faculty = _get_exam_row(db, exam_id)
-    if not _can_manage(actor, exam):
+    if not _can_manage(actor, exam, db):
         raise HTTPException(403, "You do not have access to this examination")
     if exam.status == "published":
         raise HTTPException(409, "Published examinations cannot be edited")
@@ -341,7 +345,7 @@ def save_marks(
     actor: User = Depends(require_roles(*ROLES)),
 ):
     exam, batch, _, _ = _get_exam_row(db, exam_id)
-    if not _can_manage(actor, exam):
+    if not _can_manage(actor, exam, db):
         raise HTTPException(403, "You do not have access to this examination")
     if exam.status in ("published", "cancelled"):
         raise HTTPException(409, "Marks cannot be changed for this examination")
@@ -396,7 +400,7 @@ def publish_results(
     actor: User = Depends(require_roles(*ROLES)),
 ):
     exam, batch, subject, faculty = _get_exam_row(db, exam_id)
-    if not _can_manage(actor, exam):
+    if not _can_manage(actor, exam, db):
         raise HTTPException(403, "You do not have access to this examination")
     if exam.status == "cancelled":
         raise HTTPException(409, "Cancelled examinations cannot be published")

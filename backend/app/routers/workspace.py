@@ -20,6 +20,7 @@ from ..models import (
 from ..schemas import LEAD_SOURCES, LEAD_STAGES, LeadRead
 from ..permissions import effective_permissions
 from ..security import require_roles
+from ..services import current_fee_agreement_ids
 from .finance import _installment_payload, _payment_payload
 from .students import _list_item
 
@@ -176,6 +177,7 @@ def _students(db: Session):
 
 
 def _finance(db: Session):
+    current_ids = current_fee_agreement_ids(db)
     agreements = [
         {
             "id": agreement.id,
@@ -186,6 +188,9 @@ def _finance(db: Session):
             "admissionNumber": student.admission_number,
             "agreedAmount": agreement.agreed_amount,
             "legacyRegistrationTotal": agreement.legacy_registration_total,
+            "hasWorkbookControl": bool(agreement.legacy_import_id),
+            "createdAt": agreement.created_at,
+            "isCurrent": current_ids.get(student.id) == agreement.id,
             "currency": agreement.currency,
             "status": agreement.status,
         }

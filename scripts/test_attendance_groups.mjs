@@ -46,8 +46,8 @@ for (const person of [director, { ...director, attendanceGroup: undefined }, { .
   const metrics = JSON.parse(elements.get("#staff-attendance-metrics").innerHTML);
   assert.equal(metrics[0].value, "7");
   assert.equal(metrics[1].value, "0"); // The director's completed shift is not a staff shift.
-  assert.equal(metrics[2].value, "7");
-  assert.equal(metrics[3].value, staff[0].arrivalAt);
+  assert.equal(metrics[2].value, "0"); // No absent staff in these punch records.
+  assert.equal(metrics[3].value, "—"); // No recorded completed durations.
 }
 
 const emptyDay = render([...staff, director], "2026-09-01");

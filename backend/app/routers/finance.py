@@ -1,13 +1,16 @@
 from datetime import datetime
+from hashlib import sha256
+import json
 from secrets import token_hex
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Enrollment, FeeAgreement, FeeInstallment, PaymentTransaction, Student, User
+from ..models import Enrollment, FeeAgreement, FeeInstallment, FinanceRequest, PaymentTransaction, Student, User
 from ..operations_schemas import (
     FeeAgreementCreate,
     FeeAgreementUpdate,
@@ -18,10 +21,32 @@ from ..operations_schemas import (
     PaymentReviewUpdate,
 )
 from ..security import require_roles
-from ..services import audit, payment_effect, received_effect
+from ..services import audit, current_fee_agreement, current_fee_agreement_ids, payment_effect, received_effect
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
 FINANCE_ROLES = ("owner", "accounts", "admissions_manager")
+
+
+def _replay(db, actor, key, scope, payload):
+    if not key:
+        return None, None
+    if len(key) > 128 or len(key) < 16:
+        raise HTTPException(422, "Invalid payment request key")
+    # Serializes retries across workers; the response and posting commit together.
+    db.query(User).filter_by(id=actor.id).with_for_update().one()
+    identity = sha256(f"{actor.id}:{key}".encode()).hexdigest()
+    fingerprint = sha256(json.dumps([scope, payload.model_dump(mode="json")], sort_keys=True).encode()).hexdigest()
+    saved = db.get(FinanceRequest, identity)
+    if saved:
+        if saved.fingerprint != fingerprint:
+            raise HTTPException(409, "This request was already used with different details. Refresh before starting a new entry.")
+        return None, saved.response
+    return (identity, fingerprint), None
+
+
+def _save_replay(db, request, response):
+    if request:
+        db.add(FinanceRequest(id=request[0], fingerprint=request[1], response=jsonable_encoder(response)))
 
 
 def _india_today():
@@ -68,6 +93,7 @@ def _payment_payload(row: PaymentTransaction, student: Student):
         "amount": row.amount,
         "signedAmount": _transaction_effect(row),
         "receivedAmount": received_effect(row),
+        "chargeAmount": row.amount if row.transaction_type == "fee_increase" else -row.amount if row.transaction_type == "fee_concession" else 0,
         "method": row.method,
         "type": row.transaction_type,
         "sourceNote": row.source_note,
@@ -90,6 +116,8 @@ def _agreement_payload(row: FeeAgreement, student: Student):
         "admissionNumber": student.admission_number,
         "agreedAmount": row.agreed_amount,
         "legacyRegistrationTotal": row.legacy_registration_total,
+        "hasWorkbookControl": bool(row.legacy_import_id),
+        "createdAt": row.created_at,
         "currency": row.currency,
         "status": row.status,
     }
@@ -141,6 +169,7 @@ def _balance_snapshot_covering_payment(
             PaymentTransaction.transaction_type.in_(("balance_credit", "balance_debit")),
             PaymentTransaction.status == "posted",
             PaymentTransaction.reconciliation_status == "ready",
+            PaymentTransaction.related_transaction_id.is_(None),
             PaymentTransaction.transaction_date.is_not(None),
             PaymentTransaction.transaction_date >= transaction_date,
         )
@@ -153,81 +182,53 @@ def _balance_snapshot_covering_payment(
     )
 
 
-def _preserve_client_balance_for_backdated_payment(
-    db: Session,
-    *,
-    payment: PaymentTransaction,
-    agreement: FeeAgreement,
-    actor: User,
-) -> PaymentTransaction | None:
-    """Neutralize a receipt already included in a confirmed balance snapshot.
-
-    The receipt remains real cash received. The offset changes only the ledger
-    balance so a historical payment cannot be counted twice after migration.
-    """
-    if payment.transaction_date is None:
+def _sync_balance_offset(db, payment, agreement, actor, cancel_amount=0):
+    snapshot = (_balance_snapshot_covering_payment(db, agreement, payment.transaction_date)
+                if payment.transaction_date and not cancel_amount and payment_effect(payment) else None)
+    entries = db.query(PaymentTransaction).filter(
+        PaymentTransaction.related_transaction_id == payment.id,
+        PaymentTransaction.method == "client_statement",
+        PaymentTransaction.transaction_type.in_(("balance_credit", "balance_debit")),
+    ).all()
+    existing = sum(payment_effect(entry) for entry in entries)
+    desired = min(0, existing + cancel_amount) if cancel_amount else -payment.amount if snapshot else 0
+    delta = desired - existing
+    if not delta:
         return None
-    snapshot = _balance_snapshot_covering_payment(
-        db,
-        agreement,
-        payment.transaction_date,
+    row = PaymentTransaction(
+        student_id=payment.student_id, fee_agreement_id=agreement.id,
+        transaction_date=snapshot.transaction_date if snapshot else _india_today(),
+        amount=abs(delta), method="client_statement",
+        transaction_type="balance_credit" if delta > 0 else "balance_debit",
+        source_note="Historical receipt balance reconciliation",
+        notes=f"Append-only offset correction for {payment.receipt_number or payment.id}",
+        related_transaction_id=payment.id, created_by=actor.id,
+        status="posted", reconciliation_status="ready",
     )
-    if not snapshot:
-        return None
-    existing = (
-        db.query(PaymentTransaction)
-        .filter(
-            PaymentTransaction.related_transaction_id == payment.id,
-            PaymentTransaction.transaction_type == "balance_debit",
-            PaymentTransaction.method == "client_statement",
-            PaymentTransaction.status == "posted",
-        )
-        .first()
-    )
-    if existing:
-        return existing
-    correction = PaymentTransaction(
-        student_id=payment.student_id,
-        fee_agreement_id=agreement.id,
-        transaction_date=snapshot.transaction_date,
-        amount=payment.amount,
-        method="client_statement",
-        transaction_type="balance_debit",
-        source_note="Backdated receipt already included in confirmed balance",
-        reference=snapshot.reference,
-        notes=(
-            f"Offsets {payment.receipt_number or payment.id} for ledger balance only; "
-            f"the receipt remains included in money received."
-        ),
-        related_transaction_id=payment.id,
-        created_by=actor.id,
-        status="posted",
-        reconciliation_status="ready",
-    )
-    db.add(correction)
+    db.add(row)
     db.flush()
-    audit(
-        db,
-        actor,
-        "finance.payment.balance_reconciliation",
-        "payment_transaction",
-        correction.id,
-        after={
-            "paymentId": payment.id,
-            "snapshotId": snapshot.id,
-            "snapshotDate": snapshot.transaction_date,
-            "amount": correction.amount,
-        },
-    )
-    return correction
+    audit(db, actor, "finance.payment.balance_reconciliation", "payment_transaction", row.id,
+          after={"paymentId": payment.id, "balanceEffect": delta})
+    return row
 
+
+def _preserve_client_balance_for_backdated_payment(
+    db: Session, *, payment: PaymentTransaction, agreement: FeeAgreement, actor: User,
+) -> PaymentTransaction | None:
+    return _sync_balance_offset(db, payment, agreement, actor)
 
 @router.get("/agreements")
 def fee_agreements(page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), db: Session = Depends(get_db), user: User = Depends(require_roles(*FINANCE_ROLES))):
     query = db.query(FeeAgreement, Student).join(Student, Student.id == FeeAgreement.student_id).filter(Student.is_test_account.is_(False))
     total = query.count()
-    rows = query.order_by(Student.full_name).offset((page - 1) * page_size).limit(page_size).all()
-    return {"items": [_agreement_payload(fee, student) for fee, student in rows], "total": total, "page": page, "pageSize": page_size}
+    rows = query.order_by(Student.full_name, FeeAgreement.id).offset((page - 1) * page_size).limit(page_size).all()
+    items = []
+    current_ids = current_fee_agreement_ids(db)
+    for fee, student in rows:
+        item = _agreement_payload(fee, student)
+        item["isCurrent"] = current_ids.get(student.id) == fee.id
+        items.append(item)
+    return {"items": items, "total": total, "page": page, "pageSize": page_size}
 
 
 @router.post("/agreements", status_code=201)
@@ -297,6 +298,7 @@ def transactions(
         query.order_by(
             PaymentTransaction.transaction_date.desc().nullslast(),
             PaymentTransaction.created_at.desc(),
+            PaymentTransaction.id.desc(),
         )
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -315,11 +317,15 @@ def post_payment(
     payload: PaymentCreate,
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles("owner", "accounts")),
+    idempotency_key: str | None = Header(default=None),
 ):
+    request, saved = _replay(db, actor, idempotency_key, "payment", payload)
+    if saved is not None:
+        return saved
     student = db.get(Student, payload.student_id)
     if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
-    agreement = db.query(FeeAgreement).filter_by(student_id=student.id).first()
+    agreement = current_fee_agreement(db, student.id)
     if not agreement:
         raise HTTPException(409, "Create a fee agreement before recording a payment")
     if student.status not in {"active", "draft"}:
@@ -350,6 +356,7 @@ def post_payment(
         after["balanceReconciledThrough"] = balance_correction.transaction_date
         after["balanceCorrectionId"] = balance_correction.id
     audit(db, actor, "finance.payment.post", "payment_transaction", row.id, after=after)
+    _save_replay(db, request, after)
     db.commit()
     return after
 
@@ -360,8 +367,12 @@ def reverse_payment(
     payload: PaymentReversalCreate,
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles("owner", "accounts")),
+    idempotency_key: str | None = Header(default=None),
 ):
-    original = db.get(PaymentTransaction, payment_id)
+    request, saved = _replay(db, actor, idempotency_key, f"reverse:{payment_id}", payload)
+    if saved is not None:
+        return saved
+    original = db.query(PaymentTransaction).filter_by(id=payment_id).with_for_update().first()
     if not original or original.status != "posted" or original.transaction_type != "payment":
         raise HTTPException(404, "Posted payment not found")
     if payload.transaction_date < (original.transaction_date or payload.transaction_date):
@@ -405,6 +416,8 @@ def reverse_payment(
     )
     db.add(row)
     db.flush()
+    if payload.kind in {"void", "reversal"}:
+        _sync_balance_offset(db, original, db.get(FeeAgreement, original.fee_agreement_id), actor, cancel_amount=amount)
     after = _payment_payload(row, student)
     audit(
         db,
@@ -414,6 +427,7 @@ def reverse_payment(
         row.id,
         after=after,
     )
+    _save_replay(db, request, after)
     db.commit()
     return after
 
@@ -447,11 +461,15 @@ def create_installment(
     payload: FeeInstallmentCreate,
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles(*FINANCE_ROLES)),
+    idempotency_key: str | None = Header(default=None),
 ):
+    request, saved = _replay(db, actor, idempotency_key, "installment", payload)
+    if saved is not None:
+        return saved
     student = db.get(Student, payload.studentId)
     if not student or student.is_test_account:
         raise HTTPException(404, "Student not found")
-    agreement = db.query(FeeAgreement).filter_by(student_id=student.id).first()
+    agreement = current_fee_agreement(db, student.id)
     if not agreement:
         raise HTTPException(409, "Create a fee agreement before scheduling a payment")
     if student.status not in {"active", "draft"} or agreement.status not in {"active", "draft"}:
@@ -478,8 +496,10 @@ def create_installment(
         row.id,
         after=_installment_payload(row, student),
     )
+    after = _installment_payload(row, student)
+    _save_replay(db, request, after)
     db.commit()
-    return _installment_payload(row, student)
+    return after
 
 
 @router.patch("/installments/{installment_id}")
@@ -494,6 +514,12 @@ def update_installment(
         raise HTTPException(404, "Future payment not found")
     student = db.get(Student, row.student_id)
     before = _installment_payload(row, student)
+    agreement = db.get(FeeAgreement, row.fee_agreement_id)
+    if payload.status == "scheduled":
+        if student.status not in {"active", "draft"} or agreement.status not in {"active", "draft"}:
+            raise HTTPException(409, "Reopen the account before scheduling a payment")
+        if payload.dueDate < _india_today() and (payload.dueDate != row.due_date or row.status != "scheduled"):
+            raise HTTPException(422, "New or restored payment dates cannot be in the past")
     row.due_date = payload.dueDate
     row.amount = payload.amount
     row.expected_method = payload.expectedMethod
@@ -515,13 +541,25 @@ def update_installment(
 
 @router.patch("/agreements/{agreement_id}")
 def update_agreement(agreement_id: str, payload: FeeAgreementUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles(*FINANCE_ROLES))):
-    row = db.get(FeeAgreement, agreement_id)
+    row = db.query(FeeAgreement).filter_by(id=agreement_id).with_for_update().first()
     if not row:
         raise HTTPException(404, "Fee agreement not found")
     student = db.get(Student, row.student_id)
     if student.status in {"inactive", "forfeited"} and payload.status in {"active", "draft"}:
         raise HTTPException(409, "Reactivate the student before reopening the fee agreement")
     before = {"agreedAmount": row.agreed_amount, "legacyRegistrationTotal": row.legacy_registration_total, "currency": row.currency, "status": row.status}
+    delta = payload.agreed_amount - row.agreed_amount
+    if delta:
+        db.add(PaymentTransaction(
+            student_id=row.student_id, fee_agreement_id=row.id,
+            transaction_date=_india_today(), amount=abs(delta), method="fee_amendment",
+            transaction_type="fee_increase" if delta > 0 else "fee_concession",
+            source_note="Course fee amendment", notes=f"Agreed fee changed from {row.agreed_amount} to {payload.agreed_amount}",
+            created_by=actor.id, status="posted", reconciliation_status="ready",
+        ))
+    if payload.status == "inactive":
+        for installment in db.query(FeeInstallment).filter_by(fee_agreement_id=row.id, status="scheduled"):
+            installment.status = "cancelled"
     row.agreed_amount = payload.agreed_amount
     row.legacy_registration_total = payload.legacy_registration_total
     row.currency = "INR"
@@ -533,7 +571,7 @@ def update_agreement(agreement_id: str, payload: FeeAgreementUpdate, db: Session
 
 @router.patch("/staged-payments/{payment_id}/review")
 def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles(*FINANCE_ROLES))):
-    row = db.get(PaymentTransaction, payment_id)
+    row = db.query(PaymentTransaction).filter_by(id=payment_id).with_for_update().first()
     if not row or row.status != "staged":
         raise HTTPException(404, "Staged payment not found")
     before = {
@@ -554,6 +592,8 @@ def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Ses
     if payload.reconciliation_status == "ready":
         if row.transaction_date is None:
             raise HTTPException(422, "Enter the confirmed payment date before marking this row ready")
+        if row.transaction_date > _india_today():
+            raise HTTPException(422, "Payment date cannot be in the future")
         if row.method not in {"cash", "upi", "bank_transfer", "cheque", "card", "other"}:
             raise HTTPException(422, "Select the confirmed payment mode before marking this row ready")
     if payload.reconciliation_status == "needs_date" and row.transaction_date is not None:
@@ -562,18 +602,10 @@ def update_payment_review(payment_id: str, payload: PaymentReviewUpdate, db: Ses
         raise HTTPException(422, "This row already has a confirmed payment mode; choose another review state")
     row.reconciliation_status = payload.reconciliation_status
     balance_correction = None
-    if (
-        payload.reconciliation_status == "ready"
-        and before["reconciliationStatus"] != "ready"
-    ):
+    if row.fee_agreement_id:
         agreement = db.get(FeeAgreement, row.fee_agreement_id)
         db.flush()
-        balance_correction = _preserve_client_balance_for_backdated_payment(
-            db,
-            payment=row,
-            agreement=agreement,
-            actor=actor,
-        )
+        balance_correction = _sync_balance_offset(db, row, agreement, actor)
     after = {
         "reconciliationStatus": row.reconciliation_status,
         "transactionDate": row.transaction_date,

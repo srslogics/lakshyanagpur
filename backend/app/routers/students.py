@@ -28,6 +28,7 @@ from ..services import (
     audit,
     canonical_program,
     canonical_subject,
+    current_fee_agreement,
     payment_effect,
 )
 
@@ -406,7 +407,7 @@ def student_detail(student_id: str, db: Session = Depends(get_db), user: User = 
         .order_by(Enrollment.is_active.desc(), Enrollment.created_at.desc())
         .first()
     )
-    fee = db.query(FeeAgreement).filter_by(student_id=student.id).first()
+    fee = current_fee_agreement(db, student.id)
     legacy = db.query(LegacyAdmissionRow).filter_by(student_id=student.id).first()
     academic = db.get(StudentAcademicProfile, student.id)
     subjects = (

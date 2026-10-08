@@ -38,6 +38,31 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 REPORT_ROLES = ("owner", "accounts", "academic_coordinator")
 
 
+def _recorded_attendance_counts(db, after=None):
+    """Count daily evidence once; drafts and conflicting dates are not present."""
+    evidence = {}
+    for entry, register, session in (
+        db.query(AttendanceEntry, AttendanceRegister, ClassSession)
+        .join(AttendanceRegister, AttendanceRegister.id == AttendanceEntry.register_id)
+        .join(Student, Student.id == AttendanceEntry.student_id)
+        .outerjoin(ClassSession, ClassSession.id == AttendanceRegister.class_session_id)
+        .filter(AttendanceRegister.status == "submitted", Student.is_test_account.is_(False)).all()
+    ):
+        day = register.attendance_date or (local_datetime(session.starts_at).date() if session else None)
+        if not day or (after and day <= after):
+            continue
+        evidence.setdefault((entry.student_id, day), set()).add("present" if entry.status == "late" else entry.status)
+    for entry in db.query(DailyAttendanceEntry).join(Student, Student.id == DailyAttendanceEntry.student_id).filter(Student.is_test_account.is_(False)).all():
+        day = entry.attendance_date
+        if day and (not after or day > after):
+            evidence.setdefault((entry.student_id, day), set()).add("present" if entry.normalized_status == "late" else entry.normalized_status or "unclassified")
+    counts = {}
+    for statuses in evidence.values():
+        status = next(iter(statuses)) if len(statuses) == 1 else "conflict"
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
 def _available_reports(db, user):
     permissions = effective_permissions(db, user)
     return [item for item in REPORTS if permissions.get(item["module"], {}).get("read")]
@@ -96,43 +121,14 @@ def overview(
             AttendancePeriodSummary.period_end == latest_period_end,
             AttendancePeriodSummary.status == "confirmed",
         ).one()
-        attendance = {"present": int(present), "absent": int(absent)}
-        # The client-confirmed workbook is a historical baseline. Extend it
-        # with newer submitted daily registers so Reports matches the Student,
-        # Parent and Operations attendance views. Standalone registers are the
-        # authoritative daily source and the import path consolidates any
-        # biometric/manual duplicate for the same batch and date.
-        submitted_rows = (
-            db.query(AttendanceEntry.status, func.count())
-            .join(
-                AttendanceRegister,
-                AttendanceRegister.id == AttendanceEntry.register_id,
-            )
-            .filter(
-                AttendanceRegister.status == "submitted",
-                AttendanceRegister.class_session_id.is_(None),
-                AttendanceRegister.register_kind.in_(("manual", "biometric")),
-                AttendanceRegister.attendance_date > latest_period_end,
-            )
-            .group_by(AttendanceEntry.status)
-            .all()
-        )
-        for status, count in submitted_rows:
-            attendance[status] = attendance.get(status, 0) + int(count)
-    else:
-        attendance_rows = db.query(AttendanceEntry.status, func.count()).group_by(AttendanceEntry.status).all()
-        attendance = {status: count for status, count in attendance_rows}
-        daily_rows = (
-            db.query(DailyAttendanceEntry.normalized_status, func.count())
-            .group_by(DailyAttendanceEntry.normalized_status)
-            .all()
-        )
-        for status, count in daily_rows:
-            key = status or "unclassified"
-            attendance[key] = attendance.get(key, 0) + count
-    attendance_total = sum(
-        count for status, count in attendance.items() if status != "unclassified"
-    )
+    # Use the same submitted/deduplicated evidence rules with and without a
+    # confirmed historical baseline. Unknown/excused/conflicting days are not
+    # part of the percentage denominator.
+    counts = _recorded_attendance_counts(db, latest_period_end)
+    attendance = ({"present": int(present), "absent": int(absent)} if latest_period_end else {})
+    for status, count in counts.items():
+        attendance[status] = attendance.get(status, 0) + count
+    attendance_total = attendance.get("present", 0) + attendance.get("absent", 0)
     paid = sum(
         received_effect(row)
         for row, _student in db.query(PaymentTransaction, Student)

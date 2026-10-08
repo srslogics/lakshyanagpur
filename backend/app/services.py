@@ -38,6 +38,25 @@ def audit(db: Session, actor: User, action: str, entity_type: str, entity_id: st
     )
 
 
+def current_fee_agreement(db: Session, student_id: str):
+    """Prefer the current enrollment, then an open and most recent agreement."""
+    return (db.query(FeeAgreement).join(Enrollment, Enrollment.id == FeeAgreement.enrollment_id)
+            .filter(FeeAgreement.student_id == student_id)
+            .order_by(Enrollment.is_active.desc(), FeeAgreement.status.in_(("active", "draft")).desc(),
+                      FeeAgreement.created_at.desc(), FeeAgreement.id.desc()).first())
+
+
+def current_fee_agreement_ids(db: Session):
+    rows = (db.query(FeeAgreement.student_id, FeeAgreement.id)
+            .join(Enrollment, Enrollment.id == FeeAgreement.enrollment_id)
+            .order_by(Enrollment.is_active.desc(), FeeAgreement.status.in_(("active", "draft")).desc(),
+                      FeeAgreement.created_at.desc(), FeeAgreement.id.desc()).all())
+    result = {}
+    for student_id, agreement_id in rows:
+        result.setdefault(student_id, agreement_id)
+    return result
+
+
 def payment_effect(transaction: PaymentTransaction) -> int:
     """Return the signed ledger effect used to calculate the balance."""
     if transaction.status not in {"staged", "posted"}:

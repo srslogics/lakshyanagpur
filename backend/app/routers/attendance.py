@@ -62,7 +62,9 @@ def _arrival_at(status: str, supplied: datetime | None, existing: AttendanceEntr
         return _aware(supplied).astimezone(timezone.utc)
     if existing and existing.arrival_at:
         return existing.arrival_at
-    return datetime.now(timezone.utc)
+    # A marking timestamp is not evidence of an arrival (especially for
+    # historical registers). Unknown arrival times must remain unknown.
+    return None
 
 
 def _entry_arrival(entry: AttendanceEntry | None):
@@ -79,13 +81,18 @@ def _session_query(db: Session):
 
 
 def _get_session(db: Session, session_id: str, user: User):
+    from ..concurrency import transaction_lock
+    transaction_lock(db, f"attendance:session:{session_id}")
     row = _session_query(db).filter(ClassSession.id == session_id).first()
     if not row:
         raise HTTPException(404, "Class session not found")
     return row
 
 
-def _eligible_students(db: Session, batch: Batch):
+def _eligible_students(db: Session, batch: Batch, subject=None):
+    if subject is not None:
+        from ..services import SubjectRosterResolver
+        return SubjectRosterResolver(db).students_for(batch, subject)
     query = (
         db.query(Student)
         .join(Enrollment, Enrollment.student_id == Student.id)
@@ -339,8 +346,14 @@ def list_staff_biometric_attendance(
     day: date | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(*ROLES)),
+    date_from: date | None = None,
+    date_to: date | None = None,
 ):
-    return staff_attendance_report(db, day=day, limited=True)
+    if date_from or date_to:
+        if not date_from or not date_to or not 0 <= (date_to - date_from).days <= 366:
+            raise HTTPException(422, "Choose a valid staff attendance range of up to one year")
+    return staff_attendance_report(db, day=day, date_from=date_from, date_to=date_to,
+                                   limited=day is None and date_from is None)
 
 
 def staff_attendance_report(db, day=None, date_from=None, date_to=None, limited=False):
@@ -618,6 +631,8 @@ def attendance_portal_bootstrap(
 
 
 def _manual_register(db: Session, register_id: str):
+    from ..concurrency import transaction_lock
+    transaction_lock(db, f"attendance:manual:{register_id}")
     register = (
         db.query(AttendanceRegister)
         .filter(
@@ -918,7 +933,7 @@ def _save_manual(
         register.id,
         after={"entries": len(payload.entries)},
     )
-    db.commit()
+    db.flush() if require_complete else db.commit()
     return register
 
 
@@ -1013,7 +1028,7 @@ def correct_manual_attendance(
 def attendance_roster(session_id: str, db: Session = Depends(get_db), user: User = Depends(require_roles(*ROLES))):
     row = _get_session(db, session_id, user)
     session, batch, subject, faculty, room, register = row
-    students = _eligible_students(db, batch)
+    students = _eligible_students(db, batch, row[2])
     entries = {item.student_id: item for item in db.query(AttendanceEntry).filter_by(register_id=register.id).all()} if register else {}
     return {"session": _session_summary(db, row), "entries": [{"studentId": student.id, "admissionNumber": student.admission_number, "fullName": student.full_name, "status": entries[student.id].status if student.id in entries else "present", "reason": entries[student.id].reason if student.id in entries else "", "arrivalAt": _entry_arrival(entries.get(student.id))} for student in students]}
 
@@ -1027,7 +1042,7 @@ def _save(
 ):
     row = _get_session(db, session_id, actor)
     session, batch, _, _, _, register = row
-    eligible = {student.id for student in _eligible_students(db, batch)}
+    eligible = {student.id for student in _eligible_students(db, batch, row[2])}
     incoming = {item.student_id for item in payload.entries}
     if len(incoming) != len(payload.entries):
         raise HTTPException(422, "A student appears more than once")
@@ -1049,7 +1064,7 @@ def _save(
         else:
             db.add(AttendanceEntry(register_id=register.id, student_id=item.student_id, status=item.status, reason=item.reason.strip(), marked_by=actor.id, arrival_at=_arrival_at(item.status, item.arrival_at)))
     audit(db, actor, "attendance.draft.save", "attendance_register", register.id, after={"session_id": session.id, "entries": len(payload.entries)})
-    db.commit()
+    db.flush() if require_complete else db.commit()
     return register
 
 

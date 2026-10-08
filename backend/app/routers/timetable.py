@@ -283,6 +283,8 @@ def update_teaching_assignment(
 
 @router.post("/sessions", status_code=201)
 def create_session(payload: ClassSessionCreate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner", "academic_coordinator"))):
+    from ..concurrency import transaction_lock
+    transaction_lock(db, "timetable:schedule")
     batch, subject, faculty, room = db.get(Batch, payload.batch_id), db.get(Subject, payload.subject_id), db.get(User, payload.faculty_id), db.get(Room, payload.room_id)
     if not all((batch, subject, faculty, room)):
         raise HTTPException(404, "One or more timetable resources were not found")
@@ -322,6 +324,8 @@ def create_session(payload: ClassSessionCreate, db: Session = Depends(get_db), a
 
 @router.patch("/sessions/{session_id}")
 def update_session(session_id: str, payload: ClassSessionUpdate, db: Session = Depends(get_db), actor: User = Depends(require_roles("owner", "academic_coordinator"))):
+    from ..concurrency import transaction_lock
+    transaction_lock(db, "timetable:schedule")
     row = db.get(ClassSession, session_id)
     if not row:
         raise HTTPException(404, "Class session not found")

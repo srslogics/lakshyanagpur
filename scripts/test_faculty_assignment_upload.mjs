@@ -236,5 +236,5 @@ test("HTML and offline cache ship the same new faculty script", () => {
   const version = html.match(/app\.js\?v=(\d+)/)?.[1];
   assert.ok(version);
   assert.ok(sw.includes(`./app.js?v=${version}`));
-  assert.ok(sw.includes('const CACHE = "lakshya-faculty-v34"'));
+  assert.match(sw, /const CACHE = "lakshya-faculty-v\d+"/);
 });

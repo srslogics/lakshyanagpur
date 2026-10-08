@@ -33,7 +33,10 @@ def _login_key(request: Request, payload: LoginRequest) -> str:
         else str(payload.email or payload.username or "").strip().lower()
     )
     client_host = request.client.host if request.client else "unknown"
-    return f"{client_host}:{identity or 'unknown'}"
+    # Parents have an independent credential namespace even when they share a
+    # mobile with a student. Other portals authenticate the same account.
+    namespace = "parent" if payload.portal == "parent" else "account"
+    return f"{client_host}:{namespace}:{identity or 'unknown'}"
 
 
 def _prune_failures(key: str, now: float) -> deque[float]:

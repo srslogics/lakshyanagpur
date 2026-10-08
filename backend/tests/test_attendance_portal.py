@@ -167,7 +167,7 @@ def test_attendance_operator_sees_all_classes_and_submits_register(client, datab
         register_id=register.id,
         student_id=second_student.id,
     ).one()
-    assert present_entry.arrival_at is not None
+    assert present_entry.arrival_at is None  # No arrival was supplied; marking time is not arrival.
     assert absent_entry.arrival_at is None
 
     saved_roster = client.get(
@@ -178,7 +178,7 @@ def test_attendance_operator_sees_all_classes_and_submits_register(client, datab
         item for item in saved_roster["entries"]
         if item["studentId"] == student.id
     )
-    assert saved_present["arrivalAt"] is not None
+    assert saved_present["arrivalAt"] is None
 
 
 def test_attendance_preserves_supplied_arrival_time(client, database):

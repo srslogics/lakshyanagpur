@@ -131,7 +131,7 @@ def provision_test_accounts(db: Session, passwords: dict[str, str]) -> dict:
     else:
         db.add(StudentAccount(user_id=users["student"].id, student_id=student.id))
 
-    parent_link = db.get(ParentAccount, users["parent"].id)
+    parent_link = db.get(ParentAccount, (users["parent"].id, student.id))
     if parent_link:
         parent_link.student_id = student.id
         parent_link.contact_type = "primary_contact"

@@ -17,6 +17,9 @@ TestingSession = sessionmaker(bind=engine, expire_on_commit=False)
 
 @pytest.fixture(autouse=True)
 def database():
+    from app.routers.auth import _login_failures, _login_failures_lock
+    with _login_failures_lock:
+        _login_failures.clear()
     Base.metadata.drop_all(engine); Base.metadata.create_all(engine)
     db = TestingSession()
     owner = User(mobile="9000000001", email="owner@example.com", full_name="Owner", role="owner", password_hash=hash_password("Password123!"))

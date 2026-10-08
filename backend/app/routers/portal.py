@@ -42,6 +42,7 @@ from ..services import (
     SubjectRosterResolver,
     audit,
     canonical_subject,
+    current_fee_agreement,
     payment_effect,
     received_effect,
     selected_subjects,
@@ -486,13 +487,8 @@ def notice_rows(db: Session, enrollment: Enrollment | None, audience: str):
 
 
 def fee_summary(db: Session, student: Student):
-    latest_agreement_id = (
-        select(FeeAgreement.id)
-        .where(FeeAgreement.student_id == student.id)
-        .order_by(FeeAgreement.created_at.desc(), FeeAgreement.id.desc())
-        .limit(1)
-        .scalar_subquery()
-    )
+    current = current_fee_agreement(db, student.id)
+    latest_agreement_id = current.id if current else None
     rows = (
         db.query(FeeAgreement, PaymentTransaction)
         .outerjoin(
@@ -514,6 +510,7 @@ def fee_summary(db: Session, student: Student):
             "agreedAmount": 0,
             "paidAmount": 0,
             "outstandingAmount": 0,
+            "creditAmount": 0,
             "currency": "INR",
             "payments": [],
         }
@@ -525,14 +522,20 @@ def fee_summary(db: Session, student: Student):
         "agreedAmount": agreement.agreed_amount,
         "paidAmount": max(0, paid),
         "outstandingAmount": max(0, agreement.agreed_amount - ledger_effect),
+        "creditAmount": max(0, ledger_effect - agreement.agreed_amount),
         "currency": agreement.currency,
         "payments": [{
             "id": item.id,
             "date": item.transaction_date,
             "amount": item.amount,
+            "type": item.transaction_type,
+            "signedAmount": received_effect(item),
+            "reconciliationStatus": item.reconciliation_status,
             "method": item.method,
             "status": item.status,
-        } for item in transactions if item.transaction_type not in {"balance_credit", "balance_debit"}],
+        } for item in transactions if item.transaction_type in {"payment", "refund", "reversal", "void", "adjustment"}
+           and item.reconciliation_status != "do_not_import"
+           and (item.status == "posted" or item.status == "staged" and item.reconciliation_status == "ready")],
     }
 
 

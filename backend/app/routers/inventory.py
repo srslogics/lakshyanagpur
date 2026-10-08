@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -359,7 +359,12 @@ def create_movement(
     payload: InventoryMovementCreate,
     db: Session = Depends(get_db),
     actor: User = Depends(require_roles(*WRITE_ROLES)),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    from .finance import _replay, _save_replay
+    request, saved = _replay(db, actor, idempotency_key, f"inventory:{item_id}", payload)
+    if saved is not None:
+        return saved
     item = (
         db.query(InventoryItem)
         .filter(InventoryItem.id == item_id)
@@ -456,5 +461,7 @@ def create_movement(
             "reason": movement.reason,
         },
     )
+    response = _movement(movement, item, actor)
+    _save_replay(db, request, response)
     db.commit()
-    return _movement(movement, item, actor)
+    return response

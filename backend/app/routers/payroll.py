@@ -37,6 +37,16 @@ def _people(db, month):
         DeviceAttendanceIdentity.is_ignored.is_(False),
     ).order_by(DeviceAttendanceIdentity.id).all()
     people, device_keys = {}, {}
+    # Keep an existing payroll key when an unlinked device gains a staff user.
+    # Never rewrite finalized snapshots or merge financial rows implicitly.
+    saved_keys = {row.person_key for row in db.query(StaffPayroll.person_key).all()}
+    user_keys = {}
+    for identity, user in identities:
+        if user:
+            candidates = [f"identity:{i.id}" for i, u in identities if u and u.id == user.id]
+            existing = sorted(key for key in candidates if key in saved_keys)
+            user_keys[user.id] = (f"user:{user.id}" if f"user:{user.id}" in saved_keys
+                                  else existing[0] if existing else f"identity:{min(candidates).split(':', 1)[1]}")
     for identity, user in identities:
         if not identity.is_staff_device and not identity.staff_user_id:
             continue
@@ -45,13 +55,14 @@ def _people(db, month):
         name = user.full_name if user else identity.device_name or f"Device {identity.device_user_id}"
         if _staff_designation(name) == "Director" or (user and user.role in {"owner", "director"}):
             continue
-        key = f"user:{user.id}" if user else f"identity:{identity.id}"
+        key = user_keys[user.id] if user else f"identity:{identity.id}"
         person = people.setdefault(key, {
             "personKey": key, "fullName": name,
             "designation": (user.role.replace("_", " ").title() if user else "Staff"),
             "deviceIds": [], "presentDates": set(), "coveredDates": set(),
             "dailyWorkLog": [], "totalWorkMinutes": 0, "overtimeMinutes": 0,
             "explicitAbsentDays": Decimal(0),
+            "attendanceConflicts": [],
         })
         person["deviceIds"].append(identity.device_user_id)
         device_keys[(identity.device_key, identity.device_user_id)] = key
@@ -67,10 +78,22 @@ def _people(db, month):
     workdays = db.query(StaffAttendanceWorkday).filter(
         StaffAttendanceWorkday.attendance_date.between(start, min(end, today)),
     ).order_by(StaffAttendanceWorkday.attendance_date).all()
+    daily = {}
     for workday in workdays:
         key = device_keys.get((workday.device_key, workday.device_user_id))
         if not key:
             continue
+        daily.setdefault((key, workday.attendance_date), []).append(workday)
+    for (key, day), sources in daily.items():
+        person = people[key]
+        signatures = {(r.attendance_status, r.work_duration_minutes, r.overtime_minutes) for r in sources}
+        # Repeated identical reports count once. Conflicting device reports
+        # remain visible and cannot be finalized without reconciliation.
+        if len(signatures) > 1:
+            person["attendanceConflicts"].append(day.isoformat())
+        workday = max(sources, key=lambda r: (r.updated_at, r.id))
+        if workday.attendance_status == "absent" and day.isoformat() in person["presentDates"]:
+            person["attendanceConflicts"].append(day.isoformat())
         person = people[key]
         day_key = workday.attendance_date.isoformat()
         person["coveredDates"].add(day_key)
@@ -135,6 +158,14 @@ def bootstrap(month: str = Query(...), db: Session = Depends(get_db), actor: Use
     for row in db.query(StaffPayroll).filter(StaffPayroll.month < month).order_by(StaffPayroll.month.desc()).all():
         prior.setdefault(row.person_key, row.monthly_salary)
     rows = [_serialize(person, entries.get(key), month, prior.get(key)) for key, person in people.items()]
+    # Historical financial records survive ignored/retired/reclassified devices.
+    for key, saved in entries.items():
+        if key not in people:
+            person = {"personKey": key, "fullName": saved.snapshot.get("fullName", key),
+                      "designation": "Historical record", "presentDays": 0, "unrecordedDays": 0,
+                      "deviceIds": [], "dailyWorkLog": [], "attendanceFingerprint": "",
+                      **saved.snapshot.get("attendance", {}), "archived": True}
+            rows.append(_serialize(person, saved, month))
     rows.sort(key=lambda row: row["fullName"].casefold())
     return {
         "month": month, "daysInMonth": days,
@@ -174,6 +205,8 @@ def save_payroll(month: str, person_key: str, payload: PayrollSave, db: Session 
         raise HTTPException(422, "Absent days cannot include recorded present days, today or future days")
     if payload.finalize and (end >= datetime.now(INDIA_TZ).date() or not payload.attendanceConfirmed):
         raise HTTPException(422, "Finalize only after the month ends and the absence total has been confirmed")
+    if person.get("attendanceConflicts"):
+        raise HTTPException(409, "Conflicting attendance sources for " + ", ".join(sorted(set(person["attendanceConflicts"]))) + ". Correct the attendance import before preparing payroll.")
     row = db.query(StaffPayroll).filter_by(month=month, person_key=person_key).with_for_update().one_or_none()
     if (row.version if row else 0) != payload.version:
         raise HTTPException(409, "Payroll was changed by another user. Refresh before saving.")
