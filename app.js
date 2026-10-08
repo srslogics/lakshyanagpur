@@ -882,8 +882,8 @@ function studentAccount(agreement) {
 }
 
 function accountBalance(value) {
-  if (value < 0) return `${money(Math.abs(value))} Cr`;
-  if (value > 0) return `${money(value)} Dr`;
+  if (value < 0) return `${money(Math.abs(value))} extra paid`;
+  if (value > 0) return `${money(value)} due`;
   return money(0);
 }
 
@@ -901,13 +901,13 @@ function renderFinance() {
   $("#new-future-payment").classList.toggle("hidden", !canAccess("finance", "create"));
   $("#new-fee-agreement").classList.toggle("hidden", !canManageFinance());
   $("#new-payment").classList.toggle("hidden", !canManageFinance());
-  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Outstanding", value: money(outstanding) }, { label: "Collected", value: money(paymentTotal) }, { label: "Accounts due", value: String(dueAccounts) }]);
+  $("#finance-metrics").innerHTML = compactMetrics([{ label: "Fees still to collect", value: money(outstanding) }, { label: "Payments received · all time", value: money(paymentTotal) }, { label: "Students with dues", value: String(dueAccounts) }]);
   $("#fee-agreement-count").textContent = openAccounts.length;
   $("#payment-total-count").textContent = registerCount;
   $("#payment-review-count").textContent = review ? `${review} review` : "";
   $("#payment-review-count").classList.toggle("hidden", !review);
-  $("#finance-agreements-tab").setAttribute("aria-label", `Student balances, ${openAccounts.length} active accounts`);
-  $("#finance-payments-tab").setAttribute("aria-label", `Payment register, ${registerCount} payments${review ? `, ${review} need attention` : ""}`);
+  $("#finance-agreements-tab").setAttribute("aria-label", `Student fees, ${openAccounts.length} accounts`);
+  $("#finance-payments-tab").setAttribute("aria-label", `Payments and receipts, ${registerCount} payments${review ? `, ${review} need attention` : ""}`);
   renderAgreementRows(); renderPaymentRows();
   if (ledgerCurrentStudentId) renderStudentLedger(ledgerCurrentStudentId);
 }
@@ -923,11 +923,11 @@ function renderAgreementRows() {
   const page = collectionWindow("agreements", rows);
   const visibleOutstanding = rows.reduce((sum, item) => sum + (item.accountClosed ? 0 : Math.max(item.balance, 0)), 0);
   $("#agreement-result-summary").textContent = `${rows.length} ${rows.length === 1 ? "account" : "accounts"} · ${money(visibleOutstanding)} outstanding`;
-  const openLedgerButton = item => `<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" data-agreement-id="${esc(item.id)}" aria-label="Open ledger for ${esc(item.studentName)}">${icon("book")}Ledger</button>`;
-  const editAccountButton = item => canAccess("finance", "edit") ? `<button class="icon-button receivable-edit-button" type="button" data-owner-edit="agreement" data-edit-id="${esc(item.id)}" aria-label="Edit fee agreement for ${esc(item.studentName)}" title="Edit fee agreement">${icon("edit")}</button>` : "";
+  const openLedgerButton = item => `${!item.accountClosed && item.isCurrent !== false && canManageFinance() ? `<button class="button button-primary button-small" type="button" data-collect-fees="${esc(item.studentId)}" aria-label="Collect payment from ${esc(item.studentName)}">Collect payment</button>` : ""}<button class="button button-secondary button-small open-ledger-button" type="button" data-open-ledger="${esc(item.studentId)}" data-agreement-id="${esc(item.id)}" aria-label="View fees and payments for ${esc(item.studentName)}">Details</button>`;
+  const editAccountButton = () => "";
   const balanceBadge = item => item.accountClosed ? `<span class="ledger-balance-state ledger-balance-settled">Closed</span>` : `<span class="ledger-balance-state ledger-balance-${item.balanceState}">${item.balanceState === "credit" ? "Credit" : item.balanceState === "settled" ? "Settled" : "Due"}</span>`;
   $("#agreements-table-body").innerHTML = rows.length ? page.rows.map(item => `<tr><td class="receivable-student">${studentPrimary(item.studentName, item.admissionNumber)}</td><td class="receivable-fee-summary"><strong class="currency">${money(item.agreed)}</strong><small>${money(item.paid)} paid</small></td><td class="receivable-outstanding"><strong class="currency">${money(Math.abs(item.balance))}</strong>${balanceBadge(item)}</td><td class="receivable-reconciliation">${reconciliationBadge(item)}</td><td class="receivable-actions"><div class="cell-actions">${openLedgerButton(item)}${editAccountButton(item)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="5">${collectionMoreButton("agreements", page.shown, page.total, "accounts")}</td></tr>` : "") : `<tr><td colspan="5">${emptyState("search", "No matching balances", "Clear a filter to see every student balance.")}</td></tr>`;
-  $("#agreements-mobile-list").innerHTML = rows.length ? page.rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Agreed</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Balance</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}${ownerEditButton("agreement", item.id)}</div></article>`).join("") + collectionMoreButton("agreements", page.shown, page.total, "accounts") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
+  $("#agreements-mobile-list").innerHTML = rows.length ? page.rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Total fees</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Remaining / extra paid</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}</div></article>`).join("") + collectionMoreButton("agreements", page.shown, page.total, "accounts") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
 }
 
 function renderPaymentRows() {
@@ -989,7 +989,7 @@ function renderPaymentRows() {
     : item.status === "staged"
       ? ownerEditButton("payment", item.id, "Review")
       : item.type === "payment" && canManageFinance()
-        ? `<button class="button button-secondary button-small" type="button" data-payment-reverse="${esc(item.id)}">${icon("refresh")}Reverse</button>`
+        ? `<details class="fee-correction"><summary>Correct payment</summary><button class="button button-secondary button-small" type="button" data-payment-reverse="${esc(item.id)}">Refund or cancel payment</button></details>`
         : "";
   $("#payments-table-body").innerHTML = rows.length ? page.rows.map(item => `<tr><td>${studentPrimary(item.studentName, item.admissionNumber || `Line ${item.line || "—"}`)}</td><td>${esc(typeLabel(item))}</td><td>${formatDate(item.date)}</td><td class="currency">${amountLabel(item)}</td><td>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</td><td title="${esc([item.receiptNumber, item.reference, item.notes || item.sourceNote].filter(Boolean).join(" · "))}"><strong>${esc(sourceLabel(item).slice(0, 32))}</strong>${item.reference && item.receiptNumber ? `<br><small>${esc(item.reference.slice(0, 32))}</small>` : ""}</td><td><div class="cell-actions">${status(displayState(item))}${action(item)}</div></td></tr>`).join("") + (page.hasMore ? `<tr class="collection-more-row"><td colspan="7">${collectionMoreButton("payments", page.shown, page.total, "entries")}</td></tr>` : "") : `<tr><td colspan="7">${emptyState("search", "No matching payments", "Clear a filter to see every payment.")}</td></tr>`;
   $("#payments-mobile-list").innerHTML = rows.length ? page.rows.map(item => `<article class="mobile-record-card"><div class="mobile-record-card-head"><div>${studentPrimary(item.studentName, formatDate(item.date))}</div>${status(displayState(item))}</div><div class="mobile-record-meta"><div><span>Type</span><strong>${esc(typeLabel(item))}</strong></div><div><span>Amount</span><strong>${amountLabel(item)}</strong></div><div><span>Mode</span><strong>${esc(String(item.method || "Not captured").replaceAll("_", " "))}</strong></div><div><span>Receipt</span><strong>${esc(sourceLabel(item).slice(0, 30))}</strong></div></div>${action(item)}</article>`).join("") + collectionMoreButton("payments", page.shown, page.total, "entries") : emptyState("search", "No matching payments", "Clear a filter to see every payment.");
@@ -1059,12 +1059,12 @@ function renderStudentLedger(studentId) {
   $("#ledger-student-name").textContent = account.studentName;
   $("#ledger-student-meta").textContent = [account.admissionNumber, student?.program, student?.batch].filter(Boolean).join(" · ");
   $("#ledger-period").textContent = knownDates.length ? `${formatDate(knownDates[0])} – ${formatDate(knownDates[knownDates.length - 1])}` : "Current statement";
-  $("#ledger-owner-action").innerHTML = ownerEditButton("agreement", account.id, "Edit account");
+  $("#ledger-owner-action").innerHTML = `${!account.accountClosed && agreement.isCurrent !== false && canManageFinance() ? `<button class="button button-primary button-small" type="button" data-collect-fees="${esc(studentId)}">Collect payment</button>` : ""}${canAccess("finance", "edit") ? `<details class="fee-account-options"><summary>Manage fees</summary>${ownerEditButton("agreement", account.id, "Change fees")}</details>` : ""}`;
   $("#ledger-summary").innerHTML = [
-    { label: "Agreed fee", value: money(account.agreed), detail: "Account debit" },
-    { label: "Paid", value: money(account.paid), detail: `${account.payments.length} ${account.payments.length === 1 ? "payment" : "payments"}` },
-    { label: balanceLabel, value: accountBalance(account.balance), detail: accountStatus === "due" ? "Amount receivable" : accountStatus === "credit" ? "Student credit" : "No amount due", featured: true },
-    { label: "Account status", value: account.accountClosed ? "Account closed" : accountStatus === "due" ? "Payment due" : accountStatus === "credit" ? "Credit" : "Settled", detail: account.accountClosed ? "Closed to new collections" : account.needsReconciliation ? "Control needs review" : "Control matched" }
+    { label: "Total fees", value: money(account.agreed), detail: "Fees agreed with the student" },
+    { label: "Paid so far", value: money(account.paid), detail: "Payments less refunds and cancellations" },
+    { label: balanceLabel, value: money(Math.abs(account.balance)), detail: accountStatus === "due" ? "Amount still to pay" : accountStatus === "credit" ? "Extra paid by student" : "No payment remaining", featured: true },
+    { label: "Status", value: account.accountClosed ? "Account closed" : accountStatus === "due" ? "Payment due" : accountStatus === "credit" ? "Extra paid" : "Fully paid", detail: account.accountClosed ? "No new payments allowed" : account.needsReconciliation ? "Ask accounts to check records" : "Records checked" }
   ].map(item => `<article class="ledger-summary-card ${item.featured ? "ledger-summary-featured" : ""}"><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong><small>${esc(item.detail)}</small></article>`).join("");
   $("#ledger-table-body").innerHTML = transactions.map(item => `<tr><td>${item.date ? formatDate(item.date) : `<span class="unknown-date">Date unknown</span>`}</td><td><strong>${esc(item.particulars)}</strong>${item.note ? `<small>${esc(item.note)}</small>` : ""}</td><td>${esc(item.reference)}</td><td class="payment-mode">${esc(item.mode)}</td><td class="currency ledger-number">${item.debit == null ? "—" : money(item.debit)}</td><td class="currency ledger-number">${item.credit == null ? "—" : money(item.credit)}</td><td class="currency ledger-number ledger-running-balance">${accountBalance(item.balance)}</td></tr>`).join("");
   $("#ledger-mobile-list").innerHTML = transactions.map(item => `<article class="mobile-record-card ledger-mobile-card"><div class="mobile-record-card-head"><div><h3>${esc(item.particulars)}</h3><p>${item.date ? formatDate(item.date) : "Date unknown"} · ${esc(item.reference)}</p></div><strong class="ledger-mobile-balance">${accountBalance(item.balance)}</strong></div>${item.note ? `<p class="ledger-mobile-note">${esc(item.note)}</p>` : ""}<div class="mobile-record-meta"><div><span>Debit</span><strong>${item.debit == null ? "—" : money(item.debit)}</strong></div><div><span>Credit</span><strong>${item.credit == null ? "—" : money(item.credit)}</strong></div><div><span>Mode</span><strong class="payment-mode">${esc(item.mode)}</strong></div><div><span>Balance</span><strong>${accountBalance(item.balance)}</strong></div></div></article>`).join("");
@@ -2308,6 +2308,7 @@ function bindStudentPicker(form) {
     chosenLabel = input.value.trim();
     input.setCustomValidity("");
     closeResults();
+    form.dispatchEvent(new CustomEvent("student-selected"));
   };
   const renderResults = rows => {
     available = rows;
@@ -2577,25 +2578,38 @@ function paymentMethodOptions(current = "") {
   ].map(([value, label]) => `<option value="${value}"${selected(value, current)}>${label}</option>`).join("");
 }
 
-function openPaymentForm() {
+function openPaymentForm(studentId = "") {
   if (!canManageFinance()) { toast("Finance access is required.", "error"); return; }
   if (!state.agreements.length) { toast("Create a fee agreement before recording a payment.", "error"); return; }
-  const preferredStudent = financeStudentFilter && state.agreements.some(row => row.studentId === financeStudentFilter)
-    ? financeStudentFilter
+  const requestedStudent = typeof studentId === "string" && studentId ? studentId : financeStudentFilter;
+  const preferredStudent = requestedStudent && state.agreements.some(row => row.studentId === requestedStudent)
+    ? requestedStudent
     : "";
-  const preferredAccount = state.agreements.find(row => row.studentId === preferredStudent) || null;
-  openDrawer("Record payment", `<form class="auth-form" id="payment-create-form">
-    <div class="inline-notice">${icon("receipt")}<span>A numbered receipt is created immediately.<small>Posted entries cannot be edited or deleted; corrections use a reversal.</small></span></div>
+  const preferredAccount = state.agreements.find(row => row.studentId === preferredStudent && row.isCurrent) || state.agreements.find(row => row.studentId === preferredStudent) || null;
+  openDrawer("Collect payment", `<form class="auth-form" id="payment-create-form">
+    <p class="finance-help">Enter the money received. A receipt number will be generated when you save.</p>
     ${studentPickerMarkup({ label: "Student account", selectedItem: preferredAccount, scope: "with_agreement" })}
+    <div id="payment-account-summary" class="fee-payment-summary" aria-live="polite"></div>
     <div class="form-pair"><label class="field"><span>Payment date</span><input name="transactionDate" type="date" max="${dateInputValue()}" value="${dateInputValue()}" required></label><label class="field"><span>Amount received</span><input name="amount" type="number" min="1" step="1" inputmode="numeric" required></label></div>
     <label class="field"><span>Payment mode</span><select name="method" required><option value="">Select payment mode</option>${paymentMethodOptions()}</select></label>
     <label class="field"><span>Bank / UPI / cheque reference <small>(optional for cash)</small></span><input name="reference" maxlength="255"></label>
-    <label class="field"><span>Internal note <small>(optional)</small></span><textarea name="notes" rows="3" maxlength="2000"></textarea></label>
+    <details class="finance-admin-details"><summary>Add a note <small>Optional</small></summary><label class="field"><span>Note</span><textarea name="notes" rows="2" maxlength="2000"></textarea></label></details>
     ${formError("payment-create-error")}
-    <button class="button button-primary button-large" type="submit">${icon("receipt")}Post payment &amp; issue receipt</button>
+    <button class="button button-primary button-large" type="submit">${icon("receipt")}Save payment &amp; create receipt</button>
   </form>`);
   const paymentForm = $("#payment-create-form");
   bindStudentPicker(paymentForm);
+  const updateSummary = () => {
+    const id = paymentForm.elements.studentId.value;
+    const agreement = state.agreements.find(row => row.studentId === id && row.isCurrent) || state.agreements.find(row => row.studentId === id);
+    const target = $("#payment-account-summary");
+    if (!id || !agreement) { target.textContent = "Choose a student to see their fee balance."; return; }
+    const account = studentAccount(agreement);
+    target.innerHTML = `<span>Total fees<strong>${money(account.agreed)}</strong></span><span>Already paid<strong>${money(account.paid)}</strong></span><span>${account.balance < 0 ? "Extra paid" : "Remaining"}<strong>${money(Math.abs(account.balance))}</strong></span>${account.needsReconciliation ? '<small>Some records need checking. Confirm the balance with accounts before collecting.</small>' : ""}`;
+  };
+  paymentForm.addEventListener("student-selected", updateSummary);
+  paymentForm.addEventListener("input", updateSummary);
+  updateSummary();
   paymentForm.addEventListener("submit", submitPayment);
 }
 
@@ -2691,12 +2705,13 @@ function openFeeAgreementForm() {
   const existingIds = new Set(state.agreements.map(row => row.studentId));
   const students = state.students.filter(row => ["active", "draft"].includes(row.status) && !existingIds.has(row.id));
   if (!students.length) { toast("Every student already has a fee agreement."); return; }
-  openDrawer("Create fee agreement", `<form class="auth-form" id="fee-agreement-create-form">
+  openDrawer("Set student fees", `<form class="auth-form" id="fee-agreement-create-form">
     ${studentPickerMarkup({ scope: "without_agreement" })}
-    <label class="field"><span>Agreed course fee</span><input name="agreedAmount" type="number" min="0" step="1" inputmode="numeric" required></label>
-    <div class="form-pair"><label class="field"><span>Currency</span><input name="currency" value="INR" readonly aria-readonly="true"></label><label class="field"><span>Status</span><select name="status"><option value="active">Active</option><option value="draft">Draft</option></select></label></div>
+    <label class="field"><span>Total course fees (₹)</span><input name="agreedAmount" type="number" min="0" step="1" inputmode="numeric" required><small>The full amount agreed with the student, not today's payment.</small></label>
+    <input type="hidden" name="currency" value="INR">
+    <details class="finance-admin-details"><summary>More options</summary><label class="field"><span>Fee status</span><select name="status"><option value="active">Ready to collect</option><option value="draft">Draft — still being decided</option></select></label></details>
     ${formError("fee-agreement-create-error")}
-    <button class="button button-primary button-large" type="submit">${icon("wallet")}Create fee agreement</button>
+    <button class="button button-primary button-large" type="submit">${icon("wallet")}Save student fees</button>
   </form>`);
   const feeAgreementForm = $("#fee-agreement-create-form");
   bindStudentPicker(feeAgreementForm);
@@ -3422,6 +3437,8 @@ function bindEvents() {
     if (viewPayments) showStudentPayments(viewPayments);
     const ledgerButton = event.target.closest("[data-open-ledger]");
     if (ledgerButton) openStudentLedger(ledgerButton.dataset.openLedger, ledgerButton);
+    const collectButton = event.target.closest("[data-collect-fees]");
+    if (collectButton) openPaymentForm(collectButton.dataset.collectFees);
     const examinationButton = event.target.closest("[data-examination-open]");
     if (examinationButton) openExamination(examinationButton.dataset.examinationOpen);
     const conversationButton = event.target.closest("[data-conversation-id]");

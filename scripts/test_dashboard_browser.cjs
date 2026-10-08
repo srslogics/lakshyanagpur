@@ -52,6 +52,24 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('#nav-examinations-count').textContent(), '3');
     await page.locator('.nav-item[data-view="finance"]').click();
     assert.deepEqual(await page.locator('#finance-metrics strong').allTextContents(), ['₹24,00,000', '₹1,00,000', '1']);
+    await page.locator('#agreements-table-body [data-collect-fees]').click();
+    assert.equal(await page.locator('#payment-create-form [name="studentId"]').inputValue(), 'student-0');
+    assert.ok((await page.locator('#payment-account-summary').textContent()).includes('₹24,00,000'));
+    assert.equal(await page.locator('#payment-create-form details').getAttribute('open'), null);
+    await page.evaluate(() => closeDetail());
+    if (process.env.DASHBOARD_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.DASHBOARD_SCREENSHOT_DIR, 'fees-desktop.png'), fullPage:true});
+    await page.locator('#agreements-table-body [data-open-ledger]').click();
+    assert.equal(await page.locator('#student-ledger-view details.finance-admin-details').getAttribute('open'), null);
+    await page.locator('#ledger-back').click();
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForTimeout(400);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'fees mobile does not overflow');
+    assert.ok(await page.locator('#agreements-mobile-list [data-collect-fees]').isVisible());
+    for (const value of await page.locator('#finance-metrics strong').all()) {
+      assert.ok(await value.evaluate(node => node.scrollWidth <= node.clientWidth), 'mobile fee totals must fit');
+    }
+    if (process.env.DASHBOARD_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.DASHBOARD_SCREENSHOT_DIR, 'fees-mobile.png'), fullPage:true});
+    await page.setViewportSize({width:1440,height:1100});
     await page.locator('.nav-item[data-view="dashboard"]').click();
     if (process.env.DASHBOARD_SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.DASHBOARD_SCREENSHOT_DIR, 'dashboard-desktop.png'), fullPage: true, animations: 'disabled' });
     await page.locator('.nav-item[data-view="students"]').click();

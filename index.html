@@ -29,7 +29,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/pwa-icon-192.png?v=20260804-no-tm" type="image/png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20260804-no-tm">
-  <link rel="stylesheet" href="/styles.css?v=68">
+  <link rel="stylesheet" href="/styles.css?v=69">
   <link rel="stylesheet" href="/auth-shared.css?v=9">
   <link rel="stylesheet" href="/push-shared.css?v=1">
 </head>
@@ -251,17 +251,18 @@
 
         <section class="app-view" id="finance" aria-labelledby="finance-heading">
           <div id="finance-workspace">
-            <div class="page-heading"><div><h2 id="finance-heading">Fees &amp; finance</h2><p class="page-heading-copy">Track student balances and record payments.</p></div><div class="heading-actions"><button class="button button-primary" id="new-payment" type="button"><span data-icon="receipt"></span>Record payment</button></div></div>
+            <div class="page-heading"><div><h2 id="finance-heading">Student fees</h2><p class="page-heading-copy">Find a student, check the amount due, and collect their payment.</p></div><div class="heading-actions"><button class="button button-primary" id="new-payment" type="button"><span data-icon="receipt"></span>Collect payment</button></div></div>
             <div class="compact-metrics" id="finance-metrics"></div>
-            <nav class="segmented-control" id="finance-view-tabs" role="tablist" aria-label="Finance views"><button class="active" id="finance-agreements-tab" type="button" role="tab" aria-label="Student balances" aria-selected="true" aria-controls="finance-agreements-panel" data-finance-tab="agreements">Student balances <span class="tab-count" id="fee-agreement-count" aria-hidden="true">0</span></button><button id="finance-payments-tab" type="button" role="tab" aria-label="Payment register" aria-selected="false" aria-controls="finance-payments-panel" tabindex="-1" data-finance-tab="payments">Payment register <span class="tab-count" id="payment-total-count" aria-hidden="true">0</span><span class="tab-review-count hidden" id="payment-review-count" aria-hidden="true"></span></button></nav>
+            <p class="finance-help">Start with a student below. <strong>Collect payment</strong> records money received; a payment plan does not.</p>
+            <nav class="segmented-control" id="finance-view-tabs" role="tablist" aria-label="Finance views"><button class="active" id="finance-agreements-tab" type="button" role="tab" aria-label="Student fees" aria-selected="true" aria-controls="finance-agreements-panel" data-finance-tab="agreements">Student fees <span class="tab-count" id="fee-agreement-count" aria-hidden="true">0</span></button><button id="finance-payments-tab" type="button" role="tab" aria-label="Payments &amp; receipts" aria-selected="false" aria-controls="finance-payments-panel" tabindex="-1" data-finance-tab="payments">Payments &amp; receipts <span class="tab-count" id="payment-total-count" aria-hidden="true">0</span><span class="tab-review-count hidden" id="payment-review-count" aria-hidden="true"></span></button></nav>
             <article class="surface table-surface finance-tab active" id="finance-agreements-panel" role="tabpanel" aria-labelledby="finance-agreements-tab">
-              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search student balances"></label><select id="agreement-balance-filter" aria-label="Filter account balance"><option value="">All balances</option><option value="due">Payment due</option><option value="settled">Fully paid</option><option value="credit">Credit balance</option><option value="closed">Opted out</option><option value="reconcile">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-fee-agreement" type="button"><span data-icon="plus"></span>Add fee</button></div>
+              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="agreement-search" type="search" placeholder="Search student or admission number" aria-label="Search student balances"></label><select id="agreement-balance-filter" aria-label="Filter account balance"><option value="">All students</option><option value="due">Payment due</option><option value="settled">Fully paid</option><option value="credit">Credit balance</option><option value="closed">Opted out</option><option value="reconcile">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-fee-agreement" type="button"><span data-icon="plus"></span>Set student fees</button></div>
               <div class="table-meta"><span id="agreement-result-summary">Loading accounts…</span></div>
-              <div class="data-table-wrap"><table class="data-table receivables-table"><colgroup><col class="receivables-col-student"><col class="receivables-col-fee"><col class="receivables-col-outstanding"><col class="receivables-col-status"><col class="receivables-col-actions"></colgroup><thead><tr><th scope="col">Student</th><th scope="col">Fee summary</th><th class="numeric-heading" scope="col">Balance</th><th scope="col">Status</th><th scope="col" aria-label="Actions"></th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
+              <div class="data-table-wrap"><table class="data-table receivables-table"><colgroup><col class="receivables-col-student"><col class="receivables-col-fee"><col class="receivables-col-outstanding"><col class="receivables-col-status"><col class="receivables-col-actions"></colgroup><thead><tr><th scope="col">Student</th><th scope="col">Total fees / paid</th><th class="numeric-heading" scope="col">Remaining</th><th scope="col">Check</th><th scope="col" aria-label="Actions"></th></tr></thead><tbody id="agreements-table-body"></tbody></table></div>
               <div class="mobile-records" id="agreements-mobile-list"></div>
             </article>
             <article class="surface table-surface finance-tab" id="finance-payments-panel" role="tabpanel" aria-labelledby="finance-payments-tab" hidden>
-              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, receipt or reference" aria-label="Search payment register"></label><select id="payment-status-filter" aria-label="Filter payment register"><option value="">All entries</option><option value="received">Payments received</option><option value="future">Future payments</option><option value="adjustments">Refunds &amp; adjustments</option><option value="review">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-future-payment" type="button"><span data-icon="calendar-check"></span>Plan payment</button></div>
+              <div class="toolbar finance-toolbar"><label class="search-field search-field-wide"><span data-icon="search"></span><input id="payment-search" type="search" placeholder="Search student, receipt or reference" aria-label="Search payment register"></label><select id="payment-status-filter" aria-label="Filter payment register"><option value="">All activity</option><option value="received" selected>Payments received</option><option value="future">Payment plans</option><option value="adjustments">Refunds &amp; adjustments</option><option value="review">Needs attention</option></select><button class="button button-secondary finance-context-action" id="new-future-payment" type="button"><span data-icon="calendar-check"></span>Set payment date</button></div>
               <div class="payment-student-filter hidden" id="payment-student-filter"><span>Entries for <strong id="payment-student-filter-name"></strong></span><button class="button button-secondary button-small" id="clear-payment-student-filter" type="button">Show all entries</button></div>
               <div class="table-meta"><span id="payment-result-summary">Loading payments…</span></div>
               <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Student</th><th>Type</th><th>Date</th><th>Amount</th><th>Mode</th><th>Receipt / reference</th><th>Entry state</th></tr></thead><tbody id="payments-table-body"></tbody></table></div>
@@ -271,21 +272,21 @@
 
           <section class="student-ledger-view hidden" id="student-ledger-view" aria-labelledby="ledger-student-name">
             <header class="ledger-heading">
-              <button class="button button-secondary button-small" id="ledger-back" type="button"><span data-icon="arrow-left"></span>Receivables</button>
-              <div class="ledger-heading-copy"><span>Student account</span><h2 id="ledger-student-name">Ledger</h2><p id="ledger-student-meta"></p></div>
+              <button class="button button-secondary button-small" id="ledger-back" type="button"><span data-icon="arrow-left"></span>Student fees</button>
+              <div class="ledger-heading-copy"><span>Student account</span><h2 id="ledger-student-name">Fee details</h2><p id="ledger-student-meta"></p></div>
               <div class="ledger-heading-actions"><span id="ledger-owner-action"></span><button class="button button-secondary button-small" id="print-student-ledger" type="button"><span data-icon="printer"></span>Print statement</button></div>
             </header>
             <div class="ledger-summary-grid" id="ledger-summary"></div>
             <article class="surface table-surface ledger-statement">
-              <div class="ledger-statement-head"><div><span>Account statement</span><h3>Fee ledger</h3></div><span class="ledger-period" id="ledger-period"></span></div>
-              <div class="data-table-wrap"><table class="data-table ledger-table"><thead><tr><th>Date</th><th>Particulars</th><th>Reference</th><th>Mode</th><th class="numeric-heading">Debit</th><th class="numeric-heading">Credit</th><th class="numeric-heading">Balance</th></tr></thead><tbody id="ledger-table-body"></tbody></table></div>
+              <div class="ledger-statement-head"><div><span>Full history</span><h3>Fees and payments</h3></div><span class="ledger-period" id="ledger-period"></span></div>
+              <div class="data-table-wrap"><table class="data-table ledger-table"><thead><tr><th>Date</th><th>Particulars</th><th>Reference</th><th>Mode</th><th class="numeric-heading">Added to fees</th><th class="numeric-heading">Paid / reduced</th><th class="numeric-heading">Balance</th></tr></thead><tbody id="ledger-table-body"></tbody></table></div>
               <div class="mobile-records ledger-mobile-records" id="ledger-mobile-list"></div>
             </article>
-            <article class="surface ledger-control-card">
+            <details class="surface finance-admin-details"><summary>Accounting checks <small>For the accounts team</small></summary><div class="ledger-control-card">
               <div class="ledger-control-copy"><span>Workbook reconciliation</span><h3>Control comparison</h3><p>The workbook control is shown for verification only and is not posted again to the student balance.</p></div>
               <div class="ledger-control-values" id="ledger-control-values"></div>
-              <button class="button button-secondary button-small" id="ledger-payment-register" type="button"><span data-icon="receipt"></span>Open payment register</button>
-            </article>
+              <button class="button button-secondary button-small" id="ledger-payment-register" type="button"><span data-icon="receipt"></span>View all payments</button>
+            </div></details>
           </section>
         </section>
 
@@ -458,6 +459,6 @@
   <script src="/runtime-config.js?v=2" defer></script>
   <script src="/push-client.js?v=2" defer></script>
   <script src="/payroll-ui.js?v=4" defer></script>
-  <script src="/app.js?v=98" defer></script>
+  <script src="/app.js?v=99" defer></script>
 </body>
 </html>

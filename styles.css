@@ -1,3 +1,18 @@
+@media (max-width: 600px) { #finance #finance-metrics { display: grid; grid-template-columns: 1fr; overflow: visible; } #finance-metrics > * { min-width: 0; } #finance .mobile-card-actions { flex-wrap: wrap; } #finance .mobile-card-actions .button { min-height: 44px; } }
+.finance-help { color: var(--ink-600); font-size: .8rem; line-height: 1.65; margin: 12px 0 20px; }
+.finance-admin-details { padding: 16px; margin: 16px 0; border: 1px solid var(--line); border-radius: 12px; }
+.finance-admin-details summary, .fee-account-options summary { cursor: pointer; min-height: 44px; align-content: center; font-weight: 700; }
+.finance-admin-details summary small { font-weight: 400; color: var(--ink-500); margin-left: 8px; }
+.finance-admin-details > .field { margin-top: 16px; }
+.fee-account-options { display: inline-block; margin-left: 10px; }
+.fee-account-options[open] { padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.fee-payment-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; padding: 16px; border-radius: 12px; background: var(--surface-muted); font-size: .76rem; }
+.fee-payment-summary strong { display: block; margin-top: 6px; color: var(--ink-950); font-size: 1rem; overflow-wrap: anywhere; }
+.fee-payment-summary small { grid-column: 1 / -1; line-height: 1.5; }
+.fee-correction { display: inline-block; }
+.fee-correction summary { cursor: pointer; min-height: 44px; align-content: center; padding: 8px; }
+.finance-admin-details summary:focus-visible, .fee-correction summary:focus-visible, .fee-account-options summary:focus-visible { outline: 2px solid var(--ink-800); outline-offset: 3px; }
+@media (max-width: 480px) { .fee-payment-summary { grid-template-columns: 1fr; } .fee-payment-summary span { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; } .fee-payment-summary strong { margin: 0; } }
 .payroll-toolbar { flex-wrap: wrap; align-items: end; gap: 16px; margin-bottom: 20px; }
 .payroll-toolbar .field { margin: 0; min-width: 180px; }
 .payroll-toolbar .search-field { flex: 1; min-width: 180px; }
@@ -589,11 +604,11 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .payment-student-filter strong { color: var(--ink-950); }
 .view-payments-button svg { width: 14px; height: 14px; }
 .receivables-table { min-width: 860px; table-layout: fixed; }
-.receivables-col-student { width: 35%; }
+.receivables-col-student { width: 27%; }
 .receivables-col-fee { width: 17%; }
 .receivables-col-outstanding { width: 17%; }
 .receivables-col-status { width: 15%; }
-.receivables-col-actions { width: 16%; }
+.receivables-col-actions { width: 24%; }
 .receivables-table th { height: 44px; padding-inline: 16px; }
 .receivables-table td { height: 68px; padding: 10px 16px; vertical-align: middle; }
 .receivables-table th.numeric-heading,
@@ -607,7 +622,7 @@ kbd { padding: 3px 6px; border: 1px solid var(--line); border-bottom-color: var(
 .receivable-outstanding .ledger-balance-state { margin: 4px 0 0 auto; }
 .receivable-reconciliation .status { max-width: 100%; }
 .receivable-actions { padding-inline: 10px !important; }
-.receivable-actions .cell-actions { justify-content: flex-end; flex-wrap: nowrap; }
+.receivable-actions .cell-actions { justify-content: flex-end; flex-wrap: wrap; }
 .receivable-edit-button { flex: 0 0 38px; width: 38px; height: 38px; border: 1px solid var(--line); color: var(--ink-600); background: var(--surface); }
 .receivable-edit-button:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
 .receivable-edit-button svg { width: 16px; height: 16px; }
