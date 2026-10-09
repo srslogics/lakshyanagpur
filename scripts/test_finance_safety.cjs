@@ -8,6 +8,16 @@ function extract(name) {
   return (source.slice(start - 6, start) === 'async ' ? 'async ' : '') + source.slice(start, source.indexOf('\n}', start) + 2);
 }
 const button = {};
+const visibilityContext = vm.createContext({});
+vm.runInContext(extract('visiblePaymentEntries'), visibilityContext);
+const entries = [
+  {id:'old-posted',status:'posted',reconciliationStatus:'do_not_import'},
+  {id:'old-import',status:'staged',reconciliationStatus:'do_not_import'},
+  {id:'corrected',status:'staged',reconciliationStatus:'ready'},
+  {id:'refund',status:'posted',type:'refund',reconciliationStatus:'ready'},
+];
+assert.deepEqual(Array.from(visibilityContext.visiblePaymentEntries(entries), row => row.id), ['corrected','refund']);
+assert.equal(entries.length, 4, 'hiding entries must not delete audit history');
 let posts = 0, errors = 0, closed = 0;
 const keys = [];
 const context = vm.createContext({

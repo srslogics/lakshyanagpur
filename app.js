@@ -930,6 +930,10 @@ function renderAgreementRows() {
   $("#agreements-mobile-list").innerHTML = rows.length ? page.rows.map(item => `<article class="mobile-record-card receivable-mobile-card"><div class="mobile-record-card-head">${studentPrimary(item.studentName, item.admissionNumber)}${balanceBadge(item)}</div><div class="mobile-record-meta"><div><span>Total fees</span><strong>${money(item.agreed)}</strong></div><div><span>Paid</span><strong>${money(item.paid)}</strong></div><div><span>Remaining / extra paid</span><strong>${money(Math.abs(item.balance))}</strong></div><div><span>Status</span><strong>${item.needsReconciliation ? "Needs attention" : "Up to date"}</strong></div></div><div class="mobile-card-actions">${openLedgerButton(item)}</div></article>`).join("") + collectionMoreButton("agreements", page.shown, page.total, "accounts") : emptyState("search", "No matching balances", "Clear a filter to see every student balance.");
 }
 
+function visiblePaymentEntries(payments) {
+  return payments.filter(item => item.reconciliationStatus !== "do_not_import");
+}
+
 function renderPaymentRows() {
   const filter = $("#payment-status-filter").value;
   const search = $("#payment-search").value.trim().toLowerCase();
@@ -941,7 +945,7 @@ function renderPaymentRows() {
     if (["refund", "reversal", "void", "balance_credit", "balance_debit"].includes(item.type)) return "adjustments";
     return "received";
   };
-  const register = [...state.payments, ...state.installments].sort((a, b) =>
+  const register = [...visiblePaymentEntries(state.payments), ...state.installments].sort((a, b) =>
     String(b.date || "").localeCompare(String(a.date || ""))
     || String(b.createdAt || "").localeCompare(String(a.createdAt || ""))
     || String(b.id || "").localeCompare(String(a.id || ""))
