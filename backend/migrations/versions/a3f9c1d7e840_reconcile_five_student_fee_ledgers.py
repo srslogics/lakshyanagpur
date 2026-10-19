@@ -98,37 +98,60 @@ def upgrade():
     ts = _now()
     line = 0
 
+    skipped = []
+
     for student_name, spec in STUDENT_DATA.items():
         # ------------------------------------------------------------------
-        # 1. Resolve student
+        # 1. Resolve student — three progressively looser name lookups
         # ------------------------------------------------------------------
         student = conn.execute(
             sa.text(
-                "SELECT id FROM students WHERE full_name = :name AND is_test_account = false LIMIT 1"
+                "SELECT id, full_name FROM students "
+                "WHERE full_name = :name AND is_test_account = false LIMIT 1"
             ),
             {"name": student_name},
         ).mappings().first()
 
         if not student:
-            # Try case-insensitive partial match as a fallback
+            # Case-insensitive substring match
             student = conn.execute(
                 sa.text(
-                    "SELECT id FROM students "
+                    "SELECT id, full_name FROM students "
                     "WHERE lower(full_name) LIKE lower(:name) AND is_test_account = false LIMIT 1"
                 ),
                 {"name": f"%{student_name}%"},
             ).mappings().first()
 
         if not student:
-            raise RuntimeError(
-                f"Student not found: {student_name!r}. "
-                "Run this migration only against the production database that contains this student."
+            # Match on the last significant token (surname) — handles
+            # spelling variants like "Danial" vs "Daniyaal"
+            surname = student_name.strip().split()[-1]
+            student = conn.execute(
+                sa.text(
+                    "SELECT id, full_name FROM students "
+                    "WHERE lower(full_name) LIKE lower(:surname) AND is_test_account = false LIMIT 1"
+                ),
+                {"surname": f"%{surname}%"},
+            ).mappings().first()
+
+        if not student:
+            print(
+                f"[RECON WARNING] Student not found: {student_name!r} — skipping. "
+                "Correct the name in STUDENT_DATA and re-run."
+            )
+            skipped.append(student_name)
+            continue
+
+        matched_name = student["full_name"]
+        if matched_name != student_name:
+            print(
+                f"[RECON INFO] '{student_name}' matched to '{matched_name}' in DB."
             )
 
         student_id = student["id"]
 
         # ------------------------------------------------------------------
-        # 2. Resolve (or fail-fast on) the fee agreement
+        # 2. Resolve fee agreement (skip student if missing, don't crash)
         # ------------------------------------------------------------------
         agreement = conn.execute(
             sa.text(
@@ -139,10 +162,12 @@ def upgrade():
         ).mappings().first()
 
         if not agreement:
-            raise RuntimeError(
-                f"No fee agreement found for {student_name!r}. "
-                "Create one before running this migration."
+            print(
+                f"[RECON WARNING] No fee agreement for '{matched_name}' — skipping. "
+                "Create one and re-run."
             )
+            skipped.append(student_name)
+            continue
 
         agreement_id = agreement["id"]
         current_agreed = int(agreement["agreed_amount"])
@@ -364,6 +389,13 @@ def upgrade():
                     "created_at": ts,
                 },
             )
+
+    total_students = len(STUDENT_DATA)
+    done = total_students - len(skipped)
+    print(f"[RECON] Completed: {done}/{total_students} students reconciled.")
+    if skipped:
+        print(f"[RECON] Skipped (name not found in DB): {skipped}")
+        print("[RECON] To fix: check the exact spelling of these names in the students table and update STUDENT_DATA accordingly.")
 
 
 def downgrade():
