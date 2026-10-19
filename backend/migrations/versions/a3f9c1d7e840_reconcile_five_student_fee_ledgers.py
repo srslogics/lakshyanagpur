@@ -104,7 +104,7 @@ def upgrade():
         # ------------------------------------------------------------------
         student = conn.execute(
             sa.text(
-                "SELECT id FROM students WHERE full_name = :name AND is_test_account = 0 LIMIT 1"
+                "SELECT id FROM students WHERE full_name = :name AND is_test_account = false LIMIT 1"
             ),
             {"name": student_name},
         ).mappings().first()
@@ -114,7 +114,7 @@ def upgrade():
             student = conn.execute(
                 sa.text(
                     "SELECT id FROM students "
-                    "WHERE lower(full_name) LIKE lower(:name) AND is_test_account = 0 LIMIT 1"
+                    "WHERE lower(full_name) LIKE lower(:name) AND is_test_account = false LIMIT 1"
                 ),
                 {"name": f"%{student_name}%"},
             ).mappings().first()
